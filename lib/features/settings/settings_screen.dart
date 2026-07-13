@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/config_provider.dart';
+import '../../core/constants/gemini_models.dart';
+
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -143,6 +145,38 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                   ],
                 ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            'AI Model (Textový chat)',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Card(
+            elevation: 2,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  isExpanded: true,
+                  value: ref.watch(modelProvider),
+                  items: GeminiModels.allowedChatModels.map((model) {
+                    return DropdownMenuItem(
+                      value: model,
+                      child: Text(GeminiModels.getLabel(model)),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    if (value != null) {
+                      ref.read(modelProvider.notifier).saveModel(value);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Změněn model na: $value')),
+                      );
+                    }
+                  },
+                ),
               ),
             ),
           ),

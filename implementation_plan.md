@@ -249,8 +249,8 @@ class ErrorLogs extends Table {
 - [x] Konfigurace VS Code (rozšíření Flutter, Dart)
 - [x] Získání Google AI Studio API klíče
 - [x] Odsouhlasení Android licencí a kontrola `flutter doctor`
-- [ ] Inicializace Flutter projektu v `AJ_Tudor/`
-- [ ] Ověření funkčnosti na emulátoru / fyzickém zařízení
+- [x] Inicializace Flutter projektu v `AJ_Tudor/`
+- [x] Ověření funkčnosti na emulátoru / fyzickém zařízení
 
 ### Fáze 1: Core Architecture & Data Layer (Hotovo)
 - **Cíl**: Nastavit projekt, Riverpod, Drift a základní routování.
@@ -259,25 +259,26 @@ class ErrorLogs extends Table {
   - [x] Vytvoření Drift databáze a tabulek (`sessions`, `transcripts`, `error_logs`, `user_profile`).
   - [x] Základní Skeleton UI (Bottom Nav s 4 taby).
 
-### Fáze 2: Gemini Integration (Probíhá)
-- [ ] REST klient pro Gemini Flash API (`google_generative_ai`)
-- [ ] System prompt builder s bilingvním prompt engineeringem
-- [ ] Textový chat mód (jako fallback a pro testování)
+### Fáze 2: Gemini Integration (Skoro hotovo)
+- [x] REST klient pro Gemini Flash API (`google_generative_ai`)
+- [x] System prompt builder s bilingvním prompt engineeringem
+- [x] Textový chat mód (jako fallback a pro testování)
+- [ ] Odzkoušet textový chat na fungujícím modelu (Gemini 1.5 Flash)
 - [ ] Function Calling definice (`log_error`)
 - [ ] Structured Outputs pro Memory Manager
 
 ### Fáze 3 – Audio pipeline 🎤
-- [ ] Audio capture service (mikrofon → PCM 16kHz mono)
-- [ ] Audio playback service (PCM 24kHz → reproduktor)
+- [x] Audio capture service (mikrofon → PCM 16kHz mono)
+- [x] Audio playback service (PCM 24kHz → reproduktor)
 - [ ] Buffer manager (ring buffer, anti-underrun)
 - [ ] Testování audio pipeline izolovaně (echo test)
 
-### Fáze 4 – Gemini Live API (hlasový mód) 🗣️
-- [ ] WebSocket klient pro `wss://generativelanguage.googleapis.com`
-- [ ] Binární PCM streaming (send & receive)
+### Fáze 4 – Gemini Live API (hlasový mód) 🗣️ (Aktuální krok)
+- [x] WebSocket klient pro `wss://generativelanguage.googleapis.com`
+- [x] Binární PCM streaming (send & receive)
+- [x] Integrace s audio pipeline a real-time transkripce v klientovi
+- [ ] Vytvořit UI `TutorScreen` (tlačítko s mikrofonem)
 - [ ] Session manager (context compression, GoAway handling, session resumption)
-- [ ] Integrace s audio pipeline
-- [ ] Real-time transkripce z API
 
 ### Fáze 5 – Multi-agentní systém 🧠
 - [ ] Memory Manager agent (post-session analýza)
@@ -338,10 +339,23 @@ class ErrorLogs extends Table {
 - Extrakce chyb, témat, slovíček do UserProfile
 - Structured JSON output
 
+### Services (Agents & Audio)
+
+#### [NEW] [audio_capture_service.dart](file:///c:/Users/tosma/Desktop/Aj_Tudor/AJ_Tudor/lib/services/audio/audio_capture_service.dart)
+- Využívá balíček `record`
+- Konfigurace: 16 kHz, 1 kanál (mono), PCM 16-bit
+- Exponuje `Stream<List<int>>` s audio chunky pro odesílání přes WebSocket
+
+#### [NEW] [audio_playback_service.dart](file:///c:/Users/tosma/Desktop/Aj_Tudor/AJ_Tudor/lib/services/audio/audio_playback_service.dart)
+- Využívá balíček `flutter_pcm_sound`
+- Přijímá PCM 24kHz data z Gemini a zařazuje je do fronty
+- Správa bufferu (zamezení praskání zvuku) a plynulé přehrávání
+
 #### [NEW] [gemini_live_client.dart](file:///c:/Users/tosma/Desktop/Aj_Tudor/AJ_Tudor/lib/services/gemini/gemini_live_client.dart)
-- WebSocket spojení s Gemini Multimodal Live API
-- PCM binární streaming
-- Session resumption (handle ukládání, GoAway handling)
+- WebSocket klient (`web_socket_channel`)
+- Sestavení úvodní `setup` zprávy (včetně system promptu a voice konfigurace - např. Aoede/Puck)
+- Binární streaming: odesílání `RealtimeInput` s PCM base64 daty
+- Zpracování `serverContent` (dekódování PCM a odeslání do přehrávače, odchytávání turnComplete)
 
 ---
 

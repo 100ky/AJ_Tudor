@@ -67,7 +67,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                     margin: const EdgeInsets.only(bottom: 8.0),
                     padding: const EdgeInsets.all(12.0),
                     decoration: BoxDecoration(
-                      color: msg.isUser ? Colors.blueAccent.withOpacity(0.2) : Colors.grey[800],
+                      color: msg.isUser ? Colors.blueAccent.withValues(alpha: 0.2) : Colors.grey[800],
                       borderRadius: BorderRadius.circular(16.0),
                     ),
                     child: Text(msg.text, style: const TextStyle(fontSize: 16)),

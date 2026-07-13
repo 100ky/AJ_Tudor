@@ -5,17 +5,19 @@ import '../prompt/system_prompt_builder.dart';
 
 final geminiBatchClientProvider = Provider<GeminiBatchClient?>((ref) {
   final apiKey = ref.watch(apiKeyProvider);
+  final modelName = ref.watch(modelProvider);
+  
   if (apiKey == null || apiKey.isEmpty) return null;
-  return GeminiBatchClient(apiKey);
+  return GeminiBatchClient(apiKey, modelName);
 });
 
 class GeminiBatchClient {
   late final GenerativeModel _model;
   late final ChatSession chat;
 
-  GeminiBatchClient(String apiKey) {
+  GeminiBatchClient(String apiKey, String modelName) {
     _model = GenerativeModel(
-      model: 'gemini-1.5-flash',
+      model: modelName,
       apiKey: apiKey,
       systemInstruction: Content.system(SystemPromptBuilder.buildTutorPrompt()),
     );

@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../core/constants/gemini_models.dart';
 
 // Provider pro SharedPreferences instanci (inicializován v main.dart)
 final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
@@ -30,3 +31,26 @@ class ApiKeyNotifier extends Notifier<String?> {
 }
 
 final apiKeyProvider = NotifierProvider<ApiKeyNotifier, String?>(ApiKeyNotifier.new);
+
+// Notifier pro vybraný model Gemini
+class ModelNotifier extends Notifier<String> {
+  static const _key = 'gemini_model';
+
+  @override
+  String build() {
+    final prefs = ref.watch(sharedPreferencesProvider);
+    final saved = prefs.getString(_key);
+    if (saved != null && GeminiModels.allowedChatModels.contains(saved)) {
+      return saved;
+    }
+    return GeminiModels.flash1_5;
+  }
+
+  Future<void> saveModel(String model) async {
+    final prefs = ref.read(sharedPreferencesProvider);
+    await prefs.setString(_key, model);
+    state = model;
+  }
+}
+
+final modelProvider = NotifierProvider<ModelNotifier, String>(ModelNotifier.new);
