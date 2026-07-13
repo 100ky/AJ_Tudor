@@ -23,12 +23,12 @@ Implementační plán vychází z [Tudor_analyza.txt](file:///c:/Users/tosma/Des
 
 | Krok | Stav | Detail |
 |------|------|--------|
-| Flutter SDK | ✅ Hotovo | `Flutter 3.44.6 • Dart 3.12.2` v `C:\flutter` |
-| Android Studio | ✅ Nainstalováno | Přes winget, verze 2026.1.1.10 |
-| Android SDK | ✅ Hotovo | SDK 36.1.0, cmdline-tools nainstalovány |
+| Flutter SDK | ✅ Hotovo | Nainstalováno v `C:\flutter` |
+| Android Studio | ✅ Hotovo | Staženo a spuštěno |
+| Android SDK | ✅ Hotovo | Nastaveno a cmdline-tools doinstalovány |
 | API klíč | ✅ Máš | Google AI Studio – Free Tier |
 | VS Code / Antigravity | ✅ Funguje | Vývojové prostředí připraveno |
-| Flutter projekt | ⏳ Čeká | Po dokončení SDK setup |
+| Flutter projekt | ⏳ Čeká | Nyní se založí |
 
 ---
 
@@ -245,10 +245,11 @@ class ErrorLogs extends Table {
 ## Fáze implementace
 
 ### Fáze 0 – Příprava prostředí 🔧
-- [ ] Instalace Flutter SDK + Android SDK
-- [ ] Konfigurace VS Code (rozšíření Flutter, Dart)
+- [x] Instalace Flutter SDK + Android SDK
+- [x] Konfigurace VS Code (rozšíření Flutter, Dart)
+- [x] Získání Google AI Studio API klíče
+- [x] Odsouhlasení Android licencí a kontrola `flutter doctor`
 - [ ] Inicializace Flutter projektu v `AJ_Tudor/`
-- [ ] Získání Google AI Studio API klíče
 - [ ] Ověření funkčnosti na emulátoru / fyzickém zařízení
 
 ### Fáze 1: Core Architecture & Data Layer (Hotovo)
