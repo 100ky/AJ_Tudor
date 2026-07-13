@@ -251,15 +251,14 @@ class ErrorLogs extends Table {
 - [ ] Získání Google AI Studio API klíče
 - [ ] Ověření funkčnosti na emulátoru / fyzickém zařízení
 
-### Fáze 1 – Datová vrstva & základní UI 🗄️
-- [ ] Nastavení Drift databáze s tabulkami (Sessions, Transcripts, UserProfiles, ErrorLogs)
-- [ ] Code generation (`build_runner`)
-- [ ] DAOs a repositories
-- [ ] Riverpod providers pro databázi
-- [ ] Základní navigační skeleton (4 obrazovky) s dark theme
-- [ ] Nastavení stránka (API klíč input, theme toggle)
+### Fáze 1: Core Architecture & Data Layer (Hotovo)
+- **Cíl**: Nastavit projekt, Riverpod, Drift a základní routování.
+- **Úkoly**:
+  - [x] Inicializace Flutter (Riverpod, GoRouter/Navigator, Drift).
+  - [x] Vytvoření Drift databáze a tabulek (`sessions`, `transcripts`, `error_logs`, `user_profile`).
+  - [x] Základní Skeleton UI (Bottom Nav s 4 taby).
 
-### Fáze 2 – Gemini integrace (textový mód) 💬
+### Fáze 2: Gemini Integration (Probíhá)
 - [ ] REST klient pro Gemini Flash API (`google_generative_ai`)
 - [ ] System prompt builder s bilingvním prompt engineeringem
 - [ ] Textový chat mód (jako fallback a pro testování)
