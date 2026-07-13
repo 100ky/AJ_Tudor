@@ -6,7 +6,16 @@ import '../progress/progress_screen.dart';
 import '../history/history_screen.dart';
 import '../settings/settings_screen.dart';
 
-final _selectedIndexProvider = StateProvider<int>((ref) => 0);
+class _SelectedIndexNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void setIndex(int index) {
+    state = index;
+  }
+}
+
+final _selectedIndexProvider = NotifierProvider<_SelectedIndexNotifier, int>(_SelectedIndexNotifier.new);
 
 class SkeletonScreen extends ConsumerWidget {
   const SkeletonScreen({super.key});
@@ -27,7 +36,7 @@ class SkeletonScreen extends ConsumerWidget {
       bottomNavigationBar: NavigationBar(
         selectedIndex: currentIndex,
         onDestinationSelected: (index) {
-          ref.read(_selectedIndexProvider.notifier).state = index;
+          ref.read(_selectedIndexProvider.notifier).setIndex(index);
         },
         destinations: const [
           NavigationDestination(
