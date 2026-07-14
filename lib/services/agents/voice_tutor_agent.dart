@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/audio_provider.dart';
 import '../../providers/config_provider.dart';
 import '../../providers/gemini_provider.dart';
+import '../../core/constants/gemini_models.dart';
 import '../prompt/system_prompt_builder.dart';
 
 enum TutorState { idle, connecting, listening, thinking, speaking, error }
@@ -62,7 +63,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> {
       final systemPrompt = SystemPromptBuilder.buildTutorPrompt();
       
       // BidiGenerateContent (Live API) vyžaduje specifické modely pro real-time audio.
-      const liveModelName = 'models/gemini-3.1-flash-live';
+      const liveModelName = 'models/${GeminiModels.defaultLiveModel}';
       
       client.connect(modelName: liveModelName, systemPrompt: systemPrompt);
 

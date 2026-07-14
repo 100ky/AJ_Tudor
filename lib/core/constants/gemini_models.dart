@@ -6,6 +6,10 @@ class GeminiModels {
   // Gemini 3.1 Flash-Lite – levnější, pro batch analýzu a vysoký objem
   static const String flashLite3_1 = 'gemini-3.1-flash-lite';
 
+  // --- Modely pro Multimodal Live API (WebSocket / Voice Tutor) ---
+  // Použijeme model, který server aktivně podporuje pro BidiGenerateContent v tomto tieru
+  static const String liveVoiceModel = 'gemini-2.5-flash-native-audio-latest';
+
   // Gemini 2.5 Flash – starší ale stále funkční (retirement: říjen 2026)
   static const String flash2_5 = 'gemini-2.5-flash';
 
