@@ -1,11 +1,13 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/audio_provider.dart';
 import '../../providers/gemini_provider.dart';
 import '../../providers/config_provider.dart';
+import '../../providers/database_provider.dart';
 import '../../core/constants/gemini_models.dart';
 import '../prompt/system_prompt_builder.dart';
+
+import 'memory_manager_agent.dart';
 
 enum TutorState { idle, connecting, listening, thinking, speaking, error }
 
@@ -46,6 +48,7 @@ class VoiceTutorState {
 class VoiceTutorAgent extends Notifier<VoiceTutorState> {
   StreamSubscription<List<int>>? _audioSubscription;
   Timer? _thinkingTimer;
+  int? _currentSessionId;
 
   @override
   VoiceTutorState build() {
@@ -68,6 +71,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> {
     
     final client = ref.read(geminiLiveClientProvider);
     final audioCapture = ref.read(audioCaptureServiceProvider);
+    final repo = ref.read(sessionRepositoryProvider);
     
     if (client == null) {
       state = state.copyWith(
@@ -78,8 +82,17 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> {
     }
 
     try {
+      // 0. Založení session v databázi
+      _currentSessionId = await repo.startNewSession();
+
       // 1. Připojení k WebSocketu
-      final systemPrompt = SystemPromptBuilder.buildTutorPrompt();
+      // Načteme briefing z minula pro personalizaci
+      final lastBriefing = await repo.getLatestBriefing();
+      var systemPrompt = SystemPromptBuilder.buildTutorPrompt();
+      
+      if (lastBriefing != null && lastBriefing.isNotEmpty) {
+        systemPrompt += '\nKONTEXT Z MINULÉ LEKCE (PAMĚŤ): $lastBriefing\n';
+      }
       
       // Pro hlasový chat vždy vynutíme model, který Bidi protokol (Live API) podporuje.
       // Modely Gemini 3.x Flash aktuálně bidiGenerateContent neumí.
@@ -96,6 +109,21 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> {
         );
       };
 
+      client.onUserTranscriptReceived = (text) {
+        // Uložení toho, co řekl uživatel, do historie a DB
+        final newMessages = List<LiveChatMessage>.from(state.messages)
+          ..add(LiveChatMessage(text, isUser: true));
+        state = state.copyWith(messages: newMessages);
+        
+        if (_currentSessionId != null) {
+          repo.addTranscript(
+            sessionId: _currentSessionId!,
+            speaker: 'user',
+            content: text,
+          );
+        }
+      };
+
       client.onAudioReceived = () {
         // Pokud přijímáme zvuk, přepneme stav na speaking (i když nemáme text)
         if (state.status != TutorState.speaking) {
@@ -106,13 +134,23 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> {
       client.onTurnComplete = () {
         // Po dokončení promluvy uložíme text do historie a vyčistíme aktuální transkripci
         if (state.currentTranscript.isNotEmpty) {
+          final tutorText = state.currentTranscript;
           final newMessages = List<LiveChatMessage>.from(state.messages)
-            ..add(LiveChatMessage(state.currentTranscript, isUser: false));
+            ..add(LiveChatMessage(tutorText, isUser: false));
+          
           state = state.copyWith(
             status: TutorState.listening,
             currentTranscript: '',
             messages: newMessages,
           );
+
+          if (_currentSessionId != null) {
+            repo.addTranscript(
+              sessionId: _currentSessionId!,
+              speaker: 'tutor',
+              content: tutorText,
+            );
+          }
         } else {
           state = state.copyWith(status: TutorState.listening);
         }
@@ -154,6 +192,15 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> {
     
     ref.read(audioCaptureServiceProvider).stopRecording();
     ref.read(geminiLiveClientProvider)?.disconnect();
+
+    if (_currentSessionId != null) {
+      final sessionId = _currentSessionId!;
+      await ref.read(sessionRepositoryProvider).closeSession(sessionId);
+      _currentSessionId = null;
+
+      // Spustíme asynchronní analýzu
+      ref.read(memoryManagerAgentProvider).analyzeSession(sessionId);
+    }
     
     state = state.copyWith(status: TutorState.idle, currentTranscript: '');
   }

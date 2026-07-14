@@ -1003,6 +1003,17 @@ class $UserProfilesTable extends UserProfiles
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _memoryBriefingMeta = const VerificationMeta(
+    'memoryBriefing',
+  );
+  @override
+  late final GeneratedColumn<String> memoryBriefing = GeneratedColumn<String>(
+    'memory_briefing',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -1014,6 +1025,7 @@ class $UserProfilesTable extends UserProfiles
     topicPreferences,
     lastSessionAt,
     totalSessions,
+    memoryBriefing,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1099,6 +1111,15 @@ class $UserProfilesTable extends UserProfiles
         ),
       );
     }
+    if (data.containsKey('memory_briefing')) {
+      context.handle(
+        _memoryBriefingMeta,
+        memoryBriefing.isAcceptableOrUnknown(
+          data['memory_briefing']!,
+          _memoryBriefingMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -1144,6 +1165,10 @@ class $UserProfilesTable extends UserProfiles
         DriftSqlType.int,
         data['${effectivePrefix}total_sessions'],
       )!,
+      memoryBriefing: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}memory_briefing'],
+      ),
     );
   }
 
@@ -1163,6 +1188,7 @@ class UserProfile extends DataClass implements Insertable<UserProfile> {
   final String topicPreferences;
   final DateTime? lastSessionAt;
   final int totalSessions;
+  final String? memoryBriefing;
   const UserProfile({
     required this.id,
     required this.displayName,
@@ -1173,6 +1199,7 @@ class UserProfile extends DataClass implements Insertable<UserProfile> {
     required this.topicPreferences,
     this.lastSessionAt,
     required this.totalSessions,
+    this.memoryBriefing,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1188,6 +1215,9 @@ class UserProfile extends DataClass implements Insertable<UserProfile> {
       map['last_session_at'] = Variable<DateTime>(lastSessionAt);
     }
     map['total_sessions'] = Variable<int>(totalSessions);
+    if (!nullToAbsent || memoryBriefing != null) {
+      map['memory_briefing'] = Variable<String>(memoryBriefing);
+    }
     return map;
   }
 
@@ -1204,6 +1234,9 @@ class UserProfile extends DataClass implements Insertable<UserProfile> {
           ? const Value.absent()
           : Value(lastSessionAt),
       totalSessions: Value(totalSessions),
+      memoryBriefing: memoryBriefing == null && nullToAbsent
+          ? const Value.absent()
+          : Value(memoryBriefing),
     );
   }
 
@@ -1222,6 +1255,7 @@ class UserProfile extends DataClass implements Insertable<UserProfile> {
       topicPreferences: serializer.fromJson<String>(json['topicPreferences']),
       lastSessionAt: serializer.fromJson<DateTime?>(json['lastSessionAt']),
       totalSessions: serializer.fromJson<int>(json['totalSessions']),
+      memoryBriefing: serializer.fromJson<String?>(json['memoryBriefing']),
     );
   }
   @override
@@ -1237,6 +1271,7 @@ class UserProfile extends DataClass implements Insertable<UserProfile> {
       'topicPreferences': serializer.toJson<String>(topicPreferences),
       'lastSessionAt': serializer.toJson<DateTime?>(lastSessionAt),
       'totalSessions': serializer.toJson<int>(totalSessions),
+      'memoryBriefing': serializer.toJson<String?>(memoryBriefing),
     };
   }
 
@@ -1250,6 +1285,7 @@ class UserProfile extends DataClass implements Insertable<UserProfile> {
     String? topicPreferences,
     Value<DateTime?> lastSessionAt = const Value.absent(),
     int? totalSessions,
+    Value<String?> memoryBriefing = const Value.absent(),
   }) => UserProfile(
     id: id ?? this.id,
     displayName: displayName ?? this.displayName,
@@ -1262,6 +1298,9 @@ class UserProfile extends DataClass implements Insertable<UserProfile> {
         ? lastSessionAt.value
         : this.lastSessionAt,
     totalSessions: totalSessions ?? this.totalSessions,
+    memoryBriefing: memoryBriefing.present
+        ? memoryBriefing.value
+        : this.memoryBriefing,
   );
   UserProfile copyWithCompanion(UserProfilesCompanion data) {
     return UserProfile(
@@ -1290,6 +1329,9 @@ class UserProfile extends DataClass implements Insertable<UserProfile> {
       totalSessions: data.totalSessions.present
           ? data.totalSessions.value
           : this.totalSessions,
+      memoryBriefing: data.memoryBriefing.present
+          ? data.memoryBriefing.value
+          : this.memoryBriefing,
     );
   }
 
@@ -1304,7 +1346,8 @@ class UserProfile extends DataClass implements Insertable<UserProfile> {
           ..write('vocabulary: $vocabulary, ')
           ..write('topicPreferences: $topicPreferences, ')
           ..write('lastSessionAt: $lastSessionAt, ')
-          ..write('totalSessions: $totalSessions')
+          ..write('totalSessions: $totalSessions, ')
+          ..write('memoryBriefing: $memoryBriefing')
           ..write(')'))
         .toString();
   }
@@ -1320,6 +1363,7 @@ class UserProfile extends DataClass implements Insertable<UserProfile> {
     topicPreferences,
     lastSessionAt,
     totalSessions,
+    memoryBriefing,
   );
   @override
   bool operator ==(Object other) =>
@@ -1333,7 +1377,8 @@ class UserProfile extends DataClass implements Insertable<UserProfile> {
           other.vocabulary == this.vocabulary &&
           other.topicPreferences == this.topicPreferences &&
           other.lastSessionAt == this.lastSessionAt &&
-          other.totalSessions == this.totalSessions);
+          other.totalSessions == this.totalSessions &&
+          other.memoryBriefing == this.memoryBriefing);
 }
 
 class UserProfilesCompanion extends UpdateCompanion<UserProfile> {
@@ -1346,6 +1391,7 @@ class UserProfilesCompanion extends UpdateCompanion<UserProfile> {
   final Value<String> topicPreferences;
   final Value<DateTime?> lastSessionAt;
   final Value<int> totalSessions;
+  final Value<String?> memoryBriefing;
   const UserProfilesCompanion({
     this.id = const Value.absent(),
     this.displayName = const Value.absent(),
@@ -1356,6 +1402,7 @@ class UserProfilesCompanion extends UpdateCompanion<UserProfile> {
     this.topicPreferences = const Value.absent(),
     this.lastSessionAt = const Value.absent(),
     this.totalSessions = const Value.absent(),
+    this.memoryBriefing = const Value.absent(),
   });
   UserProfilesCompanion.insert({
     this.id = const Value.absent(),
@@ -1367,6 +1414,7 @@ class UserProfilesCompanion extends UpdateCompanion<UserProfile> {
     this.topicPreferences = const Value.absent(),
     this.lastSessionAt = const Value.absent(),
     this.totalSessions = const Value.absent(),
+    this.memoryBriefing = const Value.absent(),
   });
   static Insertable<UserProfile> custom({
     Expression<int>? id,
@@ -1378,6 +1426,7 @@ class UserProfilesCompanion extends UpdateCompanion<UserProfile> {
     Expression<String>? topicPreferences,
     Expression<DateTime>? lastSessionAt,
     Expression<int>? totalSessions,
+    Expression<String>? memoryBriefing,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -1389,6 +1438,7 @@ class UserProfilesCompanion extends UpdateCompanion<UserProfile> {
       if (topicPreferences != null) 'topic_preferences': topicPreferences,
       if (lastSessionAt != null) 'last_session_at': lastSessionAt,
       if (totalSessions != null) 'total_sessions': totalSessions,
+      if (memoryBriefing != null) 'memory_briefing': memoryBriefing,
     });
   }
 
@@ -1402,6 +1452,7 @@ class UserProfilesCompanion extends UpdateCompanion<UserProfile> {
     Value<String>? topicPreferences,
     Value<DateTime?>? lastSessionAt,
     Value<int>? totalSessions,
+    Value<String?>? memoryBriefing,
   }) {
     return UserProfilesCompanion(
       id: id ?? this.id,
@@ -1413,6 +1464,7 @@ class UserProfilesCompanion extends UpdateCompanion<UserProfile> {
       topicPreferences: topicPreferences ?? this.topicPreferences,
       lastSessionAt: lastSessionAt ?? this.lastSessionAt,
       totalSessions: totalSessions ?? this.totalSessions,
+      memoryBriefing: memoryBriefing ?? this.memoryBriefing,
     );
   }
 
@@ -1446,6 +1498,9 @@ class UserProfilesCompanion extends UpdateCompanion<UserProfile> {
     if (totalSessions.present) {
       map['total_sessions'] = Variable<int>(totalSessions.value);
     }
+    if (memoryBriefing.present) {
+      map['memory_briefing'] = Variable<String>(memoryBriefing.value);
+    }
     return map;
   }
 
@@ -1460,7 +1515,8 @@ class UserProfilesCompanion extends UpdateCompanion<UserProfile> {
           ..write('vocabulary: $vocabulary, ')
           ..write('topicPreferences: $topicPreferences, ')
           ..write('lastSessionAt: $lastSessionAt, ')
-          ..write('totalSessions: $totalSessions')
+          ..write('totalSessions: $totalSessions, ')
+          ..write('memoryBriefing: $memoryBriefing')
           ..write(')'))
         .toString();
   }
@@ -2731,6 +2787,7 @@ typedef $$UserProfilesTableCreateCompanionBuilder =
       Value<String> topicPreferences,
       Value<DateTime?> lastSessionAt,
       Value<int> totalSessions,
+      Value<String?> memoryBriefing,
     });
 typedef $$UserProfilesTableUpdateCompanionBuilder =
     UserProfilesCompanion Function({
@@ -2743,6 +2800,7 @@ typedef $$UserProfilesTableUpdateCompanionBuilder =
       Value<String> topicPreferences,
       Value<DateTime?> lastSessionAt,
       Value<int> totalSessions,
+      Value<String?> memoryBriefing,
     });
 
 class $$UserProfilesTableFilterComposer
@@ -2796,6 +2854,11 @@ class $$UserProfilesTableFilterComposer
 
   ColumnFilters<int> get totalSessions => $composableBuilder(
     column: $table.totalSessions,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get memoryBriefing => $composableBuilder(
+    column: $table.memoryBriefing,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -2853,6 +2916,11 @@ class $$UserProfilesTableOrderingComposer
     column: $table.totalSessions,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get memoryBriefing => $composableBuilder(
+    column: $table.memoryBriefing,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$UserProfilesTableAnnotationComposer
@@ -2906,6 +2974,11 @@ class $$UserProfilesTableAnnotationComposer
     column: $table.totalSessions,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get memoryBriefing => $composableBuilder(
+    column: $table.memoryBriefing,
+    builder: (column) => column,
+  );
 }
 
 class $$UserProfilesTableTableManager
@@ -2948,6 +3021,7 @@ class $$UserProfilesTableTableManager
                 Value<String> topicPreferences = const Value.absent(),
                 Value<DateTime?> lastSessionAt = const Value.absent(),
                 Value<int> totalSessions = const Value.absent(),
+                Value<String?> memoryBriefing = const Value.absent(),
               }) => UserProfilesCompanion(
                 id: id,
                 displayName: displayName,
@@ -2958,6 +3032,7 @@ class $$UserProfilesTableTableManager
                 topicPreferences: topicPreferences,
                 lastSessionAt: lastSessionAt,
                 totalSessions: totalSessions,
+                memoryBriefing: memoryBriefing,
               ),
           createCompanionCallback:
               ({
@@ -2970,6 +3045,7 @@ class $$UserProfilesTableTableManager
                 Value<String> topicPreferences = const Value.absent(),
                 Value<DateTime?> lastSessionAt = const Value.absent(),
                 Value<int> totalSessions = const Value.absent(),
+                Value<String?> memoryBriefing = const Value.absent(),
               }) => UserProfilesCompanion.insert(
                 id: id,
                 displayName: displayName,
@@ -2980,6 +3056,7 @@ class $$UserProfilesTableTableManager
                 topicPreferences: topicPreferences,
                 lastSessionAt: lastSessionAt,
                 totalSessions: totalSessions,
+                memoryBriefing: memoryBriefing,
               ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))

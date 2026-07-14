@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import '../../providers/config_provider.dart';
+import '../../core/constants/gemini_models.dart';
 import '../prompt/system_prompt_builder.dart';
 
 final geminiBatchClientProvider = Provider<GeminiBatchClient?>((ref) {
@@ -12,36 +14,75 @@ final geminiBatchClientProvider = Provider<GeminiBatchClient?>((ref) {
 });
 
 class GeminiBatchClient {
-  late final GenerativeModel _model;
-  late final ChatSession chat;
+  final String apiKey;
+  final String primaryModelName;
+  final String? systemPrompt;
 
-  GeminiBatchClient(String apiKey, String modelName) {
-    _model = GenerativeModel(
-      model: modelName,
-      apiKey: apiKey,
-      systemInstruction: Content.system(SystemPromptBuilder.buildTutorPrompt()),
-    );
-    chat = _model.startChat();
+  GeminiBatchClient(this.apiKey, this.primaryModelName, {this.systemPrompt});
+
+  /// Pokusí se odeslat zprávu. Pokud je model přetížený, zkusí fallback modely.
+  Future<String> sendMessage(String text) async {
+    // Definice waterfall (pořadí fallbacků)
+    final modelsToTry = [
+      primaryModelName,
+      GeminiModels.flashLite3_1,
+      GeminiModels.flash2_5,
+    ].toSet().toList(); // Odstraníme duplicity, pokud je primary už jeden z nich
+
+    String lastError = '';
+
+    for (var modelName in modelsToTry) {
+      try {
+        debugPrint('Zkouším model: $modelName...');
+        
+        final model = GenerativeModel(
+          model: modelName,
+          apiKey: apiKey,
+          systemInstruction: Content.system(systemPrompt ?? SystemPromptBuilder.buildTutorPrompt()),
+        );
+
+        final chat = model.startChat();
+        final response = await chat.sendMessage(Content.text(text));
+        
+        if (response.text != null) {
+          if (modelName != primaryModelName) {
+            debugPrint('⚠️ Fallback úspěšný s modelem: $modelName');
+          }
+          return response.text!;
+        }
+      } on GenerativeAIException catch (e) {
+        lastError = e.message;
+        final msg = e.message.toLowerCase();
+        
+        // Pokud je chyba jiná než přetížení/kvóta, nemá cenu zkoušet další model (např. špatný API klíč)
+        bool isOverloaded = msg.contains('quota') || 
+                           msg.contains('429') || 
+                           msg.contains('rate') || 
+                           msg.contains('503') || 
+                           msg.contains('unavailable') || 
+                           msg.contains('overloaded');
+
+        if (!isOverloaded) {
+          return _handlePermanentError(e);
+        }
+        
+        debugPrint('Model $modelName je přetížený. Zkouším další v pořadí...');
+      } catch (e) {
+        debugPrint('Neočekávaná chyba u modelu $modelName: $e');
+        lastError = e.toString();
+      }
+    }
+
+    return '❌ Všechny modely jsou momentálně přetížené. Poslední chyba: $lastError';
   }
 
-  Future<String> sendMessage(String text) async {
-    try {
-      final response = await chat.sendMessage(Content.text(text));
-      return response.text ?? 'Tutor neodpověděl.';
-    } on GenerativeAIException catch (e) {
-      final msg = e.message.toLowerCase();
-      if (msg.contains('quota') || msg.contains('429') || msg.contains('rate')) {
-        return '⚠️ Vyčerpán limit API. Počkej chvíli a zkus znovu, nebo zkontroluj svůj API klíč na https://aistudio.google.com/';
-      } else if (msg.contains('503') || msg.contains('unavailable') || msg.contains('overloaded')) {
-        return '⏳ Model je momentálně přetížený. Zkus to za pár sekund znovu.';
-      } else if (msg.contains('401') || msg.contains('403') || msg.contains('permission') || msg.contains('api_key')) {
-        return '🔑 Neplatný API klíč. Zkontroluj ho v Nastavení.';
-      } else if (msg.contains('not found') || msg.contains('404')) {
-        return '❌ Model nebyl nalezen. Zkus změnit model v Nastavení.';
-      }
-      return '❌ Chyba AI: ${e.message}';
-    } catch (e) {
-      return '❌ Chyba připojení: $e';
+  String _handlePermanentError(GenerativeAIException e) {
+    final msg = e.message.toLowerCase();
+    if (msg.contains('401') || msg.contains('403') || msg.contains('permission') || msg.contains('api_key')) {
+      return '🔑 Neplatný API klíč. Zkontroluj ho v Nastavení.';
+    } else if (msg.contains('not found') || msg.contains('404')) {
+      return '❌ Model nebyl nalezen.';
     }
+    return '❌ Chyba AI: ${e.message}';
   }
 }

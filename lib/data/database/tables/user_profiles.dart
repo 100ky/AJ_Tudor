@@ -11,4 +11,5 @@ class UserProfiles extends Table {
   TextColumn get topicPreferences => text().withDefault(const Constant('[]'))();
   DateTimeColumn get lastSessionAt => dateTime().nullable()();
   IntColumn get totalSessions => integer().withDefault(const Constant(0))();
+  TextColumn get memoryBriefing => text().nullable()(); // Poslední shrnutí pro tutora
 }

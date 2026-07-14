@@ -10,6 +10,7 @@ class GeminiLiveClient {
   
   // Callbacky pro UI
   Function(String)? onTextReceived;
+  Function(String)? onUserTranscriptReceived; // Nový: co řekl uživatel
   Function()? onAudioReceived;
   Function()? onTurnComplete;
   Function(String)? onError;
@@ -47,17 +48,17 @@ class GeminiLiveClient {
     final setupMessage = {
       'setup': {
         'model': modelName.startsWith('models/') ? modelName : 'models/$modelName',
-        'generationConfig': {
-          'responseModalities': ['AUDIO'],
-          'speechConfig': {
-            'voiceConfig': {
-              'prebuiltVoiceConfig': {
-                'voiceName': 'Aoede', 
+        'generation_config': {
+          'response_modalities': ['AUDIO', 'TEXT'],
+          'speech_config': {
+            'voice_config': {
+              'prebuilt_voice_config': {
+                'voice_name': 'Aoede', 
               }
             }
           }
         },
-        'systemInstruction': {
+        'system_instruction': {
           'parts': [{'text': systemPrompt}]
         }
       }
@@ -71,10 +72,10 @@ class GeminiLiveClient {
     
     final base64Audio = base64Encode(pcm16Data);
     final clientContent = {
-      'realtimeInput': {
-        'mediaChunks': [
+      'realtime_input': {
+        'media_chunks': [
           {
-            'mimeType': 'audio/pcm;rate=16000',
+            'mime_type': 'audio/pcm;rate=16000',
             'data': base64Audio,
           }
         ]
@@ -86,14 +87,14 @@ class GeminiLiveClient {
   void sendText(String text) {
     if (_channel == null) return;
     final clientContent = {
-      'clientContent': {
+      'client_content': {
         'turns': [
           {
             'role': 'user',
             'parts': [{'text': text}]
           }
         ],
-        'turnComplete': true
+        'turn_complete': true
       }
     };
     _channel?.sink.add(jsonEncode(clientContent));
@@ -120,15 +121,27 @@ class GeminiLiveClient {
         return;
       }
 
-      if (data.containsKey('serverContent')) {
-        final serverContent = data['serverContent'];
+      if (data.containsKey('server_content')) {
+        final serverContent = data['server_content'];
         
-        if (serverContent.containsKey('modelTurn')) {
-          final parts = serverContent['modelTurn']['parts'] as List;
+        // Přepis toho, co řekl uživatel (STT)
+        if (serverContent.containsKey('input_transcription')) {
+          final text = serverContent['input_transcription']['text'];
+          if (onUserTranscriptReceived != null) onUserTranscriptReceived!(text);
+        }
+
+        // Přepis toho, co říká model
+        if (serverContent.containsKey('output_transcription')) {
+          final text = serverContent['output_transcription']['text'];
+          if (onTextReceived != null) onTextReceived!(text);
+        }
+
+        if (serverContent.containsKey('model_turn')) {
+          final parts = serverContent['model_turn']['parts'] as List;
           for (var part in parts) {
-            if (part.containsKey('inlineData')) {
-              final inlineData = part['inlineData'];
-              if (inlineData['mimeType'].startsWith('audio/pcm')) {
+            if (part.containsKey('inline_data')) {
+              final inlineData = part['inline_data'];
+              if (inlineData['mime_type'].startsWith('audio/pcm')) {
                 final audioBytes = base64Decode(inlineData['data']);
                 if (onAudioReceived != null) onAudioReceived!(); // Informujeme UI
                 _playbackService.playPcmData(audioBytes);
@@ -140,7 +153,7 @@ class GeminiLiveClient {
           }
         }
         
-        if (serverContent.containsKey('turnComplete') && serverContent['turnComplete'] == true) {
+        if (serverContent.containsKey('turn_complete') && serverContent['turn_complete'] == true) {
           if (onTurnComplete != null) onTurnComplete!();
         }
       }

@@ -14,7 +14,7 @@ class MemoryManagerAgent {
     debugPrint('Zahajuji analýzu session $sessionId...');
     
     final repo = _ref.read(sessionRepositoryProvider);
-    final gemini = _ref.read(geminiBatchClientProvider);
+    final gemini = _ref.read(geminiAnalysisClientProvider);
     
     if (gemini == null) return;
 
