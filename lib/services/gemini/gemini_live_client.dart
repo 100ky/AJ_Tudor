@@ -42,9 +42,9 @@ class GeminiLiveClient {
   void connect({required String modelName, required String systemPrompt}) async {
     await _debugAvailableModels();
     
-    // Live API aktuálně doporučuje verzi v1beta
+    // Live API aktuálně funguje nejlépe na v1alpha nebo v1beta1
     final uri = Uri.parse(
-        'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=$_apiKey');
+        'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=$_apiKey');
     
     _channel = WebSocketChannel.connect(uri);
 

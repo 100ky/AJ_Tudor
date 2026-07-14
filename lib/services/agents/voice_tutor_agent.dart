@@ -62,8 +62,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> {
       final systemPrompt = SystemPromptBuilder.buildTutorPrompt();
       
       // BidiGenerateContent (Live API) vyžaduje specifické modely pro real-time audio.
-      // Nelze použít běžný textový model jako gemini-3.5-flash.
-      const liveModelName = 'models/gemini-live-2.5-flash-native-audio';
+      const liveModelName = 'models/gemini-3.1-flash-live';
       
       client.connect(modelName: liveModelName, systemPrompt: systemPrompt);
 
