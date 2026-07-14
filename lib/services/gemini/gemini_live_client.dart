@@ -18,6 +18,7 @@ class GeminiLiveClient {
   GeminiLiveClient(this._apiKey, this._playbackService);
 
   void connect({required String modelName, required String systemPrompt}) {
+    // Vracíme se k v1alpha a camelCase, což je pro tento preview model obvyklejší
     final uri = Uri.parse(
         'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=$_apiKey');
     
@@ -26,8 +27,7 @@ class GeminiLiveClient {
 
     _channel!.stream.listen(
       (message) {
-        // Logujeme vše kromě obrovských audio dat, abychom viděli chyby
-        if (message is String && !message.contains('inlineData')) {
+        if (message is String && !message.contains('inlineData') && !message.contains('inline_data')) {
           debugPrint('WebSocket PŘIJATO: $message');
         }
         _handleIncomingMessage(message);
@@ -41,24 +41,29 @@ class GeminiLiveClient {
       },
     );
 
-    _sendSetupMessage(modelName, systemPrompt);
+    // Krátká prodleva pro stabilitu
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (_channel != null) {
+        _sendSetupMessage(modelName, systemPrompt);
+      }
+    });
   }
 
   void _sendSetupMessage(String modelName, String systemPrompt) {
     final setupMessage = {
       'setup': {
         'model': modelName.startsWith('models/') ? modelName : 'models/$modelName',
-        'generation_config': {
-          'response_modalities': ['AUDIO', 'TEXT'],
-          'speech_config': {
-            'voice_config': {
-              'prebuilt_voice_config': {
-                'voice_name': 'Aoede', 
+        'generationConfig': {
+          'responseModalities': ['AUDIO'],
+          'speechConfig': {
+            'voiceConfig': {
+              'prebuiltVoiceConfig': {
+                'voiceName': 'Puck', 
               }
             }
           }
         },
-        'system_instruction': {
+        'systemInstruction': {
           'parts': [{'text': systemPrompt}]
         }
       }
@@ -72,10 +77,10 @@ class GeminiLiveClient {
     
     final base64Audio = base64Encode(pcm16Data);
     final clientContent = {
-      'realtime_input': {
-        'media_chunks': [
+      'realtimeInput': {
+        'mediaChunks': [
           {
-            'mime_type': 'audio/pcm;rate=16000',
+            'mimeType': 'audio/pcm;rate=16000',
             'data': base64Audio,
           }
         ]
@@ -87,14 +92,14 @@ class GeminiLiveClient {
   void sendText(String text) {
     if (_channel == null) return;
     final clientContent = {
-      'client_content': {
+      'clientContent': {
         'turns': [
           {
             'role': 'user',
             'parts': [{'text': text}]
           }
         ],
-        'turn_complete': true
+        'turnComplete': true
       }
     };
     _channel?.sink.add(jsonEncode(clientContent));
@@ -113,7 +118,6 @@ class GeminiLiveClient {
       
       final data = jsonDecode(messageString);
       
-      // Zpracování chyb přímo od Google serveru
       if (data.containsKey('error')) {
         final error = data['error'];
         final msg = error['message'] ?? 'Neznámá chyba serveru';
@@ -121,29 +125,33 @@ class GeminiLiveClient {
         return;
       }
 
-      if (data.containsKey('server_content')) {
-        final serverContent = data['server_content'];
-        
+      // Podpora pro camelCase (Google standard) i snake_case (některé proxy/SDK)
+      final serverContent = data['serverContent'] ?? data['server_content'];
+      
+      if (serverContent != null) {
         // Přepis toho, co řekl uživatel (STT)
-        if (serverContent.containsKey('input_transcription')) {
-          final text = serverContent['input_transcription']['text'];
+        final inputTranscription = serverContent['inputTranscription'] ?? serverContent['input_transcription'];
+        if (inputTranscription != null) {
+          final text = inputTranscription['text'];
           if (onUserTranscriptReceived != null) onUserTranscriptReceived!(text);
         }
 
         // Přepis toho, co říká model
-        if (serverContent.containsKey('output_transcription')) {
-          final text = serverContent['output_transcription']['text'];
+        final outputTranscription = serverContent['outputTranscription'] ?? serverContent['output_transcription'];
+        if (outputTranscription != null) {
+          final text = outputTranscription['text'];
           if (onTextReceived != null) onTextReceived!(text);
         }
 
-        if (serverContent.containsKey('model_turn')) {
-          final parts = serverContent['model_turn']['parts'] as List;
+        final modelTurn = serverContent['modelTurn'] ?? serverContent['model_turn'];
+        if (modelTurn != null) {
+          final parts = modelTurn['parts'] as List;
           for (var part in parts) {
-            if (part.containsKey('inline_data')) {
-              final inlineData = part['inline_data'];
-              if (inlineData['mime_type'].startsWith('audio/pcm')) {
+            final inlineData = part['inlineData'] ?? part['inline_data'];
+            if (inlineData != null) {
+              if (inlineData['mimeType'].startsWith('audio/pcm') || inlineData['mime_type'].startsWith('audio/pcm')) {
                 final audioBytes = base64Decode(inlineData['data']);
-                if (onAudioReceived != null) onAudioReceived!(); // Informujeme UI
+                if (onAudioReceived != null) onAudioReceived!(); 
                 _playbackService.playPcmData(audioBytes);
               }
             } 
@@ -153,7 +161,8 @@ class GeminiLiveClient {
           }
         }
         
-        if (serverContent.containsKey('turn_complete') && serverContent['turn_complete'] == true) {
+        final turnComplete = serverContent['turnComplete'] ?? serverContent['turn_complete'];
+        if (turnComplete == true) {
           if (onTurnComplete != null) onTurnComplete!();
         }
       }

@@ -277,50 +277,54 @@ class ErrorLogs extends Table {
   - [x] Vytvoření Drift databáze a tabulek (`sessions`, `transcripts`, `error_logs`, `user_profile`).
   - [x] Základní Skeleton UI (Bottom Nav s 4 taby).
 
-### Fáze 2: Gemini Integration (Skoro hotovo)
+### Fáze 2: Gemini Integration ✅
 - [x] REST klient pro Gemini Flash API (`google_generative_ai`)
 - [x] System prompt builder s bilingvním prompt engineeringem
 - [x] Textový chat mód (jako fallback a pro testování)
 - [x] Odzkoušet textový chat na fungujícím modelu (Přechod na Gemini 3.5 Flash / 3.1 Flash-Lite z důvodu omezení starých modelů)
-- [ ] Function Calling definice (`log_error`)
-- [ ] Structured Outputs pro Memory Manager
+- [x] Function Calling definice (`log_error`)
+- [x] Structured Outputs pro Memory Manager
 
-### Fáze 3 – Audio pipeline 🎤
+### Fáze 3 – Audio pipeline ✅
 - [x] Audio capture service (mikrofon → PCM 16kHz mono)
 - [x] Audio playback service (PCM 24kHz → reproduktor)
-- [ ] Buffer manager (ring buffer, anti-underrun)
-- [ ] Testování audio pipeline izolovaně (echo test)
+- [x] Buffer manager (ring buffer, anti-underrun)
+- [x] Testování audio pipeline izolovaně (echo test)
 
-### Fáze 4 – Gemini Live API (hlasový mód) 🗣️ (Aktuální krok)
+### Fáze 4 – Gemini Live API (hlasový mód) ✅
 - [x] WebSocket klient pro `wss://generativelanguage.googleapis.com`
 - [x] Binární PCM streaming (send & receive)
 - [x] Integrace s audio pipeline a real-time transkripce v klientovi
-- [ ] Vytvořit UI `TutorScreen` (tlačítko s mikrofonem)
-- [ ] Session manager (context compression, GoAway handling, session resumption)
+- [x] Vytvořit UI `TutorScreen` (tlačítko s mikrofonem)
+- [x] Session manager (context compression, GoAway handling, session resumption)
 
-### Fáze 5 – Multi-agentní systém 🧠 (Aktuální krok)
+### Fáze 5 – Multi-agentní systém ✅
 - **Cíl**: Propojit hlasového tutora s analytickým agentem pro personalizaci a sledování pokroku.
 - **Úkoly**:
-  - [ ] **Transcript Persistence**: Ukládání každé promluvy z Voice Tutora do Drift databáze.
-  - [ ] **Asynchronní Analýza**: Po skončení hovoru (nebo periodicky) `Memory Manager` (Gemini 3.1/3.5) projde transcript.
-  - [ ] **Extrakce chyb**: Identifikace gramatických a výslovnostních chyb do tabulky `ErrorLogs`.
-  - [ ] **Personalizace**: Memory Manager vygeneruje "Context Summary", který se příště pošle Voice Tutorovi jako `systemInstruction`, aby věděl, co studentovi nejde a o čem už mluvili.
-  - [ ] **Progress Tracking**: Aktualizace úrovně (A1-C2) a slovní zásoby v `UserProfile`.
+  - [x] **Transcript Persistence**: Ukládání každé promluvy z Voice Tutora do Drift databáze.
+  - [x] **Asynchronní Analýza**: Po skončení hovoru `Memory Manager` (Gemini 3.1/3.5) projde transcript.
+  - [x] **Extrakce chyb**: Identifikace gramatických a výslovnostních chyb do tabulky `ErrorLogs`.
+  - [x] **Personalizace**: Memory Manager vygeneruje "Context Summary", který se příště pošle Voice Tutorovi jako `systemInstruction`.
+  - [x] **Progress Tracking**: Aktualizace úrovně a statistik v `UserProfile`.
 
-### Fáze 6 – Ambient UI & UX ✨
-- [ ] Pulzující sféra / orb animace (stavy: idle, listening, thinking, speaking)
-- [ ] Live transcript s blednutím slov
-- [ ] Waveform vizualizace
-- [ ] Progress dashboard (grafy chyb, témata, slovíčka)
-- [ ] Historie konverzací s přehráváním
+### Fáze 6 – Ambient UI & UX ✅
+- [x] Pulzující sféra / orb animace (stavy: idle, listening, thinking, speaking)
+- [x] Live transcript s moderním vizuálem (Glassmorphism)
+- [x] Ambientní gradienty na pozadí měnící se podle stavu
+- [x] Progress dashboard (statistiky, paměť, seznam chyb)
+- [x] Historie konverzací s přehráváním a detaily
 
-### Fáze 7 – Polish & Robustnost 🛡️
-- [ ] Offline graceful degradation
-- [ ] Síťová odolnost (retry, reconnect)
-- [ ] Error handling & user-friendly chybové hlášky
-- [ ] Optimalizace výkonu (audio latence, UI jank)
-- [ ] Unit testy pro kritické komponenty
-- [ ] README.md a dokumentace
+### Fáze 7 – Polish & Robustnost ⏳ (Aktuální krok)
+- [ ] **Stabilita spojení**: Auto-reconnect a handling kvót.
+- [ ] **UX Detaily**:
+    - [ ] Waveform visualizer (reálné audio vlny).
+    - [ ] Haptika (vibrace při startu/konci poslechu).
+- [ ] **Pokročilá data**:
+    - [ ] Extrakce slovní zásoby (Vocabulary tracker).
+    - [ ] Dynamické přepínání úrovně na základě plynulosti.
+- [ ] **Technický dluh**:
+    - [ ] Refaktorizace agentů na menší servisy.
+    - [ ] Unit testy pro kritickou logiku.
 
 ---
 

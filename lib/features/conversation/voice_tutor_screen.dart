@@ -9,12 +9,23 @@ class VoiceTutorScreen extends ConsumerStatefulWidget {
   ConsumerState<VoiceTutorScreen> createState() => _VoiceTutorScreenState();
 }
 
-class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen> {
+class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen> with SingleTickerProviderStateMixin {
   final _textController = TextEditingController();
+  late AnimationController _pulseController;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
+  }
 
   @override
   void dispose() {
     _textController.dispose();
+    _pulseController.dispose();
     super.dispose();
   }
 
@@ -31,41 +42,48 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen> {
         children: [
           // Horní lišta s Ambient Orbem a stavem
           Container(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            color: Colors.black12,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            child: Column(
               children: [
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 300),
-                  width: _getOrbSize(tutorState.status) * 0.6, // Zmenšený orb
-                  height: _getOrbSize(tutorState.status) * 0.6,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: _getOrbColor(tutorState.status),
-                    boxShadow: [
-                      BoxShadow(
-                        color: _getOrbColor(tutorState.status).withOpacity(0.5),
-                        blurRadius: 15,
-                        spreadRadius: 5,
-                      )
-                    ],
-                  ),
-                  child: Icon(
-                    _getOrbIcon(tutorState.status),
-                    size: 24,
-                    color: Colors.white,
-                  ),
+                AnimatedBuilder(
+                  animation: _pulseController,
+                  builder: (context, child) {
+                    final pulse = (tutorState.status == TutorState.listening || tutorState.status == TutorState.speaking)
+                        ? _pulseController.value * 15
+                        : 0.0;
+
+                    return AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      width: _getOrbSize(tutorState.status),
+                      height: _getOrbSize(tutorState.status),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: _getOrbColor(tutorState.status),
+                        boxShadow: [
+                          BoxShadow(
+                            color: _getOrbColor(tutorState.status).withValues(alpha: 0.4),
+                            blurRadius: 20 + pulse,
+                            spreadRadius: 5 + pulse / 2,
+                          )
+                        ],
+                      ),
+                      child: Icon(
+                        _getOrbIcon(tutorState.status),
+                        size: 32,
+                        color: Colors.white,
+                      ),
+                    );
+                  },
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(height: 16),
                 Text(
                   _getStatusText(tutorState.status),
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
                 ),
               ],
             ),
           ),
-          
+
           if (tutorState.errorMessage.isNotEmpty)
             Padding(
               padding: const EdgeInsets.all(8.0),
@@ -75,44 +93,32 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen> {
                 textAlign: TextAlign.center,
               ),
             ),
-            
+
           // Historie konverzace
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.all(16.0),
-              itemCount: tutorState.messages.length + (tutorState.currentTranscript.isNotEmpty ? 1 : 0),
+              itemCount: _getVisibleItemCount(tutorState),
               itemBuilder: (context, index) {
-                if (index == tutorState.messages.length) {
-                  // Probíhající transkripce
-                  return Align(
-                    alignment: Alignment.centerLeft,
-                    child: Container(
-                      margin: const EdgeInsets.only(bottom: 8.0),
-                      padding: const EdgeInsets.all(12.0),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[800]?.withOpacity(0.5),
-                        borderRadius: BorderRadius.circular(16.0),
-                      ),
-                      child: Text(
-                        '${tutorState.currentTranscript} ...',
-                        style: const TextStyle(fontSize: 16, fontStyle: FontStyle.italic),
-                      ),
-                    ),
-                  );
+                final visibleMessages = _getVisibleMessages(tutorState);
+
+                // Pokud máme transkripci a jsme na konci listu
+                if (index == visibleMessages.length) {
+                  return _buildLiveTranscript(tutorState.currentTranscript);
                 }
-                
-                final msg = tutorState.messages[index];
-                return Align(
-                  alignment: msg.isUser ? Alignment.centerRight : Alignment.centerLeft,
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 8.0),
-                    padding: const EdgeInsets.all(12.0),
-                    decoration: BoxDecoration(
-                      color: msg.isUser ? Colors.blueAccent.withOpacity(0.2) : Colors.grey[800],
-                      borderRadius: BorderRadius.circular(16.0),
-                    ),
-                    child: Text(msg.text, style: const TextStyle(fontSize: 16)),
-                  ),
+
+                final msg = visibleMessages[index];
+
+                // Výpočet opacity pro efekt slábnutí starších zpráv
+                // Poslední prvek (index length-1) má opacity 1.0, starší klesají
+                final totalItems = visibleMessages.length + (tutorState.currentTranscript.isNotEmpty ? 1 : 0);
+                final relativeIndex = index + (totalItems - visibleMessages.length);
+                final opacity = (relativeIndex + 1) / totalItems;
+
+                return AnimatedOpacity(
+                  duration: const Duration(milliseconds: 500),
+                  opacity: opacity.clamp(0.2, 1.0),
+                  child: _buildMessageBubble(msg),
                 );
               },
             ),
@@ -154,15 +160,15 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen> {
   double _getOrbSize(TutorState status) {
     switch (status) {
       case TutorState.listening:
-        return 120.0;
-      case TutorState.thinking:
-        return 100.0;
-      case TutorState.speaking:
         return 140.0;
+      case TutorState.thinking:
+        return 120.0;
+      case TutorState.speaking:
+        return 160.0;
       case TutorState.idle:
       case TutorState.connecting:
       case TutorState.error:
-        return 100.0;
+        return 120.0;
     }
   }
 
@@ -215,5 +221,90 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen> {
       case TutorState.idle:
         return 'Připraven. Stiskni mikrofon.';
     }
+  }
+
+  // Pomocné metody pro dynamické UI zpráv
+
+  List<LiveChatMessage> _getVisibleMessages(VoiceTutorState state) {
+    if (state.messages.length <= 5) return state.messages;
+    return state.messages.sublist(state.messages.length - 5);
+  }
+
+  int _getVisibleItemCount(VoiceTutorState state) {
+    final msgCount = state.messages.length > 5 ? 5 : state.messages.length;
+    return msgCount + (state.currentTranscript.isNotEmpty ? 1 : 0);
+  }
+
+  Widget _buildLiveTranscript(String transcript) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12.0),
+        padding: const EdgeInsets.all(12.0),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(16.0),
+          border: Border.all(color: Colors.deepPurpleAccent.withValues(alpha: 0.2)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 10,
+                  height: 10,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.deepPurpleAccent),
+                ),
+                SizedBox(width: 8),
+                Text(
+                  'LIVE',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.deepPurpleAccent,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '$transcript...',
+              style: const TextStyle(fontSize: 16, fontStyle: FontStyle.italic, color: Colors.white70),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMessageBubble(LiveChatMessage msg) {
+    return Align(
+      alignment: msg.isUser ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12.0),
+        padding: const EdgeInsets.all(12.0),
+        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+        decoration: BoxDecoration(
+          color: msg.isUser
+              ? Colors.cyanAccent.withValues(alpha: 0.15)
+              : Colors.deepPurple.withValues(alpha: 0.2),
+          borderRadius: BorderRadius.circular(16.0),
+          border: Border.all(
+            color: msg.isUser
+                ? Colors.cyanAccent.withValues(alpha: 0.2)
+                : Colors.deepPurpleAccent.withValues(alpha: 0.1),
+          ),
+        ),
+        child: Text(
+          msg.text,
+          style: TextStyle(
+            fontSize: 16,
+            color: msg.isUser ? Colors.cyan[50] : Colors.deepPurple[50],
+          ),
+        ),
+      ),
+    );
   }
 }

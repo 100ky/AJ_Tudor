@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/database_provider.dart';
 import '../../providers/gemini_provider.dart';
-import '../prompt/system_prompt_builder.dart';
 
 class MemoryManagerAgent {
   final Ref _ref;
@@ -26,16 +25,33 @@ class MemoryManagerAgent {
       final chatHistory = transcripts.map((t) => '${t.speaker}: ${t.content}').join('\n');
 
       // 2. Analýza pomocí Gemini Flash
-      final prompt = '''Analyzuj tuto konverzaci:
+      final prompt = '''Analyzuj tuto konverzaci mezi tutorem (AI) a studentem:
 $chatHistory
 
-Odpověz POUZE ve formátu JSON podle instrukcí v tvém systému.''';
+Úkol:
+1. Vygeneruj stručné shrnutí tématu (topicSummary).
+2. Ohodnoť plynulost studenta od 0.0 do 1.0 (fluencyScore).
+3. Vytvoř krátký briefing pro příští lekci (např. "Student má problém s předpřítomným časem, příště procvičit.").
+4. Identifikuj konkrétní chyby (gramatika, slovní zásoba, výslovnost).
 
-      // Dočasně použijeme sendMessage, ale ideálně bychom měli mít čistý completion bez system promptu tutora.
-      // Proto vytvoříme novou instanci modelu pro analýzu.
+Odpověz POUZE ve formátu JSON:
+{
+  "topicSummary": "string",
+  "fluencyScore": 0.85,
+  "totalErrors": 2,
+  "briefing": "string",
+  "errors": [
+    {
+      "type": "grammar|vocabulary|pronunciation",
+      "userSaid": "originální věta studenta",
+      "correctForm": "opravená verze",
+      "explanation": "krátké české vysvětlení proč je to špatně"
+    }
+  ]
+}''';
+
       final analysisResult = await gemini.sendMessage(prompt);
       
-      // Pokus o parsování JSONu (Gemini občas přidá markdown tagy)
       final cleanJson = analysisResult.replaceAll('```json', '').replaceAll('```', '').trim();
       final data = jsonDecode(cleanJson);
 
@@ -48,8 +64,21 @@ Odpověz POUZE ve formátu JSON podle instrukcí v tvém systému.''';
       );
 
       await repo.updateUserMemory(data['briefing'] ?? '');
+
+      // 4. Uložení jednotlivých chyb
+      if (data['errors'] != null && data['errors'] is List) {
+        for (var err in data['errors']) {
+          await repo.addErrorLog(
+            sessionId: sessionId,
+            errorType: err['type'] ?? 'grammar',
+            userSaid: err['userSaid'] ?? '',
+            correctForm: err['correctForm'] ?? '',
+            explanation: err['explanation'] ?? '',
+          );
+        }
+      }
       
-      debugPrint('Analýza session $sessionId dokončena. Briefing uložen.');
+      debugPrint('Analýza session $sessionId dokončena. Briefing a ${data['totalErrors']} chyb uloženo.');
     } catch (e) {
       debugPrint('Chyba při analýze session: $e');
     }

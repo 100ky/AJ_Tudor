@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/config_provider.dart';
+import '../../providers/database_provider.dart';
+import '../../providers/profile_provider.dart';
 import '../../core/constants/gemini_models.dart';
 
 
@@ -188,6 +190,66 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ),
           const SizedBox(height: 24),
+          const Text(
+            'Můj pokrok a paměť',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Consumer(
+            builder: (context, ref, child) {
+              final profileAsync = ref.watch(userProfileProvider);
+              return profileAsync.when(
+                data: (profile) {
+                  if (profile == null) {
+                    return const Card(
+                      child: Padding(
+                        padding: EdgeInsets.all(16.0),
+                        child: Text('Zatím neproběhla žádná lekce.'),
+                      ),
+                    );
+                  }
+                  return Card(
+                    child: Column(
+                      children: [
+                        ListTile(
+                          leading: const Icon(Icons.psychology),
+                          title: const Text('Co si AI pamatuje (Briefing)'),
+                          subtitle: Text(
+                            profile.memoryBriefing ?? 'Žádný briefing zatím není k dispozici.',
+                            style: const TextStyle(fontStyle: FontStyle.italic),
+                          ),
+                        ),
+                        const Divider(),
+                        ListTile(
+                          leading: const Icon(Icons.school),
+                          title: const Text('Úroveň angličtiny'),
+                          trailing: Text(
+                            profile.targetLevel,
+                            style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueAccent),
+                          ),
+                        ),
+                        ListTile(
+                          leading: const Icon(Icons.history),
+                          title: const Text('Počet absolvovaných lekcí'),
+                          trailing: Text(profile.totalSessions.toString()),
+                        ),
+                        const Divider(),
+                        TextButton.icon(
+                          onPressed: () => _showResetDialog(context),
+                          icon: const Icon(Icons.delete_forever, color: Colors.red),
+                          label: const Text('Resetovat paměť a pokrok', style: TextStyle(color: Colors.red)),
+                        ),
+                        const SizedBox(height: 8),
+                      ],
+                    ),
+                  );
+                },
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (e, _) => Text('Chyba načítání profilu: $e'),
+              );
+            },
+          ),
+          const SizedBox(height: 24),
           const Divider(),
           const SizedBox(height: 24),
           const Text(
@@ -199,6 +261,34 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             leading: const Icon(Icons.info_outline),
             title: const Text('Verze'),
             subtitle: const Text('0.1.0 - Dev Preview'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showResetDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Resetovat paměť?'),
+        content: const Text('Tato akce vymaže vše, co si AI pamatuje o vašem pokroku. Nelze vrátit zpět.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Zrušit'),
+          ),
+          TextButton(
+            onPressed: () async {
+              await ref.read(sessionRepositoryProvider).resetUserMemory();
+              if (context.mounted) {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Paměť byla vymazána.')),
+                );
+              }
+            },
+            child: const Text('Resetovat', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),

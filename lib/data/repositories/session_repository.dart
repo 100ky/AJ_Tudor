@@ -95,5 +95,59 @@ class SessionRepository {
     final user = await (_db.select(_db.userProfiles)..where((t) => t.id.equals(1))).getSingleOrNull();
     return user?.memoryBriefing;
   }
+
+  /// Sleduje změny v profilu uživatele
+  Stream<UserProfile?> watchUserProfile() {
+    return (_db.select(_db.userProfiles)..where((t) => t.id.equals(1))).watchSingleOrNull();
+  }
+
+  /// Přidá záznam o chybě
+  Future<void> addErrorLog({
+    required int sessionId,
+    required String errorType,
+    required String userSaid,
+    required String correctForm,
+    required String explanation,
+  }) async {
+    await _db.into(_db.errorLogs).insert(
+      ErrorLogsCompanion.insert(
+        sessionId: sessionId,
+        errorType: errorType,
+        userSaid: userSaid,
+        correctForm: correctForm,
+        explanation: explanation,
+        timestamp: DateTime.now(),
+      ),
+    );
+  }
+
+  /// Načte všechny chyby pro danou session
+  Future<List<ErrorLog>> getErrorLogs(int sessionId) async {
+    return await (_db.select(_db.errorLogs)..where((t) => t.sessionId.equals(sessionId))).get();
+  }
+
+  /// Sleduje všechny chyby (pro dashboard)
+  Stream<List<ErrorLog>> watchAllErrorLogs() {
+    return (_db.select(_db.errorLogs)..orderBy([(t) => OrderingTerm.desc(t.timestamp)])).watch();
+  }
+
+  /// Načte seznam všech sessions
+  Stream<List<Session>> watchAllSessions() {
+    return (_db.select(_db.sessions)..orderBy([(t) => OrderingTerm.desc(t.startedAt)])).watch();
+  }
+
+  /// Smaže paměť uživatele (včetně briefingu)
+  Future<void> resetUserMemory() async {
+    await (_db.update(_db.userProfiles)..where((t) => t.id.equals(1))).write(
+      const UserProfilesCompanion(
+        memoryBriefing: Value(null),
+        totalSessions: Value(0),
+        recurringErrors: Value('[]'),
+        vocabulary: Value('[]'),
+        topicPreferences: Value('[]'),
+        targetLevel: Value('B1'),
+      ),
+    );
+  }
 }
 
