@@ -32,6 +32,20 @@ Implementační plán vychází z [Tudor_analyza.txt](file:///c:/Users/tosma/Des
 
 ---
 
+## Zjištění o modelech (červenec 2026) 🧠
+
+Během vývoje jsme identifikovali specifické chování a omezení jednotlivých modelů Gemini:
+
+- **Gemini Live API (WebSocket)**: Vyžaduje specifické "Native Audio" modely.
+  - `gemini-2.5-flash-native-audio-preview-12-2025`: Aktuálně jediný stabilně podporující real-time hlasovou konverzaci přes protokol `bidiGenerateContent`.
+  - **Omezení**: Starší experimentální modely (např. `2.0-flash-exp`) byly staženy (Chyba 1008). Standardní modely (3.5 Flash) tento protokol zatím nepodporují.
+- **Gemini 3.5 Flash**: Špičkový pro textový chat a analýzu (Agentic workflows), ale v Live API nepodporuje multimodální výstup (AUDIO + TEXT zároveň vyvolává chybu 1007/1008).
+- **Gemini 3.1 Flash-Lite**: Ideální pro asynchronní "těžkou práci" – analýzu dlouhých transkriptů a extrakci metadat.
+
+---
+
+---
+
 ## Navrhovaná architektura
 
 ```mermaid
@@ -57,8 +71,8 @@ graph TB
     end
     
     subgraph "Google Cloud"
-        LIVE["Gemini 2.0 Flash<br/>Multimodal Live API"]
-        BATCH["Gemini 2.5 Flash-Lite<br/>Batch Analysis"]
+        LIVE["Gemini 2.5 Native Audio<br/>Real-time Voice"]
+        BATCH["Gemini 3.5 Flash / 3.1 Lite<br/>Asynchronní Analýza"]
     end
     
     UI --> VM
@@ -71,8 +85,12 @@ graph TB
     WS -->|"PCM 24kHz"| AS
     WS --> LIVE
     REST --> BATCH
-    VT --> DB
-    MM --> DB
+    
+    %% Multi-agent workflow
+    VT -- "Uloží transcript" --> DB
+    DB -- "Trigger analýzy" --> MM
+    MM -- "Aktualizuje Progress & Chyby" --> DB
+    DB -- "Injektuje kontext (Personalizace)" --> VT
 ```
 
 ---
@@ -280,11 +298,14 @@ class ErrorLogs extends Table {
 - [ ] Vytvořit UI `TutorScreen` (tlačítko s mikrofonem)
 - [ ] Session manager (context compression, GoAway handling, session resumption)
 
-### Fáze 5 – Multi-agentní systém 🧠
-- [ ] Memory Manager agent (post-session analýza)
-- [ ] Dynamická injekce kontextu (memory-injected prompting)
-- [ ] Error tracking přes Function Calling v reálném čase
-- [ ] Aktualizace UserProfile po každé konverzaci
+### Fáze 5 – Multi-agentní systém 🧠 (Aktuální krok)
+- **Cíl**: Propojit hlasového tutora s analytickým agentem pro personalizaci a sledování pokroku.
+- **Úkoly**:
+  - [ ] **Transcript Persistence**: Ukládání každé promluvy z Voice Tutora do Drift databáze.
+  - [ ] **Asynchronní Analýza**: Po skončení hovoru (nebo periodicky) `Memory Manager` (Gemini 3.1/3.5) projde transcript.
+  - [ ] **Extrakce chyb**: Identifikace gramatických a výslovnostních chyb do tabulky `ErrorLogs`.
+  - [ ] **Personalizace**: Memory Manager vygeneruje "Context Summary", který se příště pošle Voice Tutorovi jako `systemInstruction`, aby věděl, co studentovi nejde a o čem už mluvili.
+  - [ ] **Progress Tracking**: Aktualizace úrovně (A1-C2) a slovní zásoby v `UserProfile`.
 
 ### Fáze 6 – Ambient UI & UX ✨
 - [ ] Pulzující sféra / orb animace (stavy: idle, listening, thinking, speaking)

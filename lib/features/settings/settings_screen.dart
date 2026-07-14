@@ -153,6 +153,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             'AI Model (Textový chat)',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
+          const Padding(
+            padding: EdgeInsets.only(top: 4.0, bottom: 8.0),
+            child: Text(
+              'Hlasový mód používá automaticky model optimalizovaný pro zvuk (Gemini 2.5 Native Audio).',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ),
           const SizedBox(height: 8),
           Card(
             elevation: 2,

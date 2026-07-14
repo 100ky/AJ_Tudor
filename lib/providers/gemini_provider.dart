@@ -5,6 +5,7 @@ import 'config_provider.dart';
 
 final geminiLiveClientProvider = Provider<GeminiLiveClient?>((ref) {
   final apiKey = ref.watch(apiKeyProvider);
+  final model = ref.watch(modelProvider); // Sledujeme i model
   final playbackService = ref.watch(audioPlaybackServiceProvider);
   
   if (apiKey == null || apiKey.isEmpty) return null;

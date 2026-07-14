@@ -10,6 +10,7 @@ class GeminiLiveClient {
   
   // Callbacky pro UI
   Function(String)? onTextReceived;
+  Function()? onAudioReceived;
   Function()? onTurnComplete;
   Function(String)? onError;
 
@@ -47,7 +48,7 @@ class GeminiLiveClient {
       'setup': {
         'model': modelName.startsWith('models/') ? modelName : 'models/$modelName',
         'generationConfig': {
-          'responseModalities': ['TEXT', 'AUDIO'],
+          'responseModalities': ['AUDIO'],
           'speechConfig': {
             'voiceConfig': {
               'prebuiltVoiceConfig': {
@@ -129,6 +130,7 @@ class GeminiLiveClient {
               final inlineData = part['inlineData'];
               if (inlineData['mimeType'].startsWith('audio/pcm')) {
                 final audioBytes = base64Decode(inlineData['data']);
+                if (onAudioReceived != null) onAudioReceived!(); // Informujeme UI
                 _playbackService.playPcmData(audioBytes);
               }
             } 

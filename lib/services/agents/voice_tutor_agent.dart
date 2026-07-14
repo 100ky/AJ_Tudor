@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/audio_provider.dart';
 import '../../providers/gemini_provider.dart';
+import '../../providers/config_provider.dart';
 import '../../core/constants/gemini_models.dart';
 import '../prompt/system_prompt_builder.dart';
 
@@ -48,6 +49,14 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> {
 
   @override
   VoiceTutorState build() {
+    // Pokud se změní API klíč nebo model, ukončíme aktivní hovor
+    ref.listen(apiKeyProvider, (previous, next) {
+      if (state.status != TutorState.idle) stopSession();
+    });
+    ref.listen(modelProvider, (previous, next) {
+      if (state.status != TutorState.idle) stopSession();
+    });
+
     ref.onDispose(() {
       stopSession();
     });
@@ -72,7 +81,8 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> {
       // 1. Připojení k WebSocketu
       final systemPrompt = SystemPromptBuilder.buildTutorPrompt();
       
-      // BidiGenerateContent (Live API) vyžaduje specifické modely pro real-time audio.
+      // Pro hlasový chat vždy vynutíme model, který Bidi protokol (Live API) podporuje.
+      // Modely Gemini 3.x Flash aktuálně bidiGenerateContent neumí.
       const liveModelName = 'models/${GeminiModels.defaultLiveModel}';
       
       client.connect(modelName: liveModelName, systemPrompt: systemPrompt);
@@ -84,6 +94,13 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> {
           status: TutorState.speaking,
           currentTranscript: state.currentTranscript + text,
         );
+      };
+
+      client.onAudioReceived = () {
+        // Pokud přijímáme zvuk, přepneme stav na speaking (i když nemáme text)
+        if (state.status != TutorState.speaking) {
+          state = state.copyWith(status: TutorState.speaking);
+        }
       };
 
       client.onTurnComplete = () {

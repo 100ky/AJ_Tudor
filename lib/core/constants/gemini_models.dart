@@ -1,21 +1,12 @@
 class GeminiModels {
   // Aktuální modely (červenec 2026)
-  // Gemini 3.5 Flash – nejnovější, nejrychlejší, doporučený
   static const String flash3_5 = 'gemini-3.5-flash';
-
-  // Gemini 3.1 Flash-Lite – levnější, pro batch analýzu a vysoký objem
   static const String flashLite3_1 = 'gemini-3.1-flash-lite';
-
-  // --- Modely pro Multimodal Live API (WebSocket / Voice Tutor) ---
-  // Použijeme model, který server aktivně podporuje pro BidiGenerateContent v tomto tieru
-  // Gemini 2.5 Flash – starší ale stále funkční (retirement: říjen 2026)
   static const String flash2_5 = 'gemini-2.5-flash';
 
-  // Specializované modely
-  static const String flash3_1_8b = 'gemini-3.1-flash-8b';
-
-  // --- Modely pro Bidi (Live API) ---
-  static const String liveVoiceModel = 'gemini-2.5-flash-native-audio-latest';
+  // --- Model pro Multimodal Live API (WebSocket / Voice Tutor) ---
+  // Používáme specifický "native audio" model, který podporuje BidiGenerateContent
+  static const String liveVoiceModel = 'gemini-2.5-flash-native-audio-preview-12-2025';
   static const String defaultLiveModel = liveVoiceModel;
 
   static const String embedding = 'text-embedding-004';
@@ -38,6 +29,8 @@ class GeminiModels {
         return 'Gemini 3.1 Flash-Lite (Úsporný)';
       case flash2_5:
         return 'Gemini 2.5 Flash (Záložní)';
+      case liveVoiceModel:
+        return 'Gemini 2.5 Native Audio (Hlasový)';
       default:
         return model;
     }

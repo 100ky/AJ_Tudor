@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../services/gemini/gemini_batch_client.dart';
+import '../../providers/config_provider.dart';
 
 class ChatMessage {
   final String text;
@@ -48,6 +49,15 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Sledujeme změnu modelu a čistíme chat, protože nový model nezná kontext starého
+    ref.listen(modelProvider, (previous, next) {
+      if (previous != next) {
+        setState(() {
+          _messages.clear();
+        });
+      }
+    });
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('AJ Tudor'),
