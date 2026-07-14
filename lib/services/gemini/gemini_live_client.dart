@@ -77,7 +77,16 @@ class GeminiLiveClient {
 
   void _handleIncomingMessage(dynamic message) {
     try {
-      final data = jsonDecode(message as String);
+      String messageString;
+      if (message is String) {
+        messageString = message;
+      } else if (message is List<int>) {
+        messageString = utf8.decode(message);
+      } else {
+        throw Exception('Neznámý formát zprávy: ${message.runtimeType}');
+      }
+      
+      final data = jsonDecode(messageString);
       
       if (data.containsKey('serverContent')) {
         final serverContent = data['serverContent'];
