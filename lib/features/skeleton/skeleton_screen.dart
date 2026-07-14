@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../conversation/conversation_screen.dart';
+import '../conversation/voice_tutor_screen.dart';
 import '../progress/progress_screen.dart';
 import '../history/history_screen.dart';
 import '../settings/settings_screen.dart';
@@ -21,7 +21,7 @@ class SkeletonScreen extends ConsumerWidget {
   const SkeletonScreen({super.key});
 
   static const List<Widget> _pages = [
-    ConversationScreen(),
+    VoiceTutorScreen(),
     ProgressScreen(),
     HistoryScreen(),
     SettingsScreen(),

@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../audio/audio_playback_service.dart';
 
+import 'package:http/http.dart' as http;
+
 class GeminiLiveClient {
   WebSocketChannel? _channel;
   final String _apiKey;
@@ -15,10 +17,34 @@ class GeminiLiveClient {
 
   GeminiLiveClient(this._apiKey, this._playbackService);
 
-  void connect({required String modelName, required String systemPrompt}) {
-    // Live API využívá verzi v1alpha
+  Future<void> _debugAvailableModels() async {
+    try {
+      final response = await http.get(Uri.parse('https://generativelanguage.googleapis.com/v1beta/models?key=$_apiKey'));
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final models = data['models'] as List;
+        final bidiModels = models.where((m) {
+          final methods = m['supportedGenerationMethods'] as List?;
+          return methods != null && methods.contains('bidiGenerateContent');
+        }).map((m) => m['name']).toList();
+        
+        debugPrint('--- PODPOROVANÉ MODELY PRO LIVE API (BidiGenerateContent) ---');
+        debugPrint(bidiModels.toString());
+        debugPrint('------------------------------------------------------------');
+      } else {
+        debugPrint('Nepodařilo se načíst seznam modelů: ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('Chyba při načítání modelů: $e');
+    }
+  }
+
+  void connect({required String modelName, required String systemPrompt}) async {
+    await _debugAvailableModels();
+    
+    // Live API aktuálně doporučuje verzi v1beta
     final uri = Uri.parse(
-        'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=$_apiKey');
+        'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=$_apiKey');
     
     _channel = WebSocketChannel.connect(uri);
 
@@ -28,7 +54,7 @@ class GeminiLiveClient {
         if (onError != null) onError!('WebSocket chyba: $error');
       },
       onDone: () {
-        debugPrint('WebSocket spojení uzavřeno');
+        debugPrint('WebSocket spojení uzavřeno. Code: ${_channel?.closeCode}, Reason: ${_channel?.closeReason}');
       },
     );
 

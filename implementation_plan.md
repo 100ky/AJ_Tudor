@@ -263,7 +263,7 @@ class ErrorLogs extends Table {
 - [x] REST klient pro Gemini Flash API (`google_generative_ai`)
 - [x] System prompt builder s bilingvním prompt engineeringem
 - [x] Textový chat mód (jako fallback a pro testování)
-- [ ] Odzkoušet textový chat na fungujícím modelu (Gemini 1.5 Flash)
+- [x] Odzkoušet textový chat na fungujícím modelu (Přechod na Gemini 3.5 Flash / 3.1 Flash-Lite z důvodu omezení starých modelů)
 - [ ] Function Calling definice (`log_error`)
 - [ ] Structured Outputs pro Memory Manager
 
