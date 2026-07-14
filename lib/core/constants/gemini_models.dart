@@ -1,33 +1,35 @@
 class GeminiModels {
-  // Rychlé modely pro běžný chat a připravované Live API
+  // Aktuální modely (červenec 2026)
+  // Gemini 3.5 Flash – nejnovější, nejrychlejší, doporučený
   static const String flash3_5 = 'gemini-3.5-flash';
-  static const String flash2 = 'gemini-2.0-flash';
-  static const String flash1_5 = 'gemini-1.5-flash';
-  
-  // Pokročilé modely pro složitější analytické úlohy (v budoucnu pro Memory Manager)
-  static const String pro1_5 = 'gemini-1.5-pro';
+
+  // Gemini 3.1 Flash-Lite – levnější, pro batch analýzu a vysoký objem
+  static const String flashLite3_1 = 'gemini-3.1-flash-lite';
+
+  // Gemini 2.5 Flash – starší ale stále funkční (retirement: říjen 2026)
+  static const String flash2_5 = 'gemini-2.5-flash';
 
   // Specializované modely
   static const String embedding = 'text-embedding-004';
 
+  // Výchozí model pro chat
+  static const String defaultModel = flash3_5;
+
   // Seznam povolených modelů pro textový chat v nastavení
   static const List<String> allowedChatModels = [
     flash3_5,
-    flash2,
-    flash1_5,
-    pro1_5,
+    flashLite3_1,
+    flash2_5,
   ];
 
   static String getLabel(String model) {
     switch (model) {
       case flash3_5:
-        return 'Gemini 3.5 Flash (Nejnovější textový)';
-      case flash2:
-        return 'Gemini 2.0 Flash (Nejrychlejší)';
-      case flash1_5:
-        return 'Gemini 1.5 Flash (Stabilní)';
-      case pro1_5:
-        return 'Gemini 1.5 Pro (Pokročilý)';
+        return 'Gemini 3.5 Flash (Doporučený)';
+      case flashLite3_1:
+        return 'Gemini 3.1 Flash-Lite (Úsporný)';
+      case flash2_5:
+        return 'Gemini 2.5 Flash (Záložní)';
       default:
         return model;
     }

@@ -28,8 +28,20 @@ class GeminiBatchClient {
     try {
       final response = await chat.sendMessage(Content.text(text));
       return response.text ?? 'Tutor neodpověděl.';
+    } on GenerativeAIException catch (e) {
+      final msg = e.message.toLowerCase();
+      if (msg.contains('quota') || msg.contains('429') || msg.contains('rate')) {
+        return '⚠️ Vyčerpán limit API. Počkej chvíli a zkus znovu, nebo zkontroluj svůj API klíč na https://aistudio.google.com/';
+      } else if (msg.contains('503') || msg.contains('unavailable') || msg.contains('overloaded')) {
+        return '⏳ Model je momentálně přetížený. Zkus to za pár sekund znovu.';
+      } else if (msg.contains('401') || msg.contains('403') || msg.contains('permission') || msg.contains('api_key')) {
+        return '🔑 Neplatný API klíč. Zkontroluj ho v Nastavení.';
+      } else if (msg.contains('not found') || msg.contains('404')) {
+        return '❌ Model nebyl nalezen. Zkus změnit model v Nastavení.';
+      }
+      return '❌ Chyba AI: ${e.message}';
     } catch (e) {
-      return 'Chyba připojení: $e';
+      return '❌ Chyba připojení: $e';
     }
   }
 }

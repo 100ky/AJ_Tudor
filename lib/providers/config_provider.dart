@@ -43,7 +43,8 @@ class ModelNotifier extends Notifier<String> {
     if (saved != null && GeminiModels.allowedChatModels.contains(saved)) {
       return saved;
     }
-    return GeminiModels.flash1_5;
+    // Uložený model je zastaralý nebo žádný není → resetovat na výchozí
+    return GeminiModels.defaultModel;
   }
 
   Future<void> saveModel(String model) async {
