@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/audio_provider.dart';
-import '../../providers/config_provider.dart';
 import '../../providers/gemini_provider.dart';
 import '../../core/constants/gemini_models.dart';
 import '../prompt/system_prompt_builder.dart';

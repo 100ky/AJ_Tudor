@@ -18,6 +18,7 @@ class GeminiModels {
 
   // Výchozí model pro chat
   static const String defaultModel = flash3_5;
+  static const String defaultLiveModel = liveVoiceModel;
 
   // Seznam povolených modelů pro textový chat v nastavení
   static const List<String> allowedChatModels = [
