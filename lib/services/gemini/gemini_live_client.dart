@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../audio/audio_playback_service.dart';
 
@@ -27,7 +28,7 @@ class GeminiLiveClient {
         if (onError != null) onError!('WebSocket chyba: $error');
       },
       onDone: () {
-        print('WebSocket spojení uzavřeno');
+        debugPrint('WebSocket spojení uzavřeno');
       },
     );
 
