@@ -305,12 +305,12 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen> with Single
         margin: const EdgeInsets.only(bottom: 12.0),
         padding: const EdgeInsets.all(16.0),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.08),
+          color: Colors.deepPurple.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(20.0),
-          border: Border.all(color: Colors.cyanAccent.withValues(alpha: 0.3)),
+          border: Border.all(color: Colors.deepPurpleAccent.withValues(alpha: 0.3)),
           boxShadow: [
             BoxShadow(
-              color: Colors.cyanAccent.withValues(alpha: 0.05),
+              color: Colors.deepPurpleAccent.withValues(alpha: 0.05),
               blurRadius: 10,
               spreadRadius: 2,
             )
@@ -325,27 +325,26 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen> with Single
                 const SizedBox(
                   width: 8,
                   height: 8,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.cyanAccent),
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.deepPurpleAccent),
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'STUDENT IS SPEAKING',
+                  'TUTOR IS SPEAKING',
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 1.2,
-                    color: Colors.cyanAccent.withValues(alpha: 0.7),
+                    color: Colors.deepPurpleAccent.withValues(alpha: 0.7),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 8),
             Text(
-              '$displayTranscript...',
+              displayTranscript,
               style: const TextStyle(
                 fontSize: 18, 
                 fontWeight: FontWeight.w400,
-                fontStyle: FontStyle.italic, 
                 color: Colors.white,
                 height: 1.4,
               ),

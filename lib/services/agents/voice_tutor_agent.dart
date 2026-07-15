@@ -2,13 +2,19 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../providers/audio_provider.dart';
 import '../../providers/gemini_provider.dart';
 import '../../providers/config_provider.dart';
 import '../../providers/database_provider.dart';
+import '../../data/repositories/session_repository.dart';
 import '../../core/constants/gemini_models.dart';
+import '../../core/utils/logger.dart';
+import '../../core/utils/result.dart';
+import '../../core/error/error_handling.dart';
 import '../prompt/system_prompt_builder.dart';
+import '../audio/audio_session_controller.dart';
+import '../system/wakelock_service.dart';
+import '../gemini/gemini_live_client.dart';
 
 import 'memory_manager_agent.dart';
 
@@ -57,26 +63,52 @@ class VoiceTutorState {
 }
 
 class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObserver {
-  StreamSubscription<List<int>>? _audioSubscription;
   Timer? _thinkingTimer;
+  Timer? _watchdogTimer;
   int? _currentSessionId;
+
+  // Odstranění cachovaného _client, budeme ho číst dynamicky
+  late final WakelockService _wakelock;
+  late final AudioSessionController _audio;
+  late final SessionRepository _repo;
+  late final MemoryManagerAgent _memory;
 
   @override
   VoiceTutorState build() {
+    _wakelock = ref.read(wakelockServiceProvider);
+    _audio = ref.read(audioSessionControllerProvider);
+    _repo = ref.read(sessionRepositoryProvider);
+    _memory = ref.read(memoryManagerAgentProvider);
+
     // Registrace observeru životního cyklu
     WidgetsBinding.instance.addObserver(this);
 
     // Pokud se změní API klíč nebo model, ukončíme aktivní hovor
     ref.listen(apiKeyProvider, (previous, next) {
-      if (state.status != TutorState.idle) stopSession();
+      if (previous != next && state.status != TutorState.idle) {
+        stopSession('apiKey changed');
+      }
     });
     ref.listen(modelProvider, (previous, next) {
-      if (state.status != TutorState.idle) stopSession();
+      if (previous != next && state.status != TutorState.idle) {
+        stopSession('model changed');
+      }
     });
 
     ref.onDispose(() {
       WidgetsBinding.instance.removeObserver(this);
-      stopSession();
+      
+      // Synchronní část cleanupu
+      _watchdogTimer?.cancel();
+      _thinkingTimer?.cancel();
+      
+      // Pro asynchronní cleanup v onDispose musíme být opatrní s ref.read.
+      // Raději zavoláme stopSession, ale zachytíme chyby Riverpodu při disposal.
+      try {
+        stopSession('disposed');
+      } catch (e) {
+        L.w('Chyba při disposal VoiceTutorAgent: $e');
+      }
     });
     return VoiceTutorState();
   }
@@ -90,9 +122,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         if (!client.isConnected) {
           debugPrint('Detekováno odpojení po resume, zkouším reconnect...');
           this.state = this.state.copyWith(status: TutorState.reconnecting);
-          // GeminiLiveClient má interní reconnect logiku na onDone/onError, 
-          // ale po resume může být socket "zombie".
-          client.disconnect(); // Tím vyvoláme onDone a následný auto-reconnect
+          client.disconnect();
         }
       }
     }
@@ -103,7 +133,6 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   }
 
   Future<void> startSession() async {
-    // Při startu nové session vyčistíme zprávy z té předchozí v UI
     state = state.copyWith(
       status: TutorState.connecting, 
       errorMessage: '',
@@ -111,13 +140,9 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       currentTranscript: '',
     );
     HapticFeedback.mediumImpact();
-    
-    // Aktivace wakelocku
-    WakelockPlus.enable();
+    _wakelock.enable();
     
     final client = ref.read(geminiLiveClientProvider);
-    final audioCapture = ref.read(audioCaptureServiceProvider);
-    final repo = ref.read(sessionRepositoryProvider);
     
     if (client == null) {
       state = state.copyWith(
@@ -128,12 +153,18 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     }
 
     try {
-      // 0. Založení session v databázi
-      _currentSessionId = await repo.startNewSession();
+      // 0. Založení session
+      final sessionResult = await _repo.startNewSession();
+      if (sessionResult.isFailure) {
+        state = state.copyWith(status: TutorState.error, errorMessage: sessionResult.getOrThrow().toString()); // getOrThrow vyhodí failure
+        return; 
+      }
+      _currentSessionId = sessionResult.getOrThrow();
 
-      // 1. Připojení k WebSocketu
-      // Načteme briefing z minula pro personalizaci
-      final lastBriefing = await repo.getLatestBriefing();
+      // 1. Připojení k AI
+      final briefingResult = await _repo.getLatestBriefing();
+      final lastBriefing = briefingResult.fold((s) => s, (f) => null);
+      
       var systemPrompt = SystemPromptBuilder.buildTutorPrompt(
         scenarioContext: state.scenarioContext,
       );
@@ -142,145 +173,150 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         systemPrompt += '\nKONTEXT Z MINULÉ LEKCE (PAMĚŤ): $lastBriefing\n';
       }
       
-      // Pro hlasový chat vždy vynutíme model, který Bidi protokol (Live API) podporuje.
       const liveModelName = 'models/${GeminiModels.defaultLiveModel}';
-      
       client.connect(modelName: liveModelName, systemPrompt: systemPrompt);
 
-      // Nastavení callbacků
-      client.onTextReceived = (text) {
-        // Zpracování průběžné transkripce
-        state = state.copyWith(
-          status: TutorState.speaking,
-          currentTranscript: state.currentTranscript + text,
-        );
-      };
+      _setupClientCallbacks(client, _repo);
 
-      client.onUserTranscriptReceived = (text) {
-        HapticFeedback.lightImpact();
-        // Uložení toho, co řekl uživatel, do historie a DB
-        final newMessages = List<LiveChatMessage>.from(state.messages)
-          ..add(LiveChatMessage(text, isUser: true));
-        state = state.copyWith(messages: newMessages);
-        
-        if (_currentSessionId != null) {
-          repo.addTranscript(
-            sessionId: _currentSessionId!,
-            speaker: 'user',
-            content: text,
-          );
-        }
-      };
-
-      client.onAudioReceived = () {
-        // Pokud přijímáme zvuk, přepneme stav na speaking (i když nemáme text)
-        if (state.status != TutorState.speaking) {
-          state = state.copyWith(status: TutorState.speaking);
-        }
-      };
-
-      client.onTurnComplete = () {
-        HapticFeedback.selectionClick();
-        // Po dokončení promluvy uložíme text do historie a vyčistíme aktuální transkripci
-        if (state.currentTranscript.isNotEmpty) {
-          final tutorText = state.currentTranscript;
-          final newMessages = List<LiveChatMessage>.from(state.messages)
-            ..add(LiveChatMessage(tutorText, isUser: false));
-          
-          state = state.copyWith(
-            status: TutorState.listening,
-            currentTranscript: '',
-            messages: newMessages,
-          );
-
-          if (_currentSessionId != null) {
-            repo.addTranscript(
-              sessionId: _currentSessionId!,
-              speaker: 'tutor',
-              content: tutorText,
-            );
-          }
-        } else {
-          state = state.copyWith(status: TutorState.listening);
-        }
-      };
-
-      client.onToolCall = (name, args) {
-        if (name == 'log_error' && _currentSessionId != null) {
-          repo.addErrorLog(
-            sessionId: _currentSessionId!,
-            errorType: args['error_type'] ?? 'grammar',
-            userSaid: args['user_said'] ?? '',
-            correctForm: args['correct_form'] ?? '',
-            explanation: args['explanation'] ?? '',
-          );
-          debugPrint('✅ Chyba zalogována v reálném čase přes Function Calling.');
-        }
-      };
-
-      client.onConnectionStatusChanged = (isConnected) {
-        if (!isConnected && state.status != TutorState.idle && state.status != TutorState.error) {
-          state = state.copyWith(status: TutorState.reconnecting);
-        } else if (isConnected && state.status == TutorState.reconnecting) {
-          state = state.copyWith(status: TutorState.listening);
-        }
-      };
-
-      client.onError = (error) {
-        state = state.copyWith(status: TutorState.error, errorMessage: error);
-      };
-
-      // 2. Zahájení nahrávání audia z mikrofonu
+      // 2. Audio
       try {
-        await audioCapture.startRecording();
-        
-        _audioSubscription = audioCapture.audioStream.listen((data) {
-          // Posíláme data na server, pokud nejsme v idle nebo error stavu.
-          if (state.status != TutorState.idle && state.status != TutorState.error) {
+        await _audio.start(onAudioChunk: (data) {
+          if (state.status == TutorState.listening) {
             client.sendAudioChunk(data);
           }
         });
       } catch (audioError) {
         state = state.copyWith(
           status: TutorState.error, 
-          errorMessage: 'Chyba mikrofonu: $audioError. Zkontrolujte oprávnění v nastavení telefonu.'
+          errorMessage: 'Chyba mikrofonu: $audioError'
         );
         client.disconnect();
         return;
       }
 
       state = state.copyWith(status: TutorState.listening, currentTranscript: '');
+      _resetWatchdog();
       
-    } catch (e) {
-      state = state.copyWith(status: TutorState.error, errorMessage: 'Chyba startu session: $e');
+    } catch (e, stack) {
+      L.e('Chyba startu session', e, stack);
+      state = state.copyWith(status: TutorState.error, errorMessage: 'Neočekávaná chyba při startu: $e');
     }
   }
 
-  Future<void> stopSession() async {
-    _thinkingTimer?.cancel();
-    _audioSubscription?.cancel();
-    
-    // Deaktivace wakelocku
-    WakelockPlus.disable();
+  void _setupClientCallbacks(dynamic client, dynamic repo) {
+    client.onTextReceived = (text) {
+      _resetWatchdog();
+      state = state.copyWith(
+        status: TutorState.speaking,
+        currentTranscript: state.currentTranscript + text,
+      );
+    };
 
-    ref.read(audioCaptureServiceProvider).stopRecording();
-    ref.read(geminiLiveClientProvider)?.disconnect();
+    client.onUserTranscriptReceived = (text) {
+      _resetWatchdog();
+      HapticFeedback.lightImpact();
+      final newMessages = List<LiveChatMessage>.from(state.messages)
+        ..add(LiveChatMessage(text, isUser: true));
+      state = state.copyWith(messages: newMessages);
+      
+      if (_currentSessionId != null) {
+        repo.addTranscript(
+          sessionId: _currentSessionId!,
+          speaker: 'user',
+          content: text,
+        );
+      }
+    };
+
+    client.onAudioReceived = () {
+      _resetWatchdog();
+      if (state.status != TutorState.speaking) {
+        state = state.copyWith(status: TutorState.speaking);
+      }
+    };
+
+    client.onTurnComplete = () {
+      _resetWatchdog();
+      HapticFeedback.selectionClick();
+      if (state.currentTranscript.isNotEmpty) {
+        final tutorText = state.currentTranscript;
+        final newMessages = List<LiveChatMessage>.from(state.messages)
+          ..add(LiveChatMessage(tutorText, isUser: false));
+        
+        state = state.copyWith(
+          status: TutorState.listening,
+          currentTranscript: '',
+          messages: newMessages,
+        );
+
+        if (_currentSessionId != null) {
+          repo.addTranscript(
+            sessionId: _currentSessionId!,
+            speaker: 'tutor',
+            content: tutorText,
+          );
+        }
+      } else {
+        state = state.copyWith(status: TutorState.listening);
+      }
+    };
+
+    client.onToolCall = (name, args) {
+      if (name == 'log_error' && _currentSessionId != null) {
+        repo.addErrorLog(
+          sessionId: _currentSessionId!,
+          errorType: args['error_type'] ?? 'grammar',
+          userSaid: args['user_said'] ?? '',
+          correctForm: args['correct_form'] ?? '',
+          explanation: args['explanation'] ?? '',
+        );
+        L.i('✅ Chyba zalogována přes Function Calling.');
+      }
+    };
+
+    client.onConnectionStatusChanged = (isConnected) {
+      if (!isConnected && state.status != TutorState.idle && state.status != TutorState.error) {
+        state = state.copyWith(status: TutorState.reconnecting);
+      } else if (isConnected && state.status == TutorState.reconnecting) {
+        state = state.copyWith(status: TutorState.listening);
+      }
+    };
+
+    client.onError = (error) {
+      state = state.copyWith(status: TutorState.error, errorMessage: error);
+    };
+  }
+
+  Future<void> stopSession([String reason = 'unknown']) async {
+    L.i('Ukončování session (Důvod: $reason)');
+    _thinkingTimer?.cancel();
+    _watchdogTimer?.cancel();
+    
+    _wakelock.disable();
+
+    await _audio.stop();
+    
+    // Disconnect provádíme pouze pokud je ref ještě dostupný
+    if (ref.mounted) {
+      ref.read(geminiLiveClientProvider)?.disconnect();
+    }
 
     if (_currentSessionId != null) {
       final sessionId = _currentSessionId!;
-      await ref.read(sessionRepositoryProvider).closeSession(sessionId);
+      await _repo.closeSession(sessionId);
       _currentSessionId = null;
-
-      // Spustíme asynchronní analýzu
-      ref.read(memoryManagerAgentProvider).analyzeSession(sessionId);
+      _memory.analyzeSession(sessionId);
     }
     
-    state = state.copyWith(status: TutorState.idle, currentTranscript: '');
+    if (ref.mounted) {
+      state = state.copyWith(status: TutorState.idle, currentTranscript: '');
+    }
   }
 
   void sendText(String text) {
     if (text.trim().isEmpty) return;
     
+    _resetWatchdog();
     final client = ref.read(geminiLiveClientProvider);
     if (client != null && state.status != TutorState.idle && state.status != TutorState.error) {
       final newMessages = List<LiveChatMessage>.from(state.messages)
@@ -289,6 +325,22 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       state = state.copyWith(messages: newMessages, status: TutorState.thinking);
       client.sendText(text);
     }
+  }
+
+  void _resetWatchdog() {
+    _watchdogTimer?.cancel();
+    _watchdogTimer = Timer(const Duration(seconds: 45), () { // Prodlouženo na 45s
+      if (state.status != TutorState.idle && state.status != TutorState.error) {
+        debugPrint('Watchdog: Žádná aktivita 45s, zkouším reconnect...');
+        if (ref.mounted) {
+          final client = ref.read(geminiLiveClientProvider);
+          if (client != null) {
+            state = state.copyWith(status: TutorState.reconnecting);
+            client.forceReconnect();
+          }
+        }
+      }
+    });
   }
 }
 

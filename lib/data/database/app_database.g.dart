@@ -1989,6 +1989,517 @@ class ErrorLogsCompanion extends UpdateCompanion<ErrorLog> {
   }
 }
 
+class $ScenariosTable extends Scenarios
+    with TableInfo<$ScenariosTable, Scenario> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ScenariosTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _externalIdMeta = const VerificationMeta(
+    'externalId',
+  );
+  @override
+  late final GeneratedColumn<String> externalId = GeneratedColumn<String>(
+    'external_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _titleMeta = const VerificationMeta('title');
+  @override
+  late final GeneratedColumn<String> title = GeneratedColumn<String>(
+    'title',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _descriptionMeta = const VerificationMeta(
+    'description',
+  );
+  @override
+  late final GeneratedColumn<String> description = GeneratedColumn<String>(
+    'description',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _tutorInstructionMeta = const VerificationMeta(
+    'tutorInstruction',
+  );
+  @override
+  late final GeneratedColumn<String> tutorInstruction = GeneratedColumn<String>(
+    'tutor_instruction',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _difficultyMeta = const VerificationMeta(
+    'difficulty',
+  );
+  @override
+  late final GeneratedColumn<String> difficulty = GeneratedColumn<String>(
+    'difficulty',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _isUsedMeta = const VerificationMeta('isUsed');
+  @override
+  late final GeneratedColumn<bool> isUsed = GeneratedColumn<bool>(
+    'is_used',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_used" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    externalId,
+    title,
+    description,
+    tutorInstruction,
+    difficulty,
+    isUsed,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'scenarios';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<Scenario> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('external_id')) {
+      context.handle(
+        _externalIdMeta,
+        externalId.isAcceptableOrUnknown(data['external_id']!, _externalIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_externalIdMeta);
+    }
+    if (data.containsKey('title')) {
+      context.handle(
+        _titleMeta,
+        title.isAcceptableOrUnknown(data['title']!, _titleMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_titleMeta);
+    }
+    if (data.containsKey('description')) {
+      context.handle(
+        _descriptionMeta,
+        description.isAcceptableOrUnknown(
+          data['description']!,
+          _descriptionMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_descriptionMeta);
+    }
+    if (data.containsKey('tutor_instruction')) {
+      context.handle(
+        _tutorInstructionMeta,
+        tutorInstruction.isAcceptableOrUnknown(
+          data['tutor_instruction']!,
+          _tutorInstructionMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_tutorInstructionMeta);
+    }
+    if (data.containsKey('difficulty')) {
+      context.handle(
+        _difficultyMeta,
+        difficulty.isAcceptableOrUnknown(data['difficulty']!, _difficultyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_difficultyMeta);
+    }
+    if (data.containsKey('is_used')) {
+      context.handle(
+        _isUsedMeta,
+        isUsed.isAcceptableOrUnknown(data['is_used']!, _isUsedMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  Scenario map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return Scenario(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      externalId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}external_id'],
+      )!,
+      title: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}title'],
+      )!,
+      description: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}description'],
+      )!,
+      tutorInstruction: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}tutor_instruction'],
+      )!,
+      difficulty: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}difficulty'],
+      )!,
+      isUsed: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_used'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $ScenariosTable createAlias(String alias) {
+    return $ScenariosTable(attachedDatabase, alias);
+  }
+}
+
+class Scenario extends DataClass implements Insertable<Scenario> {
+  final int id;
+  final String externalId;
+  final String title;
+  final String description;
+  final String tutorInstruction;
+  final String difficulty;
+  final bool isUsed;
+  final DateTime createdAt;
+  const Scenario({
+    required this.id,
+    required this.externalId,
+    required this.title,
+    required this.description,
+    required this.tutorInstruction,
+    required this.difficulty,
+    required this.isUsed,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['external_id'] = Variable<String>(externalId);
+    map['title'] = Variable<String>(title);
+    map['description'] = Variable<String>(description);
+    map['tutor_instruction'] = Variable<String>(tutorInstruction);
+    map['difficulty'] = Variable<String>(difficulty);
+    map['is_used'] = Variable<bool>(isUsed);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  ScenariosCompanion toCompanion(bool nullToAbsent) {
+    return ScenariosCompanion(
+      id: Value(id),
+      externalId: Value(externalId),
+      title: Value(title),
+      description: Value(description),
+      tutorInstruction: Value(tutorInstruction),
+      difficulty: Value(difficulty),
+      isUsed: Value(isUsed),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory Scenario.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return Scenario(
+      id: serializer.fromJson<int>(json['id']),
+      externalId: serializer.fromJson<String>(json['externalId']),
+      title: serializer.fromJson<String>(json['title']),
+      description: serializer.fromJson<String>(json['description']),
+      tutorInstruction: serializer.fromJson<String>(json['tutorInstruction']),
+      difficulty: serializer.fromJson<String>(json['difficulty']),
+      isUsed: serializer.fromJson<bool>(json['isUsed']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'externalId': serializer.toJson<String>(externalId),
+      'title': serializer.toJson<String>(title),
+      'description': serializer.toJson<String>(description),
+      'tutorInstruction': serializer.toJson<String>(tutorInstruction),
+      'difficulty': serializer.toJson<String>(difficulty),
+      'isUsed': serializer.toJson<bool>(isUsed),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  Scenario copyWith({
+    int? id,
+    String? externalId,
+    String? title,
+    String? description,
+    String? tutorInstruction,
+    String? difficulty,
+    bool? isUsed,
+    DateTime? createdAt,
+  }) => Scenario(
+    id: id ?? this.id,
+    externalId: externalId ?? this.externalId,
+    title: title ?? this.title,
+    description: description ?? this.description,
+    tutorInstruction: tutorInstruction ?? this.tutorInstruction,
+    difficulty: difficulty ?? this.difficulty,
+    isUsed: isUsed ?? this.isUsed,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  Scenario copyWithCompanion(ScenariosCompanion data) {
+    return Scenario(
+      id: data.id.present ? data.id.value : this.id,
+      externalId: data.externalId.present
+          ? data.externalId.value
+          : this.externalId,
+      title: data.title.present ? data.title.value : this.title,
+      description: data.description.present
+          ? data.description.value
+          : this.description,
+      tutorInstruction: data.tutorInstruction.present
+          ? data.tutorInstruction.value
+          : this.tutorInstruction,
+      difficulty: data.difficulty.present
+          ? data.difficulty.value
+          : this.difficulty,
+      isUsed: data.isUsed.present ? data.isUsed.value : this.isUsed,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('Scenario(')
+          ..write('id: $id, ')
+          ..write('externalId: $externalId, ')
+          ..write('title: $title, ')
+          ..write('description: $description, ')
+          ..write('tutorInstruction: $tutorInstruction, ')
+          ..write('difficulty: $difficulty, ')
+          ..write('isUsed: $isUsed, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    externalId,
+    title,
+    description,
+    tutorInstruction,
+    difficulty,
+    isUsed,
+    createdAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Scenario &&
+          other.id == this.id &&
+          other.externalId == this.externalId &&
+          other.title == this.title &&
+          other.description == this.description &&
+          other.tutorInstruction == this.tutorInstruction &&
+          other.difficulty == this.difficulty &&
+          other.isUsed == this.isUsed &&
+          other.createdAt == this.createdAt);
+}
+
+class ScenariosCompanion extends UpdateCompanion<Scenario> {
+  final Value<int> id;
+  final Value<String> externalId;
+  final Value<String> title;
+  final Value<String> description;
+  final Value<String> tutorInstruction;
+  final Value<String> difficulty;
+  final Value<bool> isUsed;
+  final Value<DateTime> createdAt;
+  const ScenariosCompanion({
+    this.id = const Value.absent(),
+    this.externalId = const Value.absent(),
+    this.title = const Value.absent(),
+    this.description = const Value.absent(),
+    this.tutorInstruction = const Value.absent(),
+    this.difficulty = const Value.absent(),
+    this.isUsed = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  });
+  ScenariosCompanion.insert({
+    this.id = const Value.absent(),
+    required String externalId,
+    required String title,
+    required String description,
+    required String tutorInstruction,
+    required String difficulty,
+    this.isUsed = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  }) : externalId = Value(externalId),
+       title = Value(title),
+       description = Value(description),
+       tutorInstruction = Value(tutorInstruction),
+       difficulty = Value(difficulty);
+  static Insertable<Scenario> custom({
+    Expression<int>? id,
+    Expression<String>? externalId,
+    Expression<String>? title,
+    Expression<String>? description,
+    Expression<String>? tutorInstruction,
+    Expression<String>? difficulty,
+    Expression<bool>? isUsed,
+    Expression<DateTime>? createdAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (externalId != null) 'external_id': externalId,
+      if (title != null) 'title': title,
+      if (description != null) 'description': description,
+      if (tutorInstruction != null) 'tutor_instruction': tutorInstruction,
+      if (difficulty != null) 'difficulty': difficulty,
+      if (isUsed != null) 'is_used': isUsed,
+      if (createdAt != null) 'created_at': createdAt,
+    });
+  }
+
+  ScenariosCompanion copyWith({
+    Value<int>? id,
+    Value<String>? externalId,
+    Value<String>? title,
+    Value<String>? description,
+    Value<String>? tutorInstruction,
+    Value<String>? difficulty,
+    Value<bool>? isUsed,
+    Value<DateTime>? createdAt,
+  }) {
+    return ScenariosCompanion(
+      id: id ?? this.id,
+      externalId: externalId ?? this.externalId,
+      title: title ?? this.title,
+      description: description ?? this.description,
+      tutorInstruction: tutorInstruction ?? this.tutorInstruction,
+      difficulty: difficulty ?? this.difficulty,
+      isUsed: isUsed ?? this.isUsed,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (externalId.present) {
+      map['external_id'] = Variable<String>(externalId.value);
+    }
+    if (title.present) {
+      map['title'] = Variable<String>(title.value);
+    }
+    if (description.present) {
+      map['description'] = Variable<String>(description.value);
+    }
+    if (tutorInstruction.present) {
+      map['tutor_instruction'] = Variable<String>(tutorInstruction.value);
+    }
+    if (difficulty.present) {
+      map['difficulty'] = Variable<String>(difficulty.value);
+    }
+    if (isUsed.present) {
+      map['is_used'] = Variable<bool>(isUsed.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ScenariosCompanion(')
+          ..write('id: $id, ')
+          ..write('externalId: $externalId, ')
+          ..write('title: $title, ')
+          ..write('description: $description, ')
+          ..write('tutorInstruction: $tutorInstruction, ')
+          ..write('difficulty: $difficulty, ')
+          ..write('isUsed: $isUsed, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -1996,6 +2507,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $TranscriptsTable transcripts = $TranscriptsTable(this);
   late final $UserProfilesTable userProfiles = $UserProfilesTable(this);
   late final $ErrorLogsTable errorLogs = $ErrorLogsTable(this);
+  late final $ScenariosTable scenarios = $ScenariosTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -2005,6 +2517,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     transcripts,
     userProfiles,
     errorLogs,
+    scenarios,
   ];
 }
 
@@ -3436,6 +3949,259 @@ typedef $$ErrorLogsTableProcessedTableManager =
       ErrorLog,
       PrefetchHooks Function({bool sessionId})
     >;
+typedef $$ScenariosTableCreateCompanionBuilder =
+    ScenariosCompanion Function({
+      Value<int> id,
+      required String externalId,
+      required String title,
+      required String description,
+      required String tutorInstruction,
+      required String difficulty,
+      Value<bool> isUsed,
+      Value<DateTime> createdAt,
+    });
+typedef $$ScenariosTableUpdateCompanionBuilder =
+    ScenariosCompanion Function({
+      Value<int> id,
+      Value<String> externalId,
+      Value<String> title,
+      Value<String> description,
+      Value<String> tutorInstruction,
+      Value<String> difficulty,
+      Value<bool> isUsed,
+      Value<DateTime> createdAt,
+    });
+
+class $$ScenariosTableFilterComposer
+    extends Composer<_$AppDatabase, $ScenariosTable> {
+  $$ScenariosTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get externalId => $composableBuilder(
+    column: $table.externalId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get tutorInstruction => $composableBuilder(
+    column: $table.tutorInstruction,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get difficulty => $composableBuilder(
+    column: $table.difficulty,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isUsed => $composableBuilder(
+    column: $table.isUsed,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ScenariosTableOrderingComposer
+    extends Composer<_$AppDatabase, $ScenariosTable> {
+  $$ScenariosTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get externalId => $composableBuilder(
+    column: $table.externalId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get tutorInstruction => $composableBuilder(
+    column: $table.tutorInstruction,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get difficulty => $composableBuilder(
+    column: $table.difficulty,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isUsed => $composableBuilder(
+    column: $table.isUsed,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ScenariosTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ScenariosTable> {
+  $$ScenariosTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get externalId => $composableBuilder(
+    column: $table.externalId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get title =>
+      $composableBuilder(column: $table.title, builder: (column) => column);
+
+  GeneratedColumn<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get tutorInstruction => $composableBuilder(
+    column: $table.tutorInstruction,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get difficulty => $composableBuilder(
+    column: $table.difficulty,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isUsed =>
+      $composableBuilder(column: $table.isUsed, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$ScenariosTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ScenariosTable,
+          Scenario,
+          $$ScenariosTableFilterComposer,
+          $$ScenariosTableOrderingComposer,
+          $$ScenariosTableAnnotationComposer,
+          $$ScenariosTableCreateCompanionBuilder,
+          $$ScenariosTableUpdateCompanionBuilder,
+          (Scenario, BaseReferences<_$AppDatabase, $ScenariosTable, Scenario>),
+          Scenario,
+          PrefetchHooks Function()
+        > {
+  $$ScenariosTableTableManager(_$AppDatabase db, $ScenariosTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ScenariosTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ScenariosTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ScenariosTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> externalId = const Value.absent(),
+                Value<String> title = const Value.absent(),
+                Value<String> description = const Value.absent(),
+                Value<String> tutorInstruction = const Value.absent(),
+                Value<String> difficulty = const Value.absent(),
+                Value<bool> isUsed = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => ScenariosCompanion(
+                id: id,
+                externalId: externalId,
+                title: title,
+                description: description,
+                tutorInstruction: tutorInstruction,
+                difficulty: difficulty,
+                isUsed: isUsed,
+                createdAt: createdAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String externalId,
+                required String title,
+                required String description,
+                required String tutorInstruction,
+                required String difficulty,
+                Value<bool> isUsed = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => ScenariosCompanion.insert(
+                id: id,
+                externalId: externalId,
+                title: title,
+                description: description,
+                tutorInstruction: tutorInstruction,
+                difficulty: difficulty,
+                isUsed: isUsed,
+                createdAt: createdAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ScenariosTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ScenariosTable,
+      Scenario,
+      $$ScenariosTableFilterComposer,
+      $$ScenariosTableOrderingComposer,
+      $$ScenariosTableAnnotationComposer,
+      $$ScenariosTableCreateCompanionBuilder,
+      $$ScenariosTableUpdateCompanionBuilder,
+      (Scenario, BaseReferences<_$AppDatabase, $ScenariosTable, Scenario>),
+      Scenario,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -3448,4 +4214,6 @@ class $AppDatabaseManager {
       $$UserProfilesTableTableManager(_db, _db.userProfiles);
   $$ErrorLogsTableTableManager get errorLogs =>
       $$ErrorLogsTableTableManager(_db, _db.errorLogs);
+  $$ScenariosTableTableManager get scenarios =>
+      $$ScenariosTableTableManager(_db, _db.scenarios);
 }

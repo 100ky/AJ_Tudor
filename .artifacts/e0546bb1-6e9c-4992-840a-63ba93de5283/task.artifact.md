@@ -1,0 +1,11 @@
+- [x] Enable Core Library Desugaring in `android/app/build.gradle.kts`
+- [x] Add `desugar_jdk_libs` dependency in `android/app/build.gradle.kts`
+- [x] Verify build succeeds
+- [x] Add `MigrationStrategy` to `AppDatabase` in `lib/data/database/app_database.dart`
+- [x] Verify database error is resolved
+- [x] Filter "thought" parts in `lib/services/gemini/gemini_live_client.dart`
+- [x] Implement echo suppression (mute mic while speaking) in `lib/services/agents/voice_tutor_agent.dart`
+- [x] Fix UI labels and transcript display in `lib/features/conversation/voice_tutor_screen.dart`
+- [x] Implement volume stream throttling in `lib/services/audio/audio_capture_service.dart`
+- [x] Improve connection resilience in `lib/services/gemini/gemini_live_client.dart`
+- [x] Add watchdog timer in `lib/services/agents/voice_tutor_agent.dart`

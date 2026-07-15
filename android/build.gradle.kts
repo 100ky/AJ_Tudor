@@ -21,6 +21,11 @@ subprojects {
     afterEvaluate {
         project.extensions.findByType<BaseExtension>()?.apply {
             compileSdkVersion(35)
+            
+            compileOptions {
+                sourceCompatibility = JavaVersion.VERSION_17
+                targetCompatibility = JavaVersion.VERSION_17
+            }
         }
     }
 }

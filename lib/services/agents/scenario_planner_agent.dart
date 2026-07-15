@@ -34,6 +34,7 @@ class ScenarioPlannerAgent {
       // 3. Generování pomocí Structured Outputs
       final result = await gemini.sendMessage(
         'Vygeneruj 3 nové scénáře na základě mého profilu.',
+        systemPrompt: prompt,
         responseSchema: SystemPromptBuilder.getScenarioResponseSchema(),
       );
 

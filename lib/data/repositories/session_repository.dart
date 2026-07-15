@@ -1,6 +1,9 @@
 import 'dart:convert';
 import 'package:drift/drift.dart';
 import '../database/app_database.dart';
+import '../../core/error/error_handling.dart';
+import '../../core/utils/result.dart';
+import '../../core/utils/logger.dart';
 
 class SessionRepository {
   final AppDatabase _db;
@@ -8,37 +11,55 @@ class SessionRepository {
   SessionRepository(this._db);
 
   /// Vytvoří novou session v databázi a vrátí její ID
-  Future<int> startNewSession() async {
-    return await _db.into(_db.sessions).insert(
-      SessionsCompanion.insert(
-        startedAt: DateTime.now(),
-      ),
-    );
+  Future<Result<int>> startNewSession() async {
+    try {
+      final id = await _db.into(_db.sessions).insert(
+        SessionsCompanion.insert(
+          startedAt: DateTime.now(),
+        ),
+      );
+      return Result.success(id);
+    } catch (e, stack) {
+      L.e('Chyba při zakládání session', e, stack);
+      return Result.failure(DatabaseFailure('Nepodařilo se založit novou lekci.'));
+    }
   }
 
   /// Přidá záznam do transkriptu
-  Future<void> addTranscript({
+  Future<Result<void>> addTranscript({
     required int sessionId,
     required String speaker,
     required String content,
   }) async {
-    await _db.into(_db.transcripts).insert(
-      TranscriptsCompanion.insert(
-        sessionId: sessionId,
-        speaker: speaker,
-        content: content,
-        timestamp: DateTime.now(),
-      ),
-    );
+    try {
+      await _db.into(_db.transcripts).insert(
+        TranscriptsCompanion.insert(
+          sessionId: sessionId,
+          speaker: speaker,
+          content: content,
+          timestamp: DateTime.now(),
+        ),
+      );
+      return Result.success(null);
+    } catch (e, stack) {
+      L.e('Chyba při ukládání transkriptu', e, stack);
+      return Result.failure(DatabaseFailure('Nepodařilo se uložit historii hovoru.'));
+    }
   }
 
   /// Uzavře session
-  Future<void> closeSession(int sessionId) async {
-    await (_db.update(_db.sessions)..where((t) => t.id.equals(sessionId))).write(
-      SessionsCompanion(
-        endedAt: Value(DateTime.now()),
-      ),
-    );
+  Future<Result<void>> closeSession(int sessionId) async {
+    try {
+      await (_db.update(_db.sessions)..where((t) => t.id.equals(sessionId))).write(
+        SessionsCompanion(
+          endedAt: Value(DateTime.now()),
+        ),
+      );
+      return Result.success(null);
+    } catch (e, stack) {
+      L.e('Chyba při uzavírání session', e, stack);
+      return Result.failure(DatabaseFailure('Nepodařilo se korektně ukončit lekci.'));
+    }
   }
 
   /// Načte transkripty pro danou session
@@ -109,9 +130,14 @@ class SessionRepository {
   }
 
   /// Získá aktuální briefing pro tutora
-  Future<String?> getLatestBriefing() async {
-    final user = await (_db.select(_db.userProfiles)..where((t) => t.id.equals(1))).getSingleOrNull();
-    return user?.memoryBriefing;
+  Future<Result<String?>> getLatestBriefing() async {
+    try {
+      final user = await (_db.select(_db.userProfiles)..where((t) => t.id.equals(1))).getSingleOrNull();
+      return Result.success(user?.memoryBriefing);
+    } catch (e, stack) {
+      L.e('Chyba při načítání briefingu', e, stack);
+      return Result.failure(DatabaseFailure('Nepodařilo se načíst paměť tutora.'));
+    }
   }
 
   /// Sleduje změny v profilu uživatele
@@ -120,23 +146,29 @@ class SessionRepository {
   }
 
   /// Přidá záznam o chybě
-  Future<void> addErrorLog({
+  Future<Result<void>> addErrorLog({
     required int sessionId,
     required String errorType,
     required String userSaid,
     required String correctForm,
     required String explanation,
   }) async {
-    await _db.into(_db.errorLogs).insert(
-      ErrorLogsCompanion.insert(
-        sessionId: sessionId,
-        errorType: errorType,
-        userSaid: userSaid,
-        correctForm: correctForm,
-        explanation: explanation,
-        timestamp: DateTime.now(),
-      ),
-    );
+    try {
+      await _db.into(_db.errorLogs).insert(
+        ErrorLogsCompanion.insert(
+          sessionId: sessionId,
+          errorType: errorType,
+          userSaid: userSaid,
+          correctForm: correctForm,
+          explanation: explanation,
+          timestamp: DateTime.now(),
+        ),
+      );
+      return Result.success(null);
+    } catch (e, stack) {
+      L.e('Chyba při logování lingvistické chyby', e, stack);
+      return Result.failure(DatabaseFailure('Nepodařilo se uložit záznam o chybě.'));
+    }
   }
 
   /// Načte všechny chyby pro danou session

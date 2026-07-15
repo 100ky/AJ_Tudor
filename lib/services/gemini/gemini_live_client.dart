@@ -33,6 +33,9 @@ class GeminiLiveClient {
     _lastModelName = modelName;
     _lastSystemPrompt = systemPrompt;
     
+    // Čištění starého spojení, pokud existuje
+    _channel?.sink.close();
+    
     final uri = Uri.parse(
         'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=$_apiKey');
     
@@ -218,10 +221,12 @@ class GeminiLiveClient {
           if (onUserTranscriptReceived != null) onUserTranscriptReceived!(text);
         }
 
-        // Přepis toho, co říká model
+        // Přepis toho, co říká model (STT) - obvykle chodí průběžně
         final outputTranscription = serverContent['outputTranscription'] ?? serverContent['output_transcription'];
         if (outputTranscription != null) {
           final text = outputTranscription['text'];
+          // Průběžný STT modelu nepoužíváme pro finální zobrazení, pokud chodí i modelTurn text, 
+          // ale tady ho dáváme do callbacku, který VoiceTutorAgent dává do currentTranscript.
           if (onTextReceived != null) onTextReceived!(text);
         }
 
@@ -229,6 +234,11 @@ class GeminiLiveClient {
         if (modelTurn != null) {
           final parts = modelTurn['parts'] as List;
           for (var part in parts) {
+            // Ignorujeme myšlenkové pochody modelu (reasoning/thought)
+            if (part['thought'] == true) {
+              continue;
+            }
+
             final inlineData = part['inlineData'] ?? part['inline_data'];
             if (inlineData != null) {
               if (inlineData['mimeType'].startsWith('audio/pcm') || inlineData['mime_type'].startsWith('audio/pcm')) {
@@ -238,6 +248,8 @@ class GeminiLiveClient {
               }
             } 
             else if (part.containsKey('text')) {
+              // Pokud dostaneme text přímo v modelTurn, je to obvykle finální verze nebo textová odpověď.
+              // Ve VoiceTutorAgent to přidá k currentTranscript.
               if (onTextReceived != null) onTextReceived!(part['text']);
             }
           }
@@ -287,6 +299,13 @@ class GeminiLiveClient {
       }
     };
     _channel?.sink.add(jsonEncode(responseMsg));
+  }
+
+  void forceReconnect() {
+    debugPrint('WebSocket: Vynucený reconnect...');
+    _isManualDisconnect = false;
+    _channel?.sink.close();
+    // Tím se vyvolá onDone a následný _attemptReconnect
   }
 
   void disconnect() {

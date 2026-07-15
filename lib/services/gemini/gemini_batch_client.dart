@@ -21,7 +21,11 @@ class GeminiBatchClient {
   GeminiBatchClient(this.apiKey, this.primaryModelName, {this.systemPrompt});
 
   /// Pokusí se odeslat zprávu. Pokud je model přetížený, zkusí fallback modely.
-  Future<String> sendMessage(String text, {Map<String, dynamic>? responseSchema}) async {
+  Future<String> sendMessage(
+    String text, {
+    Map<String, dynamic>? responseSchema,
+    String? systemPrompt,
+  }) async {
     // Definice waterfall (pořadí fallbacků)
     final modelsToTry = {
       primaryModelName,
@@ -38,10 +42,10 @@ class GeminiBatchClient {
         final model = GenerativeModel(
           model: modelName,
           apiKey: apiKey,
-          systemInstruction: Content.system(systemPrompt ?? SystemPromptBuilder.buildTutorPrompt()),
+          systemInstruction: Content.system(systemPrompt ?? this.systemPrompt ?? SystemPromptBuilder.buildTutorPrompt()),
           generationConfig: responseSchema != null ? GenerationConfig(
             responseMimeType: 'application/json',
-            responseSchema: Schema.fromJson(responseSchema),
+            responseSchema: _mapToSchema(responseSchema),
           ) : null,
         );
 
@@ -78,6 +82,47 @@ class GeminiBatchClient {
     }
 
     return '❌ Všechny modely jsou momentálně přetížené. Poslední chyba: $lastError';
+  }
+
+  /// Manually maps a JSON-like schema map to the Gemini SDK Schema class.
+  Schema _mapToSchema(Map<String, dynamic> json) {
+    final typeStr = json['type'] as String;
+    final description = json['description'] as String?;
+    
+    switch (typeStr.toUpperCase()) {
+      case 'OBJECT':
+        final properties = json['properties'] as Map<String, dynamic>?;
+        final requiredProps = json['required'] as List<dynamic>?;
+        
+        return Schema.object(
+          properties: properties?.map((key, value) => MapEntry(key, _mapToSchema(value))) ?? {},
+          requiredProperties: requiredProps?.cast<String>(),
+          description: description,
+        );
+      case 'ARRAY':
+        final items = json['items'] as Map<String, dynamic>;
+        return Schema.array(
+          items: _mapToSchema(items),
+          description: description,
+        );
+      case 'STRING':
+        final enumValues = json['enum'] as List<dynamic>?;
+        if (enumValues != null) {
+          return Schema.enumString(
+            enumValues: enumValues.cast<String>(),
+            description: description,
+          );
+        }
+        return Schema.string(description: description);
+      case 'NUMBER':
+        return Schema.number(description: description);
+      case 'INTEGER':
+        return Schema.integer(description: description);
+      case 'BOOLEAN':
+        return Schema.boolean(description: description);
+      default:
+        return Schema.string(description: description);
+    }
   }
 
   String _handlePermanentError(GenerativeAIException e) {

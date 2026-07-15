@@ -8,6 +8,7 @@ class AudioCaptureService {
   StreamSubscription<List<int>>? _audioStreamSubscription;
   final StreamController<List<int>> _audioDataController = StreamController<List<int>>.broadcast();
   final StreamController<double> _volumeController = StreamController<double>.broadcast();
+  DateTime _lastVolumeUpdate = DateTime.now();
 
   Stream<List<int>> get audioStream => _audioDataController.stream;
   Stream<double> get volumeStream => _volumeController.stream;
@@ -33,6 +34,13 @@ class AudioCaptureService {
 
   void _calculateAndEmitVolume(List<int> buffer) {
     if (buffer.isEmpty) return;
+
+    // THROTTLING: Omezíme aktualizace hlasitosti na max ~30 FPS, aby se nezahltilo UI vlákno.
+    final now = DateTime.now();
+    if (now.difference(_lastVolumeUpdate).inMilliseconds < 33) {
+      return;
+    }
+    _lastVolumeUpdate = now;
     
     double sum = 0;
     final int sampleCount = buffer.length ~/ 2;
