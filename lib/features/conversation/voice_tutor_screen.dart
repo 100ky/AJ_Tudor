@@ -12,6 +12,7 @@ class VoiceTutorScreen extends ConsumerStatefulWidget {
 
 class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen> with SingleTickerProviderStateMixin {
   final _textController = TextEditingController();
+  final _scrollController = ScrollController();
   late AnimationController _pulseController;
 
   @override
@@ -26,13 +27,34 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen> with Single
   @override
   void dispose() {
     _textController.dispose();
+    _scrollController.dispose();
     _pulseController.dispose();
     super.dispose();
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final tutorState = ref.watch(voiceTutorAgentProvider);
+    
+    // Automatický scroll při změně zpráv nebo transkriptu
+    ref.listen(voiceTutorAgentProvider, (previous, next) {
+      if (previous?.messages.length != next.messages.length || 
+          previous?.currentTranscript != next.currentTranscript) {
+        _scrollToBottom();
+      }
+    });
 
     return Scaffold(
       appBar: AppBar(
@@ -87,6 +109,18 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen> with Single
                   _getStatusText(tutorState.status),
                   style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
                 ),
+                if (tutorState.selectedScenarioId != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8.0),
+                    child: Chip(
+                      label: const Text('Aktivní scénář Role-Play'),
+                      backgroundColor: Colors.blueAccent.withValues(alpha: 0.2),
+                      deleteIcon: const Icon(Icons.close, size: 16),
+                      onDeleted: () {
+                        ref.read(voiceTutorAgentProvider.notifier).selectScenario(0, '');
+                      },
+                    ),
+                  ),
               ],
             ),
           ),
@@ -101,33 +135,43 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen> with Single
               ),
             ),
 
-          // Historie konverzace
+          // Historie konverzace s efektem mizení (ShaderMask)
           Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16.0),
-              itemCount: _getVisibleItemCount(tutorState),
-              itemBuilder: (context, index) {
-                final visibleMessages = _getVisibleMessages(tutorState);
-
-                // Pokud máme transkripci a jsme na konci listu
-                if (index == visibleMessages.length) {
-                  return _buildLiveTranscript(tutorState.currentTranscript);
-                }
-
-                final msg = visibleMessages[index];
-
-                // Výpočet opacity pro efekt slábnutí starších zpráv
-                // Poslední prvek (index length-1) má opacity 1.0, starší klesají
-                final totalItems = visibleMessages.length + (tutorState.currentTranscript.isNotEmpty ? 1 : 0);
-                final relativeIndex = index + (totalItems - visibleMessages.length);
-                final opacity = (relativeIndex + 1) / totalItems;
-
-                return AnimatedOpacity(
-                  duration: const Duration(milliseconds: 500),
-                  opacity: opacity.clamp(0.2, 1.0),
-                  child: _buildMessageBubble(msg),
-                );
+            child: ShaderMask(
+              shaderCallback: (Rect bounds) {
+                return const LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Colors.transparent, Colors.white, Colors.white],
+                  stops: [0.0, 0.2, 1.0], // Horních 20% plynule mizí
+                ).createShader(bounds);
               },
+              blendMode: BlendMode.dstIn,
+              child: ListView.builder(
+                controller: _scrollController,
+                padding: const EdgeInsets.fromLTRB(16, 40, 16, 16), // Větší top padding pro efekt mizení
+                itemCount: _getVisibleItemCount(tutorState),
+                itemBuilder: (context, index) {
+                  final visibleMessages = _getVisibleMessages(tutorState);
+
+                  // Pokud máme transkripci a jsme na konci listu
+                  if (index == visibleMessages.length) {
+                    return _buildLiveTranscript(tutorState.currentTranscript);
+                  }
+
+                  final msg = visibleMessages[index];
+
+                  // Dynamická opacity podle vzdálenosti od konce
+                  final distanceContent = visibleMessages.length - index;
+                  final double opacity = (1.0 - (distanceContent * 0.15)).clamp(0.05, 1.0);
+
+                  return AnimatedOpacity(
+                    duration: const Duration(milliseconds: 500),
+                    opacity: opacity,
+                    child: _buildMessageBubble(msg),
+                  );
+                },
+              ),
             ),
           ),
 
@@ -238,52 +282,73 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen> with Single
   // Pomocné metody pro dynamické UI zpráv
 
   List<LiveChatMessage> _getVisibleMessages(VoiceTutorState state) {
-    if (state.messages.length <= 5) return state.messages;
-    return state.messages.sublist(state.messages.length - 5);
+    // Zobrazíme celou historii aktuální session, auto-scroll se postará o zbytek
+    return state.messages;
   }
 
   int _getVisibleItemCount(VoiceTutorState state) {
-    final msgCount = state.messages.length > 5 ? 5 : state.messages.length;
-    return msgCount + (state.currentTranscript.isNotEmpty ? 1 : 0);
+    return state.messages.length + (state.currentTranscript.isNotEmpty ? 1 : 0);
   }
 
   Widget _buildLiveTranscript(String transcript) {
+    if (transcript.isEmpty) return const SizedBox.shrink();
+
+    // Logika pro zobrazení pouze posledních ~3 vět, pokud je transkript dlouhý
+    final sentences = transcript.split(RegExp(r'(?<=[.!?])\s+'));
+    final displayTranscript = sentences.length > 3 
+        ? '... ${sentences.sublist(sentences.length - 3).join(' ')}' 
+        : transcript;
+
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(
         margin: const EdgeInsets.only(bottom: 12.0),
-        padding: const EdgeInsets.all(12.0),
+        padding: const EdgeInsets.all(16.0),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(16.0),
-          border: Border.all(color: Colors.deepPurpleAccent.withValues(alpha: 0.2)),
+          color: Colors.white.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(20.0),
+          border: Border.all(color: Colors.cyanAccent.withValues(alpha: 0.3)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.cyanAccent.withValues(alpha: 0.05),
+              blurRadius: 10,
+              spreadRadius: 2,
+            )
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Row(
+            Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                SizedBox(
-                  width: 10,
-                  height: 10,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.deepPurpleAccent),
+                const SizedBox(
+                  width: 8,
+                  height: 8,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.cyanAccent),
                 ),
-                SizedBox(width: 8),
+                const SizedBox(width: 8),
                 Text(
-                  'LIVE',
+                  'STUDENT IS SPEAKING',
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.bold,
-                    color: Colors.deepPurpleAccent,
+                    letterSpacing: 1.2,
+                    color: Colors.cyanAccent.withValues(alpha: 0.7),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
             Text(
-              '$transcript...',
-              style: const TextStyle(fontSize: 16, fontStyle: FontStyle.italic, color: Colors.white70),
+              '$displayTranscript...',
+              style: const TextStyle(
+                fontSize: 18, 
+                fontWeight: FontWeight.w400,
+                fontStyle: FontStyle.italic, 
+                color: Colors.white,
+                height: 1.4,
+              ),
             ),
           ],
         ),

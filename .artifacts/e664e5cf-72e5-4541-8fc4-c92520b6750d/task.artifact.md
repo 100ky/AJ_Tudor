@@ -14,12 +14,12 @@
 - [x] **UX Detaily**
     - [x] Implementace haptické odezvy (vibrace)
     - [x] Refaktorizace agentů a finalizace kódu
-- [ ] **Lifecycle & Screen Management**
-    - [ ] `pubspec.yaml`: Přidání `wakelock_plus`
-    - [ ] `VoiceTutorAgent`: Implementace `WidgetsBindingObserver`
-    - [ ] `VoiceTutorAgent`: Integrace `WakelockPlus` (enable/disable)
-    - [ ] `GeminiLiveClient`: Vylepšení detekce spojení po resume
-- [ ] **History Implementation**
-    - [ ] `pubspec.yaml`: Přidání `intl`
-    - [ ] `HistoryScreen`: Implementace seznamu sessions
-    - [ ] `HistoryScreen`: Detailní náhled na transcript
+- [x] **Lifecycle & Screen Management**
+    - [x] `pubspec.yaml`: Přidání `wakelock_plus`
+    - [x] `VoiceTutorAgent`: Implementace `WidgetsBindingObserver`
+    - [x] `VoiceTutorAgent`: Integrace `WakelockPlus` (enable/disable)
+    - [x] `GeminiLiveClient`: Vylepšení detekce spojení po resume
+- [x] **History Implementation**
+    - [x] `pubspec.yaml`: Přidání `intl`
+    - [x] `HistoryScreen`: Implementace seznamu sessions
+    - [x] `HistoryScreen`: Detailní náhled na transcript

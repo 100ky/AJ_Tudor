@@ -72,12 +72,14 @@ class _WavePainter extends CustomPainter {
       // Vytvoříme organický vzhled vln
       // Výška je kombinací hlasitosti a pozice (střed vyšší)
       final distanceFromCenter = (i - barCount / 2).abs() / (barCount / 2);
-      final multiplier = 1.0 - distanceFromCenter * 0.7;
+      final multiplier = 1.0 - math.pow(distanceFromCenter, 2); // Parabolištější tvar
       
-      // Přidáme trochu šumu pro živost
-      final noise = 0.8 + random.nextDouble() * 0.4;
+      // Přidáme trochu šumu pro živost, ale vázaného na hlasitost
+      final noise = 0.6 + random.nextDouble() * 0.8;
       
-      final height = (volume * maxBarHeight * multiplier * noise).clamp(4.0, maxBarHeight);
+      // Základní výška i při tichu, aby sféra pulzovala
+      final minHeight = isActive ? 6.0 : 0.0;
+      final height = (volume * maxBarHeight * multiplier * noise).clamp(minHeight, maxBarHeight);
       
       final x = i * (barWidth + spacing);
       

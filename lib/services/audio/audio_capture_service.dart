@@ -46,10 +46,12 @@ class AudioCaptureService {
     }
     
     final double rms = math.sqrt(sum / sampleCount);
-    // Normalizace: 32768 je max pro 16-bit. 
-    // Použijeme logaritmickou nebo lineární aproximaci.
-    // Pro vizualizaci stačí lineární podíl s rozumným stropem.
-    double volume = rms / 32768.0; 
+    
+    // Vylepšená normalizace hlasitosti pro vizualizaci.
+    // Pro PCM 16-bit je max hodnota 32768. 
+    // Použijeme odmocninu pro zvýšení citlivosti při nižších hlasitostech,
+    // aby byl waveform živější i při běžné mluvě.
+    double volume = math.sqrt(rms / 32768.0); 
     _volumeController.add(volume.clamp(0.0, 1.0));
   }
 

@@ -21,13 +21,13 @@ class GeminiBatchClient {
   GeminiBatchClient(this.apiKey, this.primaryModelName, {this.systemPrompt});
 
   /// Pokusí se odeslat zprávu. Pokud je model přetížený, zkusí fallback modely.
-  Future<String> sendMessage(String text) async {
+  Future<String> sendMessage(String text, {Map<String, dynamic>? responseSchema}) async {
     // Definice waterfall (pořadí fallbacků)
     final modelsToTry = {
       primaryModelName,
       GeminiModels.flashLite3_1,
       GeminiModels.flash2_5,
-    }.toList(); // Odstraníme duplicity přes Set literál
+    }.toList();
 
     String lastError = '';
 
@@ -39,6 +39,10 @@ class GeminiBatchClient {
           model: modelName,
           apiKey: apiKey,
           systemInstruction: Content.system(systemPrompt ?? SystemPromptBuilder.buildTutorPrompt()),
+          generationConfig: responseSchema != null ? GenerationConfig(
+            responseMimeType: 'application/json',
+            responseSchema: Schema.fromJson(responseSchema),
+          ) : null,
         );
 
         final chat = model.startChat();

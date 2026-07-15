@@ -9,10 +9,11 @@ import 'tables/sessions.dart';
 import 'tables/transcripts.dart';
 import 'tables/user_profiles.dart';
 import 'tables/error_logs.dart';
+import 'tables/scenarios.dart';
 
 part 'app_database.g.dart';
 
-@DriftDatabase(tables: [Sessions, Transcripts, UserProfiles, ErrorLogs])
+@DriftDatabase(tables: [Sessions, Transcripts, UserProfiles, ErrorLogs, Scenarios])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 

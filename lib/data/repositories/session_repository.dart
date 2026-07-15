@@ -167,5 +167,44 @@ class SessionRepository {
       ),
     );
   }
+
+  // --- SCÉNÁŘE ---
+
+  /// Uloží nové scénáře (a smaže staré nepoužité)
+  Future<void> replaceScenarios(List<Scenario> newScenarios) async {
+    await _db.transaction(() async {
+      // Smažeme staré, které nebyly využity (nebo prostě všechny nepoužité)
+      await (_db.delete(_db.scenarios)..where((t) => t.isUsed.equals(false))).go();
+      
+      for (var s in newScenarios) {
+        await _db.into(_db.scenarios).insert(
+          ScenariosCompanion.insert(
+            externalId: s.externalId,
+            title: s.title,
+            description: s.description,
+            tutorInstruction: s.tutorInstruction,
+            difficulty: s.difficulty,
+          ),
+        );
+      }
+    });
+  }
+
+  /// Načte dostupné scénáře
+  Stream<List<Scenario>> watchAvailableScenarios() {
+    return (_db.select(_db.scenarios)..where((t) => t.isUsed.equals(false))).watch();
+  }
+
+  /// Označí scénář jako použitý
+  Future<void> markScenarioUsed(int id) async {
+    await (_db.update(_db.scenarios)..where((t) => t.id.equals(id))).write(
+      const ScenariosCompanion(isUsed: Value(true)),
+    );
+  }
+
+  /// Načte profil uživatele
+  Future<UserProfile?> getUserProfile() async {
+    return await (_db.select(_db.userProfiles)..where((t) => t.id.equals(1))).getSingleOrNull();
+  }
 }
 

@@ -114,7 +114,7 @@ class ProgressScreen extends ConsumerWidget {
                         width: 20,
                         height: (score / 2).clamp(5.0, 50.0),
                         decoration: BoxDecoration(
-                          color: Colors.blueAccent.withOpacity(0.6),
+                          color: Colors.blueAccent.withValues(alpha: 0.6),
                           borderRadius: BorderRadius.circular(4),
                         ),
                       ),

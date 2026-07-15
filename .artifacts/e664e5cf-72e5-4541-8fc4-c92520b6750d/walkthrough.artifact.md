@@ -25,6 +25,16 @@ Přidána jemná vibrační odezva pro přirozenější pocit z konverzace.
 - Vibrace při startu hovoru.
 - Jemné "kliknutí" při rozpoznání tvé řeči a při začátku mluvení tutora.
 
+### 5. Správa obrazovky & Životní cyklus
+Aplikace je nyní lépe připravena pro mobilní použití.
+- **Wakelock**: Během hovoru obrazovka telefonu nezhasne, takže nemusíš telefon neustále probouzet.
+- **Lifecycle Recovery**: Pokud telefon zamkneš a pak odemkneš, aplikace automaticky zjistí, že byla odpojena, a pokusí se spojení s AI tutorem obnovit (stav "Obnovování spojení").
+
+### 6. Kompletní Historie
+Záložka "History" je nyní plně funkční.
+- **Seznam lekcí**: Přehledný seznam všech proběhlých konverzací s datem, časem a shrnutím tématu.
+- **Detail přepisu**: Po kliknutí na lekci se otevře detailní přepis celé konverzace, kde uvidíš, co jsi řekl ty, co řekl tutor, a kde byly případné chyby opraveny.
+
 ## Jak otestovat
 
 1. **Hlasový mód**: Spusť lekci a uvidíš novou waveformu místo orbu, když mluvíš.

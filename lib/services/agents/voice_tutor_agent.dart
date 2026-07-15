@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../providers/audio_provider.dart';
 import '../../providers/gemini_provider.dart';
 import '../../providers/config_provider.dart';
@@ -23,12 +25,16 @@ class VoiceTutorState {
   final String currentTranscript;
   final List<LiveChatMessage> messages;
   final String errorMessage;
+  final int? selectedScenarioId;
+  final String? scenarioContext;
 
   VoiceTutorState({
     this.status = TutorState.idle,
     this.currentTranscript = '',
     this.messages = const [],
     this.errorMessage = '',
+    this.selectedScenarioId,
+    this.scenarioContext,
   });
 
   VoiceTutorState copyWith({
@@ -36,23 +42,30 @@ class VoiceTutorState {
     String? currentTranscript,
     List<LiveChatMessage>? messages,
     String? errorMessage,
+    int? selectedScenarioId,
+    String? scenarioContext,
   }) {
     return VoiceTutorState(
       status: status ?? this.status,
       currentTranscript: currentTranscript ?? this.currentTranscript,
       messages: messages ?? this.messages,
       errorMessage: errorMessage ?? this.errorMessage,
+      selectedScenarioId: selectedScenarioId ?? this.selectedScenarioId,
+      scenarioContext: scenarioContext ?? this.scenarioContext,
     );
   }
 }
 
-class VoiceTutorAgent extends Notifier<VoiceTutorState> {
+class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObserver {
   StreamSubscription<List<int>>? _audioSubscription;
   Timer? _thinkingTimer;
   int? _currentSessionId;
 
   @override
   VoiceTutorState build() {
+    // Registrace observeru životního cyklu
+    WidgetsBinding.instance.addObserver(this);
+
     // Pokud se změní API klíč nebo model, ukončíme aktivní hovor
     ref.listen(apiKeyProvider, (previous, next) {
       if (state.status != TutorState.idle) stopSession();
@@ -62,14 +75,45 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> {
     });
 
     ref.onDispose(() {
+      WidgetsBinding.instance.removeObserver(this);
       stopSession();
     });
     return VoiceTutorState();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Pokud se aplikace vrátí z pozadí a probíhá hovor, zkontrolujeme spojení
+    if (state == AppLifecycleState.resumed) {
+      final client = ref.read(geminiLiveClientProvider);
+      if (client != null && this.state.status != TutorState.idle && this.state.status != TutorState.error) {
+        if (!client.isConnected) {
+          debugPrint('Detekováno odpojení po resume, zkouším reconnect...');
+          this.state = this.state.copyWith(status: TutorState.reconnecting);
+          // GeminiLiveClient má interní reconnect logiku na onDone/onError, 
+          // ale po resume může být socket "zombie".
+          client.disconnect(); // Tím vyvoláme onDone a následný auto-reconnect
+        }
+      }
+    }
+  }
+
+  void selectScenario(int id, String context) {
+    state = state.copyWith(selectedScenarioId: id, scenarioContext: context);
+  }
+
   Future<void> startSession() async {
-    state = state.copyWith(status: TutorState.connecting, errorMessage: '');
+    // Při startu nové session vyčistíme zprávy z té předchozí v UI
+    state = state.copyWith(
+      status: TutorState.connecting, 
+      errorMessage: '',
+      messages: [],
+      currentTranscript: '',
+    );
     HapticFeedback.mediumImpact();
+    
+    // Aktivace wakelocku
+    WakelockPlus.enable();
     
     final client = ref.read(geminiLiveClientProvider);
     final audioCapture = ref.read(audioCaptureServiceProvider);
@@ -90,14 +134,15 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> {
       // 1. Připojení k WebSocketu
       // Načteme briefing z minula pro personalizaci
       final lastBriefing = await repo.getLatestBriefing();
-      var systemPrompt = SystemPromptBuilder.buildTutorPrompt();
+      var systemPrompt = SystemPromptBuilder.buildTutorPrompt(
+        scenarioContext: state.scenarioContext,
+      );
       
       if (lastBriefing != null && lastBriefing.isNotEmpty) {
         systemPrompt += '\nKONTEXT Z MINULÉ LEKCE (PAMĚŤ): $lastBriefing\n';
       }
       
       // Pro hlasový chat vždy vynutíme model, který Bidi protokol (Live API) podporuje.
-      // Modely Gemini 3.x Flash aktuálně bidiGenerateContent neumí.
       const liveModelName = 'models/${GeminiModels.defaultLiveModel}';
       
       client.connect(modelName: liveModelName, systemPrompt: systemPrompt);
@@ -160,6 +205,19 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> {
         }
       };
 
+      client.onToolCall = (name, args) {
+        if (name == 'log_error' && _currentSessionId != null) {
+          repo.addErrorLog(
+            sessionId: _currentSessionId!,
+            errorType: args['error_type'] ?? 'grammar',
+            userSaid: args['user_said'] ?? '',
+            correctForm: args['correct_form'] ?? '',
+            explanation: args['explanation'] ?? '',
+          );
+          debugPrint('✅ Chyba zalogována v reálném čase přes Function Calling.');
+        }
+      };
+
       client.onConnectionStatusChanged = (isConnected) {
         if (!isConnected && state.status != TutorState.idle && state.status != TutorState.error) {
           state = state.copyWith(status: TutorState.reconnecting);
@@ -202,6 +260,9 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> {
     _thinkingTimer?.cancel();
     _audioSubscription?.cancel();
     
+    // Deaktivace wakelocku
+    WakelockPlus.disable();
+
     ref.read(audioCaptureServiceProvider).stopRecording();
     ref.read(geminiLiveClientProvider)?.disconnect();
 

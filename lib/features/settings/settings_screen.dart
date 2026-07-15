@@ -152,6 +152,65 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           const SizedBox(height: 24),
           const Text(
+            'Upozornění a připomínky',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Card(
+            elevation: 2,
+            child: Column(
+              children: [
+                SwitchListTile(
+                  title: const Text('Denní připomínky'),
+                  subtitle: const Text('AI se připomene, když zapomenete trénovat.'),
+                  value: ref.watch(remindersEnabledProvider),
+                  onChanged: (value) {
+                    ref.read(remindersEnabledProvider.notifier).toggle(value);
+                  },
+                ),
+                if (ref.watch(remindersEnabledProvider)) ...[
+                  const Divider(),
+                  ListTile(
+                    title: const Text('Čas upozornění'),
+                    trailing: Text(
+                      ref.watch(reminderTimeProvider),
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                    onTap: () async {
+                      final timeStr = ref.read(reminderTimeProvider);
+                      final timeParts = timeStr.split(':');
+                      final initialTime = TimeOfDay(
+                        hour: int.parse(timeParts[0]),
+                        minute: int.parse(timeParts[1]),
+                      );
+
+                      final picked = await showTimePicker(
+                        context: context,
+                        initialTime: initialTime,
+                      );
+
+                      if (picked != null) {
+                        final formattedTime = 
+                            '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
+                        ref.read(reminderTimeProvider.notifier).saveTime(formattedTime);
+                      }
+                    },
+                  ),
+                  const Divider(),
+                  SwitchListTile(
+                    title: const Text('Otravný režim 😈'),
+                    subtitle: const Text('Více upozornění během dne. Nenechá vás v klidu.'),
+                    value: ref.watch(annoyingModeProvider),
+                    onChanged: (value) {
+                      ref.read(annoyingModeProvider.notifier).toggle(value);
+                    },
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          const Text(
             'AI Model (Textový chat)',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),

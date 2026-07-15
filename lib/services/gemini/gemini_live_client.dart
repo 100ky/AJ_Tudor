@@ -15,13 +15,16 @@ class GeminiLiveClient {
   String? _lastModelName;
   String? _lastSystemPrompt;
 
+  bool get isConnected => _channel != null && _reconnectAttempts == 0;
+
   // Callbacky pro UI
   Function(String)? onTextReceived;
   Function(String)? onUserTranscriptReceived;
   Function()? onAudioReceived;
   Function()? onTurnComplete;
   Function(String)? onError;
-  Function(bool)? onConnectionStatusChanged; // Nový: true = připojen, false = odpojen/reconnecting
+  Function(bool)? onConnectionStatusChanged;
+  Function(String name, Map<String, dynamic> args)? onToolCall;
 
   GeminiLiveClient(this._apiKey, this._playbackService);
 
@@ -111,10 +114,43 @@ class GeminiLiveClient {
         },
         'systemInstruction': {
           'parts': [{'text': systemPrompt}]
-        }
+        },
+        'tools': [
+          {
+            'functionDeclarations': [
+              {
+                'name': 'log_error',
+                'description': 'Logs a linguistic error made by the student during the conversation.',
+                'parameters': {
+                  'type': 'OBJECT',
+                  'properties': {
+                    'error_type': {
+                      'type': 'STRING', 
+                      'enum': ['grammar', 'vocabulary', 'pronunciation'],
+                      'description': 'The type of error.'
+                    },
+                    'user_said': {
+                      'type': 'STRING',
+                      'description': 'What the user actually said.'
+                    },
+                    'correct_form': {
+                      'type': 'STRING',
+                      'description': 'The correct version of the sentence/phrase.'
+                    },
+                    'explanation': {
+                      'type': 'STRING',
+                      'description': 'A short explanation in Czech.'
+                    }
+                  },
+                  'required': ['error_type', 'user_said', 'correct_form', 'explanation']
+                }
+              }
+            ]
+          }
+        ]
       }
     };
-    debugPrint('Odesílám SETUP: ${jsonEncode(setupMessage)}');
+    debugPrint('Odesílám SETUP s nástroji: ${jsonEncode(setupMessage)}');
     _channel?.sink.add(jsonEncode(setupMessage));
   }
 
@@ -211,10 +247,46 @@ class GeminiLiveClient {
         if (turnComplete == true) {
           if (onTurnComplete != null) onTurnComplete!();
         }
+
+        // Zpracování Tool Calls (Function Calling)
+        final toolCall = serverContent['toolCall'] ?? serverContent['tool_call'];
+        if (toolCall != null) {
+          final functionCalls = toolCall['functionCalls'] ?? toolCall['function_calls'] as List?;
+          if (functionCalls != null) {
+            for (var call in functionCalls) {
+              final name = call['name'];
+              final args = call['args'] as Map<String, dynamic>;
+              final id = call['id'];
+
+              debugPrint('Model volá funkci: $name s argumenty: $args');
+              if (onToolCall != null) onToolCall!(name, args);
+
+              // Okamžitá odpověď modelu, aby mohl pokračovat
+              _sendToolResponse(id, name, {'status': 'ok'});
+            }
+          }
+        }
       }
     } catch (e) {
       debugPrint('Chyba zpracování zprávy: $e');
     }
+  }
+
+  void _sendToolResponse(String? id, String name, Map<String, dynamic> response) {
+    if (_channel == null) return;
+    
+    final responseMsg = {
+      'toolResponse': {
+        'functionResponses': [
+          {
+            'id': id,
+            'name': name,
+            'response': response,
+          }
+        ]
+      }
+    };
+    _channel?.sink.add(jsonEncode(responseMsg));
   }
 
   void disconnect() {

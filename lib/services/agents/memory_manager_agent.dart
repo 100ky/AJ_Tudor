@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/database_provider.dart';
 import '../../providers/gemini_provider.dart';
+import '../prompt/system_prompt_builder.dart';
+import 'scenario_planner_agent.dart';
 
 class MemoryManagerAgent {
   final Ref _ref;
@@ -10,7 +12,7 @@ class MemoryManagerAgent {
   MemoryManagerAgent(this._ref);
 
   Future<void> analyzeSession(int sessionId) async {
-    debugPrint('Zahajuji analýzu session $sessionId...');
+    debugPrint('Zahajuji analýzu session $sessionId pomocí Structured Outputs...');
     
     final repo = _ref.read(sessionRepositoryProvider);
     final gemini = _ref.read(geminiAnalysisClientProvider);
@@ -23,39 +25,15 @@ class MemoryManagerAgent {
       if (transcripts.isEmpty) return;
 
       final chatHistory = transcripts.map((t) => '${t.speaker}: ${t.content}').join('\n');
+      final wrappedHistory = '<transcript>\n$chatHistory\n</transcript>';
 
-      // 2. Analýza pomocí Gemini Flash
-      final prompt = '''Analyzuj tuto konverzaci mezi tutorem (AI) a studentem:
-$chatHistory
-
-Úkol:
-1. Vygeneruj stručné shrnutí tématu (topicSummary).
-2. Ohodnoť plynulost studenta od 0.0 do 1.0 (fluencyScore) na základě délky vět a plynulosti.
-3. Vytvoř krátký briefing pro příští lekci (např. "Student má problém s předpřítomným časem, příště procvičit.").
-4. Identifikuj konkrétní chyby (gramatika, slovní zásoba, výslovnost).
-5. Extrahuje 3-5 nejdůležitějších nových slovíček nebo frází, které student použil nebo které by se měl naučit (vocabulary).
-
-Odpověz POUZE ve formátu JSON:
-{
-  "topicSummary": "string",
-  "fluencyScore": 0.85,
-  "totalErrors": 2,
-  "briefing": "string",
-  "vocabulary": ["slovíčko1", "slovíčko2"],
-  "errors": [
-    {
-      "type": "grammar|vocabulary|pronunciation",
-      "userSaid": "originální věta studenta",
-      "correctForm": "opravená verze",
-      "explanation": "krátké české vysvětlení proč je to špatně"
-    }
-  ]
-}''';
-
-      final analysisResult = await gemini.sendMessage(prompt);
+      // 2. Analýza pomocí Gemini a JSON Schema
+      final analysisResult = await gemini.sendMessage(
+        wrappedHistory,
+        responseSchema: SystemPromptBuilder.getAnalysisResponseSchema(),
+      );
       
-      final cleanJson = analysisResult.replaceAll('```json', '').replaceAll('```', '').trim();
-      final data = jsonDecode(cleanJson);
+      final data = jsonDecode(analysisResult);
 
       // 3. Uložení výsledků
       await repo.updateSessionAnalysis(
@@ -86,9 +64,13 @@ Odpověz POUZE ve formátu JSON:
         }
       }
       
-      debugPrint('Analýza session $sessionId dokončena. Briefing a ${data['totalErrors']} chyb uloženo.');
+      debugPrint('Analýza session $sessionId dokončena přesně (JSON).');
+
+      // 5. Spuštění plánování scénářů na příště
+      _ref.read(scenarioPlannerAgentProvider).planScenarios();
+
     } catch (e) {
-      debugPrint('Chyba při analýze session: $e');
+      debugPrint('Chyba při strukturované analýze session: $e');
     }
   }
 }
