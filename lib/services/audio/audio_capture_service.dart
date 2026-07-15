@@ -1,12 +1,16 @@
 import 'dart:async';
+import 'dart:math' as math;
+import 'dart:typed_data';
 import 'package:record/record.dart';
 
 class AudioCaptureService {
   final AudioRecorder _record = AudioRecorder();
   StreamSubscription<List<int>>? _audioStreamSubscription;
   final StreamController<List<int>> _audioDataController = StreamController<List<int>>.broadcast();
+  final StreamController<double> _volumeController = StreamController<double>.broadcast();
 
   Stream<List<int>> get audioStream => _audioDataController.stream;
+  Stream<double> get volumeStream => _volumeController.stream;
 
   Future<void> startRecording() async {
     if (await _record.hasPermission()) {
@@ -20,19 +24,44 @@ class AudioCaptureService {
 
       _audioStreamSubscription = stream.listen((data) {
         _audioDataController.add(data);
+        _calculateAndEmitVolume(data);
       });
     } else {
       throw Exception('Aplikace nemá oprávnění používat mikrofon.');
     }
   }
 
+  void _calculateAndEmitVolume(List<int> buffer) {
+    if (buffer.isEmpty) return;
+    
+    double sum = 0;
+    final int sampleCount = buffer.length ~/ 2;
+    
+    final byteData = ByteData.sublistView(Uint8List.fromList(buffer));
+    
+    for (int i = 0; i < buffer.length - 1; i += 2) {
+      // PCM 16-bit Little Endian
+      final int sample = byteData.getInt16(i, Endian.little);
+      sum += sample * sample;
+    }
+    
+    final double rms = math.sqrt(sum / sampleCount);
+    // Normalizace: 32768 je max pro 16-bit. 
+    // Použijeme logaritmickou nebo lineární aproximaci.
+    // Pro vizualizaci stačí lineární podíl s rozumným stropem.
+    double volume = rms / 32768.0; 
+    _volumeController.add(volume.clamp(0.0, 1.0));
+  }
+
   Future<void> stopRecording() async {
     await _audioStreamSubscription?.cancel();
     await _record.stop();
+    _volumeController.add(0.0);
   }
 
   void dispose() {
     _audioDataController.close();
+    _volumeController.close();
     _record.dispose();
   }
 }

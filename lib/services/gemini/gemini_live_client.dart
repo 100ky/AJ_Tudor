@@ -8,17 +8,28 @@ class GeminiLiveClient {
   final String _apiKey;
   final AudioPlaybackService _playbackService;
   
+  // Reconnect logika
+  int _reconnectAttempts = 0;
+  final int _maxReconnectAttempts = 5;
+  bool _isManualDisconnect = false;
+  String? _lastModelName;
+  String? _lastSystemPrompt;
+
   // Callbacky pro UI
   Function(String)? onTextReceived;
-  Function(String)? onUserTranscriptReceived; // Nový: co řekl uživatel
+  Function(String)? onUserTranscriptReceived;
   Function()? onAudioReceived;
   Function()? onTurnComplete;
   Function(String)? onError;
+  Function(bool)? onConnectionStatusChanged; // Nový: true = připojen, false = odpojen/reconnecting
 
   GeminiLiveClient(this._apiKey, this._playbackService);
 
   void connect({required String modelName, required String systemPrompt}) {
-    // Vracíme se k v1alpha a camelCase, což je pro tento preview model obvyklejší
+    _isManualDisconnect = false;
+    _lastModelName = modelName;
+    _lastSystemPrompt = systemPrompt;
+    
     final uri = Uri.parse(
         'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=$_apiKey');
     
@@ -27,6 +38,9 @@ class GeminiLiveClient {
 
     _channel!.stream.listen(
       (message) {
+        _reconnectAttempts = 0; // Resetujeme pokusy při úspěšném příjmu dat
+        if (onConnectionStatusChanged != null) onConnectionStatusChanged!(true);
+
         if (message is String && !message.contains('inlineData') && !message.contains('inline_data')) {
           debugPrint('WebSocket PŘIJATO: $message');
         }
@@ -34,19 +48,51 @@ class GeminiLiveClient {
       },
       onError: (error) {
         debugPrint('WebSocket CHYBA: $error');
-        if (onError != null) onError!('WebSocket chyba: $error');
+        if (onConnectionStatusChanged != null) onConnectionStatusChanged!(false);
+        _handleError(error.toString());
       },
       onDone: () {
         debugPrint('WebSocket spojení UZAVŘENO. Code: ${_channel?.closeCode}, Reason: ${_channel?.closeReason}');
+        if (onConnectionStatusChanged != null) onConnectionStatusChanged!(false);
+        
+        if (!_isManualDisconnect) {
+          _attemptReconnect();
+        }
       },
     );
 
-    // Krátká prodleva pro stabilitu
     Future.delayed(const Duration(milliseconds: 300), () {
       if (_channel != null) {
         _sendSetupMessage(modelName, systemPrompt);
       }
     });
+  }
+
+  void _attemptReconnect() {
+    if (_reconnectAttempts < _maxReconnectAttempts && _lastModelName != null && _lastSystemPrompt != null) {
+      _reconnectAttempts++;
+      final delay = Duration(seconds: _reconnectAttempts * 2); // Exponenciální backoff
+      debugPrint('Pokus o znovupřipojení č. $_reconnectAttempts za ${delay.inSeconds}s...');
+      
+      Future.delayed(delay, () {
+        if (!_isManualDisconnect) {
+          connect(modelName: _lastModelName!, systemPrompt: _lastSystemPrompt!);
+        }
+      });
+    } else if (_reconnectAttempts >= _maxReconnectAttempts) {
+      if (onError != null) onError!('Nepodařilo se obnovit spojení po $_maxReconnectAttempts pokusech.');
+    }
+  }
+
+  void _handleError(String errorMsg) {
+    if (errorMsg.contains('429')) {
+      if (onError != null) onError!('Překročena kvóta API (Rate limit). Zkuste to za chvíli.');
+    } else if (errorMsg.contains('1008')) {
+      debugPrint('GoAway detekován, zkouším reconnect...');
+      _attemptReconnect();
+    } else {
+      if (onError != null) onError!('Chyba spojení: $errorMsg');
+    }
   }
 
   void _sendSetupMessage(String modelName, String systemPrompt) {
@@ -172,6 +218,7 @@ class GeminiLiveClient {
   }
 
   void disconnect() {
+    _isManualDisconnect = true;
     _channel?.sink.close();
     _channel = null;
   }

@@ -30,9 +30,10 @@ $chatHistory
 
 Úkol:
 1. Vygeneruj stručné shrnutí tématu (topicSummary).
-2. Ohodnoť plynulost studenta od 0.0 do 1.0 (fluencyScore).
+2. Ohodnoť plynulost studenta od 0.0 do 1.0 (fluencyScore) na základě délky vět a plynulosti.
 3. Vytvoř krátký briefing pro příští lekci (např. "Student má problém s předpřítomným časem, příště procvičit.").
 4. Identifikuj konkrétní chyby (gramatika, slovní zásoba, výslovnost).
+5. Extrahuje 3-5 nejdůležitějších nových slovíček nebo frází, které student použil nebo které by se měl naučit (vocabulary).
 
 Odpověz POUZE ve formátu JSON:
 {
@@ -40,6 +41,7 @@ Odpověz POUZE ve formátu JSON:
   "fluencyScore": 0.85,
   "totalErrors": 2,
   "briefing": "string",
+  "vocabulary": ["slovíčko1", "slovíčko2"],
   "errors": [
     {
       "type": "grammar|vocabulary|pronunciation",
@@ -64,6 +66,12 @@ Odpověz POUZE ve formátu JSON:
       );
 
       await repo.updateUserMemory(data['briefing'] ?? '');
+      
+      // Uložení slovíček
+      if (data['vocabulary'] != null && data['vocabulary'] is List) {
+        final List<String> newWords = List<String>.from(data['vocabulary']);
+        await repo.updateUserVocabulary(newWords);
+      }
 
       // 4. Uložení jednotlivých chyb
       if (data['errors'] != null && data['errors'] is List) {

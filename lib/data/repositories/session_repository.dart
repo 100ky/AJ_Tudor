@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:drift/drift.dart';
 import '../database/app_database.dart';
 
@@ -88,6 +89,23 @@ class SessionRepository {
         ),
       );
     }
+  }
+
+  /// Aktualizuje slovní zásobu uživatele
+  Future<void> updateUserVocabulary(List<String> newWords) async {
+    final user = await (_db.select(_db.userProfiles)..where((t) => t.id.equals(1))).getSingleOrNull();
+    if (user == null) return;
+
+    final List<dynamic> currentVocab = jsonDecode(user.vocabulary);
+    final Set<String> vocabSet = Set<String>.from(currentVocab.map((e) => e.toString()));
+    
+    vocabSet.addAll(newWords.map((e) => e.trim()));
+    
+    await (_db.update(_db.userProfiles)..where((t) => t.id.equals(1))).write(
+      UserProfilesCompanion(
+        vocabulary: Value(jsonEncode(vocabSet.toList())),
+      ),
+    );
   }
 
   /// Získá aktuální briefing pro tutora

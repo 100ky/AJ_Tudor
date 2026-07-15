@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/audio_provider.dart';
 import '../../providers/gemini_provider.dart';
@@ -9,7 +10,7 @@ import '../prompt/system_prompt_builder.dart';
 
 import 'memory_manager_agent.dart';
 
-enum TutorState { idle, connecting, listening, thinking, speaking, error }
+enum TutorState { idle, connecting, reconnecting, listening, thinking, speaking, error }
 
 class LiveChatMessage {
   final String text;
@@ -68,6 +69,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> {
 
   Future<void> startSession() async {
     state = state.copyWith(status: TutorState.connecting, errorMessage: '');
+    HapticFeedback.mediumImpact();
     
     final client = ref.read(geminiLiveClientProvider);
     final audioCapture = ref.read(audioCaptureServiceProvider);
@@ -110,6 +112,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> {
       };
 
       client.onUserTranscriptReceived = (text) {
+        HapticFeedback.lightImpact();
         // Uložení toho, co řekl uživatel, do historie a DB
         final newMessages = List<LiveChatMessage>.from(state.messages)
           ..add(LiveChatMessage(text, isUser: true));
@@ -132,6 +135,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> {
       };
 
       client.onTurnComplete = () {
+        HapticFeedback.selectionClick();
         // Po dokončení promluvy uložíme text do historie a vyčistíme aktuální transkripci
         if (state.currentTranscript.isNotEmpty) {
           final tutorText = state.currentTranscript;
@@ -152,6 +156,14 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> {
             );
           }
         } else {
+          state = state.copyWith(status: TutorState.listening);
+        }
+      };
+
+      client.onConnectionStatusChanged = (isConnected) {
+        if (!isConnected && state.status != TutorState.idle && state.status != TutorState.error) {
+          state = state.copyWith(status: TutorState.reconnecting);
+        } else if (isConnected && state.status == TutorState.reconnecting) {
           state = state.copyWith(status: TutorState.listening);
         }
       };

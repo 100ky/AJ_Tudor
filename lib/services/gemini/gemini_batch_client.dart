@@ -23,11 +23,11 @@ class GeminiBatchClient {
   /// Pokusí se odeslat zprávu. Pokud je model přetížený, zkusí fallback modely.
   Future<String> sendMessage(String text) async {
     // Definice waterfall (pořadí fallbacků)
-    final modelsToTry = [
+    final modelsToTry = {
       primaryModelName,
       GeminiModels.flashLite3_1,
       GeminiModels.flash2_5,
-    ].toSet().toList(); // Odstraníme duplicity, pokud je primary už jeden z nich
+    }.toList(); // Odstraníme duplicity přes Set literál
 
     String lastError = '';
 

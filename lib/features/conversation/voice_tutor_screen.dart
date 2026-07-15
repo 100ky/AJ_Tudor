@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../services/agents/voice_tutor_agent.dart';
+import 'widgets/waveform_visualizer.dart';
 
 class VoiceTutorScreen extends ConsumerStatefulWidget {
   const VoiceTutorScreen({super.key});
@@ -40,41 +41,47 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen> with Single
       ),
       body: Column(
         children: [
-          // Horní lišta s Ambient Orbem a stavem
+          // Horní lišta s Ambient Orbem / Waveform a stavem
           Container(
             padding: const EdgeInsets.symmetric(vertical: 24),
             child: Column(
               children: [
-                AnimatedBuilder(
-                  animation: _pulseController,
-                  builder: (context, child) {
-                    final pulse = (tutorState.status == TutorState.listening || tutorState.status == TutorState.speaking)
-                        ? _pulseController.value * 15
-                        : 0.0;
+                if (tutorState.status == TutorState.listening)
+                  WaveformVisualizer(
+                    isActive: true,
+                    color: _getOrbColor(tutorState.status),
+                  )
+                else
+                  AnimatedBuilder(
+                    animation: _pulseController,
+                    builder: (context, child) {
+                      final pulse = (tutorState.status == TutorState.speaking)
+                          ? _pulseController.value * 15
+                          : 0.0;
 
-                    return AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
-                      width: _getOrbSize(tutorState.status),
-                      height: _getOrbSize(tutorState.status),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: _getOrbColor(tutorState.status),
-                        boxShadow: [
-                          BoxShadow(
-                            color: _getOrbColor(tutorState.status).withValues(alpha: 0.4),
-                            blurRadius: 20 + pulse,
-                            spreadRadius: 5 + pulse / 2,
-                          )
-                        ],
-                      ),
-                      child: Icon(
-                        _getOrbIcon(tutorState.status),
-                        size: 32,
-                        color: Colors.white,
-                      ),
-                    );
-                  },
-                ),
+                      return AnimatedContainer(
+                        duration: const Duration(milliseconds: 300),
+                        width: _getOrbSize(tutorState.status),
+                        height: _getOrbSize(tutorState.status),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: _getOrbColor(tutorState.status),
+                          boxShadow: [
+                            BoxShadow(
+                              color: _getOrbColor(tutorState.status).withValues(alpha: 0.4),
+                              blurRadius: 20 + pulse,
+                              spreadRadius: 5 + pulse / 2,
+                            )
+                          ],
+                        ),
+                        child: Icon(
+                          _getOrbIcon(tutorState.status),
+                          size: 32,
+                          color: Colors.white,
+                        ),
+                      );
+                    },
+                  ),
                 const SizedBox(height: 16),
                 Text(
                   _getStatusText(tutorState.status),
@@ -167,6 +174,7 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen> with Single
         return 160.0;
       case TutorState.idle:
       case TutorState.connecting:
+      case TutorState.reconnecting:
       case TutorState.error:
         return 120.0;
     }
@@ -175,6 +183,7 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen> with Single
   Color _getOrbColor(TutorState status) {
     switch (status) {
       case TutorState.connecting:
+      case TutorState.reconnecting:
         return Colors.orangeAccent;
       case TutorState.listening:
         return Colors.greenAccent;
@@ -200,6 +209,7 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen> with Single
       case TutorState.error:
         return Icons.error_outline;
       case TutorState.connecting:
+      case TutorState.reconnecting:
         return Icons.wifi;
       case TutorState.idle:
         return Icons.mic_off;
@@ -210,6 +220,8 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen> with Single
     switch (status) {
       case TutorState.connecting:
         return 'Připojování...';
+      case TutorState.reconnecting:
+        return 'Obnovování spojení...';
       case TutorState.listening:
         return 'Tutor poslouchá...';
       case TutorState.thinking:

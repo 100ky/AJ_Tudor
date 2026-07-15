@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/database_provider.dart';
@@ -11,6 +12,7 @@ class ProgressScreen extends ConsumerWidget {
     final repo = ref.watch(sessionRepositoryProvider);
     final userProfileStream = repo.watchUserProfile();
     final errorLogsStream = repo.watchAllErrorLogs();
+    final sessionsStream = repo.watchAllSessions();
 
     return Scaffold(
       appBar: AppBar(
@@ -27,36 +29,132 @@ class ProgressScreen extends ConsumerWidget {
             builder: (context, errorsSnapshot) {
               final errors = errorsSnapshot.data ?? [];
               
-              return ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  _buildStatsCard(profile),
-                  const SizedBox(height: 24),
-                  if (profile?.memoryBriefing != null) ...[
-                    _buildMemoryCard(profile!.memoryBriefing!),
-                    const SizedBox(height: 24),
-                  ],
-                  Text(
-                    'Nedávné chyby (${errors.length})',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 12),
-                  if (errors.isEmpty)
-                    const Card(
-                      child: Padding(
-                        padding: EdgeInsets.all(16.0),
-                        child: Text('Zatím nemáš žádné zaznamenané chyby. Skvělá práce!'),
+              return StreamBuilder<List<Session>>(
+                stream: sessionsStream,
+                builder: (context, sessionsSnapshot) {
+                  final sessions = sessionsSnapshot.data ?? [];
+                  
+                  return ListView(
+                    padding: const EdgeInsets.all(16),
+                    children: [
+                      _buildStatsCard(profile),
+                      const SizedBox(height: 24),
+                      if (sessions.isNotEmpty) ...[
+                        _buildFluencyTrend(context, sessions),
+                        const SizedBox(height: 24),
+                      ],
+                      if (profile?.memoryBriefing != null) ...[
+                        _buildMemoryCard(profile!.memoryBriefing!),
+                        const SizedBox(height: 24),
+                      ],
+                      Text(
+                        'Slovní zásoba',
+                        style: Theme.of(context).textTheme.titleLarge,
                       ),
-                    )
-                  else
-                    ...errors.map((error) => _buildErrorTile(context, error)),
-                ],
+                      const SizedBox(height: 12),
+                      _buildVocabularyChipCloud(profile?.vocabulary ?? '[]'),
+                      const SizedBox(height: 24),
+                      Text(
+                        'Nedávné chyby (${errors.length})',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 12),
+                      if (errors.isEmpty)
+                        const Card(
+                          child: Padding(
+                            padding: EdgeInsets.all(16.0),
+                            child: Text('Zatím nemáš žádné zaznamenané chyby. Skvělá práce!'),
+                          ),
+                        )
+                      else
+                        ...errors.map((error) => _buildErrorTile(context, error)),
+                    ],
+                  );
+                },
               );
             },
           );
         },
       ),
     );
+  }
+
+  Widget _buildFluencyTrend(BuildContext context, List<Session> sessions) {
+    // Vezmeme posledních 7 sessions, které mají skóre
+    final validSessions = sessions
+        .where((s) => s.fluencyScore != null)
+        .take(7)
+        .toList()
+        .reversed
+        .toList();
+        
+    if (validSessions.isEmpty) return const SizedBox.shrink();
+
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Plynulost (poslední lekce)', style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 60,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: validSessions.map((s) {
+                  final score = s.fluencyScore! * 100;
+                  return Column(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Container(
+                        width: 20,
+                        height: (score / 2).clamp(5.0, 50.0),
+                        decoration: BoxDecoration(
+                          color: Colors.blueAccent.withOpacity(0.6),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text('${score.toInt()}%', style: const TextStyle(fontSize: 10)),
+                    ],
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVocabularyChipCloud(String vocabJson) {
+    try {
+      final List<dynamic> words = jsonDecode(vocabJson);
+      if (words.isEmpty) {
+        return const Card(
+          child: Padding(
+            padding: EdgeInsets.all(16.0),
+            child: Text('Zatím nemáš uložená žádná slovíčka.'),
+          ),
+        );
+      }
+
+      return Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: words.map((word) => Chip(
+          label: Text(word.toString()),
+          backgroundColor: Colors.tealAccent.withValues(alpha: 0.1),
+          side: BorderSide(color: Colors.tealAccent.withValues(alpha: 0.3)),
+        )).toList(),
+      );
+    } catch (e) {
+      return const Text('Chyba načítání slovíček');
+    }
   }
 
   Widget _buildStatsCard(UserProfile? profile) {
@@ -72,7 +170,7 @@ class ProgressScreen extends ConsumerWidget {
               children: [
                 _buildStatItem('Lekce', '${profile?.totalSessions ?? 0}'),
                 _buildStatItem('Úroveň', profile?.targetLevel ?? 'B1'),
-                _buildStatItem('Jazyk', profile?.nativeLanguage?.toUpperCase() ?? 'CS'),
+                _buildStatItem('Jazyk', profile?.nativeLanguage.toUpperCase() ?? 'CS'),
               ],
             ),
           ],

@@ -1,0 +1,25 @@
+# TODO: Fáze 7 – Polish & Robustnost
+
+- [x] **Stabilita spojení & Auto-reconnect**
+    - [x] `GeminiLiveClient`: Implementace `reconnect()` a retry logiky
+    - [x] `VoiceTutorAgent`: Přidání stavu `reconnecting`
+- [x] **Audio Visualizace (Waveform)**
+    - [x] `AudioCaptureService`: Výpočet RMS (hlasitosti) z PCM dat
+    - [x] `WaveformVisualizer`: Nový widget pro vykreslování vln
+    - [x] `VoiceTutorScreen`: Integrace vizualizéru
+- [x] **Analytika & Data**
+    - [x] `MemoryManagerAgent`: Prompt pro Vocabulary extraction
+    - [x] `MemoryManagerAgent`: Výpočet Fluency Score
+    - [x] `ProgressScreen`: UI pro zobrazení slovíček a grafu úrovně
+- [x] **UX Detaily**
+    - [x] Implementace haptické odezvy (vibrace)
+    - [x] Refaktorizace agentů a finalizace kódu
+- [ ] **Lifecycle & Screen Management**
+    - [ ] `pubspec.yaml`: Přidání `wakelock_plus`
+    - [ ] `VoiceTutorAgent`: Implementace `WidgetsBindingObserver`
+    - [ ] `VoiceTutorAgent`: Integrace `WakelockPlus` (enable/disable)
+    - [ ] `GeminiLiveClient`: Vylepšení detekce spojení po resume
+- [ ] **History Implementation**
+    - [ ] `pubspec.yaml`: Přidání `intl`
+    - [ ] `HistoryScreen`: Implementace seznamu sessions
+    - [ ] `HistoryScreen`: Detailní náhled na transcript
