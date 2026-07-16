@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+import '../../core/utils/logger.dart';
 import '../audio/audio_playback_service.dart';
 
 class GeminiLiveClient {
@@ -97,6 +98,7 @@ class GeminiLiveClient {
       debugPrint('GoAway detekován, zkouším reconnect...');
       _attemptReconnect();
     } else {
+      L.e('WebSocket CHYBA: $errorMsg');
       if (onError != null) onError!('Chyba spojení: $errorMsg');
     }
   }
@@ -118,6 +120,8 @@ class GeminiLiveClient {
         'systemInstruction': {
           'parts': [{'text': systemPrompt}]
         },
+        'inputAudioTranscription': {},
+        'outputAudioTranscription': {},
         'tools': [
           {
             'functionDeclarations': [
@@ -203,9 +207,18 @@ class GeminiLiveClient {
       
       final data = jsonDecode(messageString);
       
+      // DIAGNOSTIKA: Vypíšeme klíče v rootu zprávy
+      if (data is Map) {
+        final keys = data.keys.toList();
+        if (!keys.contains('inlineData') && !keys.contains('inline_data')) {
+           L.d('WebSocket KEYS: $keys');
+        }
+      }
+
       if (data.containsKey('error')) {
         final error = data['error'];
         final msg = error['message'] ?? 'Neznámá chyba serveru';
+        L.e('Gemini API Error: $msg');
         if (onError != null) onError!(msg);
         return;
       }
@@ -214,70 +227,86 @@ class GeminiLiveClient {
       final serverContent = data['serverContent'] ?? data['server_content'];
       
       if (serverContent != null) {
+        if (serverContent is Map) {
+          L.d('serverContent sub-keys: ${serverContent.keys.toList()}');
+        }
+        
         // Přepis toho, co řekl uživatel (STT)
         final inputTranscription = serverContent['inputTranscription'] ?? serverContent['input_transcription'];
         if (inputTranscription != null) {
           final text = inputTranscription['text'];
-          if (onUserTranscriptReceived != null) onUserTranscriptReceived!(text);
+          if (text != null) {
+            L.i('STT (Uživatel): $text');
+            if (onUserTranscriptReceived != null) onUserTranscriptReceived!(text);
+          }
         }
 
         // Přepis toho, co říká model (STT) - obvykle chodí průběžně
         final outputTranscription = serverContent['outputTranscription'] ?? serverContent['output_transcription'];
         if (outputTranscription != null) {
           final text = outputTranscription['text'];
-          // Průběžný STT modelu nepoužíváme pro finální zobrazení, pokud chodí i modelTurn text, 
-          // ale tady ho dáváme do callbacku, který VoiceTutorAgent dává do currentTranscript.
-          if (onTextReceived != null) onTextReceived!(text);
+          if (text != null) {
+            L.d('STT (Tutor kousek): $text');
+            if (onTextReceived != null) onTextReceived!(text);
+          }
         }
 
         final modelTurn = serverContent['modelTurn'] ?? serverContent['model_turn'];
         if (modelTurn != null) {
-          final parts = modelTurn['parts'] as List;
-          for (var part in parts) {
-            // Ignorujeme myšlenkové pochody modelu (reasoning/thought)
-            if (part['thought'] == true) {
-              continue;
-            }
-
-            final inlineData = part['inlineData'] ?? part['inline_data'];
-            if (inlineData != null) {
-              if (inlineData['mimeType'].startsWith('audio/pcm') || inlineData['mime_type'].startsWith('audio/pcm')) {
-                final audioBytes = base64Decode(inlineData['data']);
-                if (onAudioReceived != null) onAudioReceived!(); 
-                _playbackService.playPcmData(audioBytes);
+          final parts = modelTurn['parts'] as List?;
+          if (parts != null) {
+            for (var part in parts) {
+              // Ignorujeme myšlenkové pochody modelu (reasoning/thought)
+              if (part['thought'] == true) {
+                continue;
               }
-            } 
-            else if (part.containsKey('text')) {
-              // Pokud dostaneme text přímo v modelTurn, je to obvykle finální verze nebo textová odpověď.
-              // Ve VoiceTutorAgent to přidá k currentTranscript.
-              if (onTextReceived != null) onTextReceived!(part['text']);
+
+              final inlineData = part['inlineData'] ?? part['inline_data'];
+              if (inlineData != null) {
+                if (inlineData['mimeType'].startsWith('audio/pcm') || inlineData['mime_type'].startsWith('audio/pcm')) {
+                  final audioBytes = base64Decode(inlineData['data']);
+                  if (onAudioReceived != null) onAudioReceived!(); 
+                  _playbackService.playPcmData(audioBytes);
+                }
+              } 
+              else if (part.containsKey('text')) {
+                final text = part['text'];
+                L.i('Text z modelTurn: $text');
+                if (onTextReceived != null) onTextReceived!(text);
+              }
             }
           }
         }
         
         final turnComplete = serverContent['turnComplete'] ?? serverContent['turn_complete'];
         if (turnComplete == true) {
+          L.i('TurnComplete signál přijat.');
           if (onTurnComplete != null) onTurnComplete!();
         }
+      }
 
-        // Zpracování Tool Calls (Function Calling)
-        final toolCall = serverContent['toolCall'] ?? serverContent['tool_call'];
-        if (toolCall != null) {
-          final functionCalls = toolCall['functionCalls'] ?? toolCall['function_calls'] as List?;
-          if (functionCalls != null) {
-            for (var call in functionCalls) {
-              final name = call['name'];
-              final args = call['args'] as Map<String, dynamic>;
-              final id = call['id'];
+      // Zpracování Tool Calls (Function Calling) v rootu i v serverContent
+      final toolCall = data['toolCall'] ?? data['tool_call'] ?? (serverContent is Map ? (serverContent['toolCall'] ?? serverContent['tool_call']) : null);
+      if (toolCall != null) {
+        final functionCalls = toolCall['functionCalls'] ?? toolCall['function_calls'] as List?;
+        if (functionCalls != null) {
+          for (var call in functionCalls) {
+            final name = call['name'];
+            final args = call['args'] as Map<String, dynamic>;
+            final id = call['id'];
 
-              debugPrint('Model volá funkci: $name s argumenty: $args');
-              if (onToolCall != null) onToolCall!(name, args);
+            L.i('Model volá funkci: $name s argumenty: $args');
+            if (onToolCall != null) onToolCall!(name, args);
 
-              // Okamžitá odpověď modelu, aby mohl pokračovat
-              _sendToolResponse(id, name, {'status': 'ok'});
-            }
+            // Okamžitá odpověď modelu, aby mohl pokračovat
+            _sendToolResponse(id, name, {'status': 'ok'});
           }
         }
+      }
+
+      // Detekce zrušení tool call (např. při přerušení)
+      if (data.containsKey('toolCallCancellation') || data.containsKey('tool_call_cancellation')) {
+        L.w('ToolCall zrušen serverem.');
       }
     } catch (e) {
       debugPrint('Chyba zpracování zprávy: $e');

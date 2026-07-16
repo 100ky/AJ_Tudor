@@ -1,23 +1,36 @@
-# Odstranění Gradle varování (Java 8 Obsolete)
+# Vizuální vylepšení hlasového chatu (AI Visualizer)
 
-Při sestavování aplikace se objevují varování, že Java 8 (source/target value 8) je zastaralá a bude v budoucích verzích odstraněna. Jelikož projekt používá moderní Gradle 9 a AGP 8+, je žádoucí přejít plně na Java 17.
-
-## Současný stav
-- `app/build.gradle.kts` už má nastaveno Java 17.
-- Varování pravděpodobně pocházejí z Flutter pluginů, které jsou do projektu zahrnuty jako subprojekty a defaultně mohou stále cílit na Java 8.
+Cílem je, aby aplikace AJ Tudor působila živěji a profesionálněji. Aktuálně vidíme vlny jen když mluví uživatel. Přidáme vizualizaci i pro promluvy AI tutora a vylepšíme celkovou estetiku.
 
 ## Navrhované změny
 
-### 1. Root Gradle Konfigurace
+### 1. Audio Vizualizace pro AI (Tutor Speaking)
 
-Vynucení Java 17 pro všechny subprojekty (včetně pluginů) v kořenovém souboru.
+Aktuálně `WaveformVisualizer` reaguje jen na mikrofon. Musíme zajistit, aby reagoval i na zvuk, který přichází z Gemini API.
 
-- **[MODIFY] [build.gradle.kts](file:///C:/Users/tosma/OneDrive/Desktop/AJ_Tudor/android/build.gradle.kts):**
-    - Přidání `compileOptions` s `JavaVersion.VERSION_17` do bloku `subprojects`.
-    - Zajištění, že i Kotlin v subprojektech cílí na JVM 17.
+- **[MODIFY] [audio_playback_service.dart](file:///C:/Users/tosma/OneDrive/Desktop/AJ_Tudor/lib/services/audio/audio_playback_service.dart):**
+    - Přidání `StreamController<double>` pro hlasitost přehrávaného zvuku.
+    - Výpočet RMS (hlasitosti) z příchozích PCM dat před jejich odesláním do reproduktoru.
+- **[MODIFY] [waveform_visualizer.dart](file:///C:/Users/tosma/OneDrive/Desktop/AJ_Tudor/lib/features/conversation/widgets/waveform_visualizer.dart):**
+    - Úprava, aby mohl přijímat libovolný stream hlasitosti (nejen z capture service).
+    - Vylepšení vizuálního stylu (např. barvy, plynulejší animace).
 
-### 2. Čištění buildu
-- Provedení `flutter clean` pro zajištění, že se změny projeví v celém build cache.
+### 2. Dynamické UI v VoiceTutorScreen
 
-## Ověření
-- Spuštění `flutter build apk` nebo `flutter run` a kontrola konzole na přítomnost "obsolete" varování.
+- **[MODIFY] [voice_tutor_screen.dart](file:///C:/Users/tosma/OneDrive/Desktop/AJ_Tudor/lib/features/conversation/voice_tutor_screen.dart):**
+    - Použití `WaveformVisualizer` i ve stavu `TutorState.speaking` (ale s jinou barvou - např. fialovou).
+    - Vylepšení "Ambient Orbu" (středové sféry) - přidání vícenásobného stínování a plynulejších přechodů mezi stavy.
+    - Úprava zobrazení transkriptu pro lepší čitelnost.
+
+### 3. AudioSessionController Bridge
+
+- **[MODIFY] [audio_session_controller.dart](file:///C:/Users/tosma/OneDrive/Desktop/AJ_Tudor/lib/services/audio/audio_session_controller.dart):**
+    - Expozice jednotného `playbackVolumeStream`.
+
+## Verifikace
+
+### Manuální testování
+- Spuštění hlasového chatu.
+- Ověření, že vlny reagují na můj hlas (zelená/modrá).
+- Ověření, že vlny reagují na hlas tutora (fialová).
+- Kontrola plynulosti animací na reálném zařízení (Samsung A528B).

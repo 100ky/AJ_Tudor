@@ -200,6 +200,32 @@ class SessionRepository {
     );
   }
 
+  /// Aktualizuje cílovou úroveň angličtiny uživatele
+  Future<void> updateTargetLevel(String level) async {
+    final user = await (_db.select(_db.userProfiles)..where((t) => t.id.equals(1))).getSingleOrNull();
+    if (user != null) {
+      await (_db.update(_db.userProfiles)..where((t) => t.id.equals(1))).write(
+        UserProfilesCompanion(
+          targetLevel: Value(level),
+        ),
+      );
+    } else {
+      await _db.into(_db.userProfiles).insert(
+        UserProfilesCompanion.insert(
+          id: const Value(1),
+          memoryBriefing: const Value(null),
+          lastSessionAt: Value(DateTime.now()),
+          totalSessions: const Value(0),
+          nativeLanguage: const Value('cs'),
+          targetLevel: Value(level),
+          recurringErrors: const Value('[]'),
+          vocabulary: const Value('[]'),
+          topicPreferences: const Value('[]'),
+        ),
+      );
+    }
+  }
+
   // --- SCÉNÁŘE ---
 
   /// Uloží nové scénáře (a smaže staré nepoužité)

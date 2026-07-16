@@ -1,24 +1,22 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../providers/audio_provider.dart';
 
-class WaveformVisualizer extends ConsumerWidget {
+class WaveformVisualizer extends StatelessWidget {
   final Color color;
   final bool isActive;
+  final Stream<double> volumeStream;
   
   const WaveformVisualizer({
     super.key, 
+    required this.volumeStream,
     this.color = Colors.blueAccent,
     this.isActive = false,
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final audioCapture = ref.watch(audioCaptureServiceProvider);
-    
+  Widget build(BuildContext context) {
     return StreamBuilder<double>(
-      stream: audioCapture.volumeStream,
+      stream: volumeStream,
       initialData: 0.0,
       builder: (context, snapshot) {
         final volume = isActive ? (snapshot.data ?? 0.0) : 0.0;

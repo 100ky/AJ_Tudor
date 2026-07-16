@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../providers/audio_provider.dart';
 import '../../providers/gemini_provider.dart';
 import '../../providers/config_provider.dart';
 import '../../providers/database_provider.dart';
@@ -10,7 +9,6 @@ import '../../data/repositories/session_repository.dart';
 import '../../core/constants/gemini_models.dart';
 import '../../core/utils/logger.dart';
 import '../../core/utils/result.dart';
-import '../../core/error/error_handling.dart';
 import '../prompt/system_prompt_builder.dart';
 import '../audio/audio_session_controller.dart';
 import '../system/wakelock_service.dart';
@@ -65,7 +63,9 @@ class VoiceTutorState {
 class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObserver {
   Timer? _thinkingTimer;
   Timer? _watchdogTimer;
+  Timer? _stuckTimer;
   int? _currentSessionId;
+  bool _isStopping = false;
 
   // Odstranění cachovaného _client, budeme ho číst dynamicky
   late final WakelockService _wakelock;
@@ -101,6 +101,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       // Synchronní část cleanupu
       _watchdogTimer?.cancel();
       _thinkingTimer?.cancel();
+      _stuckTimer?.cancel();
       
       // Pro asynchronní cleanup v onDispose musíme být opatrní s ref.read.
       // Raději zavoláme stopSession, ale zachytíme chyby Riverpodu při disposal.
@@ -154,19 +155,23 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
 
     try {
       // 0. Založení session
-      final sessionResult = await _repo.startNewSession();
+      final Result<int> sessionResult = await _repo.startNewSession();
       if (sessionResult.isFailure) {
-        state = state.copyWith(status: TutorState.error, errorMessage: sessionResult.getOrThrow().toString()); // getOrThrow vyhodí failure
+        state = state.copyWith(status: TutorState.error, errorMessage: sessionResult.getOrThrow().toString()); 
         return; 
       }
       _currentSessionId = sessionResult.getOrThrow();
 
       // 1. Připojení k AI
-      final briefingResult = await _repo.getLatestBriefing();
+      final Result<String?> briefingResult = await _repo.getLatestBriefing();
       final lastBriefing = briefingResult.fold((s) => s, (f) => null);
+      
+      final userProfile = await _repo.getUserProfile();
+      final targetLevel = userProfile?.targetLevel ?? 'B1';
       
       var systemPrompt = SystemPromptBuilder.buildTutorPrompt(
         scenarioContext: state.scenarioContext,
+        targetLevel: targetLevel,
       );
       
       if (lastBriefing != null && lastBriefing.isNotEmpty) {
@@ -203,9 +208,11 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     }
   }
 
-  void _setupClientCallbacks(dynamic client, dynamic repo) {
+  void _setupClientCallbacks(GeminiLiveClient client, SessionRepository repo) {
     client.onTextReceived = (text) {
       _resetWatchdog();
+      _resetStuckTimer();
+      L.i('Text z Gemini: $text');
       state = state.copyWith(
         status: TutorState.speaking,
         currentTranscript: state.currentTranscript + text,
@@ -215,6 +222,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     client.onUserTranscriptReceived = (text) {
       _resetWatchdog();
       HapticFeedback.lightImpact();
+      L.i('Uživatel řekl: "$text"');
       final newMessages = List<LiveChatMessage>.from(state.messages)
         ..add(LiveChatMessage(text, isUser: true));
       state = state.copyWith(messages: newMessages);
@@ -230,6 +238,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
 
     client.onAudioReceived = () {
       _resetWatchdog();
+      _resetStuckTimer();
       if (state.status != TutorState.speaking) {
         state = state.copyWith(status: TutorState.speaking);
       }
@@ -240,6 +249,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       HapticFeedback.selectionClick();
       if (state.currentTranscript.isNotEmpty) {
         final tutorText = state.currentTranscript;
+        L.i('Tutor řekl: "$tutorText"');
         final newMessages = List<LiveChatMessage>.from(state.messages)
           ..add(LiveChatMessage(tutorText, isUser: false));
         
@@ -275,9 +285,11 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     };
 
     client.onConnectionStatusChanged = (isConnected) {
-      if (!isConnected && state.status != TutorState.idle && state.status != TutorState.error) {
+      if (!isConnected && state.status != TutorState.idle && state.status != TutorState.error && !_isStopping) {
+        L.w('Spojení ztraceno během hovoru, přepínám na reconnecting...');
         state = state.copyWith(status: TutorState.reconnecting);
       } else if (isConnected && state.status == TutorState.reconnecting) {
+        L.i('Spojení obnoveno, vracím se do stavu listening.');
         state = state.copyWith(status: TutorState.listening);
       }
     };
@@ -288,28 +300,69 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   }
 
   Future<void> stopSession([String reason = 'unknown']) async {
+    if (_isStopping) return;
     L.i('Ukončování session (Důvod: $reason)');
-    _thinkingTimer?.cancel();
-    _watchdogTimer?.cancel();
+    _isStopping = true;
     
-    _wakelock.disable();
+    try {
+      _thinkingTimer?.cancel();
+      _watchdogTimer?.cancel();
+      _stuckTimer?.cancel();
+      
+      _wakelock.disable();
 
-    await _audio.stop();
-    
-    // Disconnect provádíme pouze pokud je ref ještě dostupný
-    if (ref.mounted) {
-      ref.read(geminiLiveClientProvider)?.disconnect();
-    }
+      try {
+        await _audio.stop();
+      } catch (e) {
+        L.e('Chyba při zastavování audia', e);
+      }
+      
+      if (ref.mounted) {
+        try {
+          ref.read(geminiLiveClientProvider)?.disconnect();
+        } catch (e) {
+          L.e('Chyba při odpojování WebSocketu', e);
+        }
+      }
 
-    if (_currentSessionId != null) {
-      final sessionId = _currentSessionId!;
-      await _repo.closeSession(sessionId);
-      _currentSessionId = null;
-      _memory.analyzeSession(sessionId);
-    }
-    
-    if (ref.mounted) {
-      state = state.copyWith(status: TutorState.idle, currentTranscript: '');
+      if (_currentSessionId != null) {
+        final sessionId = _currentSessionId!;
+        
+        if (state.currentTranscript.isNotEmpty) {
+          final tutorText = state.currentTranscript;
+          L.i('Flush: Ukládám zbývající transkript tutora: "$tutorText"');
+          try {
+            await _repo.addTranscript(
+              sessionId: sessionId,
+              speaker: 'tutor',
+              content: tutorText,
+            );
+          } catch (e) {
+            L.e('Chyba při flushování transkriptu', e);
+          }
+        }
+
+        L.i('Ukládám a analyzuji session $sessionId');
+        try {
+          await _repo.closeSession(sessionId);
+        } catch (e) {
+          L.e('Chyba při uzavírání session', e);
+        }
+        
+        _currentSessionId = null;
+        
+        _memory.analyzeSession(sessionId).catchError((e) {
+          L.e('Chyba při spouštění analýzy na pozadí', e);
+        });
+      }
+    } catch (globalError) {
+      L.e('Neočekávaná chyba při ukončování session', globalError);
+    } finally {
+      if (ref.mounted) {
+        state = state.copyWith(status: TutorState.idle, currentTranscript: '');
+        L.i('UI resetováno do stavu idle');
+      }
+      _isStopping = false;
     }
   }
 
@@ -331,7 +384,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     _watchdogTimer?.cancel();
     _watchdogTimer = Timer(const Duration(seconds: 45), () { // Prodlouženo na 45s
       if (state.status != TutorState.idle && state.status != TutorState.error) {
-        debugPrint('Watchdog: Žádná aktivita 45s, zkouším reconnect...');
+        L.w('Watchdog: Žádná aktivita 45s, zkouším reconnect...');
         if (ref.mounted) {
           final client = ref.read(geminiLiveClientProvider);
           if (client != null) {
@@ -341,6 +394,20 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         }
       }
     });
+  }
+
+  void _resetStuckTimer() {
+    _stuckTimer?.cancel();
+    // Pokud je stav 'speaking', nastavíme timeout na 10 sekund.
+    // Pokud během 10s nepřijde ani kousek audia nebo textu, přepneme zpět na 'listening'.
+    if (state.status == TutorState.speaking) {
+      _stuckTimer = Timer(const Duration(seconds: 10), () {
+        if (state.status == TutorState.speaking) {
+          L.w('Detekováno zaseknutí ve stavu speaking (10s ticho), vracím do listening.');
+          state = state.copyWith(status: TutorState.listening);
+        }
+      });
+    }
   }
 }
 

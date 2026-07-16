@@ -1,8 +1,14 @@
-# TODO List - Odstranění Gradle varování
+# TODO List - Vizuální vylepšení hlasového chatu
 
-- [x] **Fáze 1: Gradle Konfigurace**
-    - [x] Analyzovat `android/build.gradle.kts`
-    - [x] Vynutit Java 17 v `android/build.gradle.kts` pro všechny subprojekty
-- [x] **Fáze 2: Verifikace**
-    - [x] Spustit `flutter clean`
-    - [x] Identifikovat příčinu selhání buildu (konflikt systémových proměnných)
+- [ ] **Fáze 1: Audio Backend (Hlasitost AI)**
+    - [ ] Přidat výpočet hlasitosti (RMS) do `AudioPlaybackService`
+    - [ ] Exponovat `playbackVolumeStream` v `AudioSessionController`
+- [ ] **Fáze 2: UI Komponenty**
+    - [ ] Zobecnit `WaveformVisualizer` pro příjem libovolného streamu
+    - [ ] Přidat plynulejší animace a vylepšený design vln
+- [ ] **Fáze 3: Hlavní obrazovka (VoiceTutorScreen)**
+    - [ ] Integrovat vizualizaci pro stav `TutorState.speaking`
+    - [ ] Vylepšit "Ambient Orb" (stíny, pulzování)
+    - [ ] Začistit zobrazení transkriptu a styl bublin
+- [ ] **Fáze 4: Verifikace**
+    - [ ] Otestovat na reálném zařízení odezvu vln na hlas AI

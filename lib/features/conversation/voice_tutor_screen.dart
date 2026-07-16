@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../services/agents/voice_tutor_agent.dart';
+import '../../services/audio/audio_session_controller.dart';
 import 'widgets/waveform_visualizer.dart';
 
 class VoiceTutorScreen extends ConsumerStatefulWidget {
@@ -47,6 +48,7 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen> with Single
   @override
   Widget build(BuildContext context) {
     final tutorState = ref.watch(voiceTutorAgentProvider);
+    final audioController = ref.watch(audioSessionControllerProvider);
     
     // Automatický scroll při změně zpráv nebo transkriptu
     ref.listen(voiceTutorAgentProvider, (previous, next) {
@@ -68,9 +70,12 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen> with Single
             padding: const EdgeInsets.symmetric(vertical: 24),
             child: Column(
               children: [
-                if (tutorState.status == TutorState.listening)
+                if (tutorState.status == TutorState.listening || tutorState.status == TutorState.speaking)
                   WaveformVisualizer(
                     isActive: true,
+                    volumeStream: tutorState.status == TutorState.listening 
+                        ? audioController.captureVolumeStream 
+                        : audioController.playbackVolumeStream,
                     color: _getOrbColor(tutorState.status),
                   )
                 else
@@ -82,23 +87,34 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen> with Single
                           : 0.0;
 
                       return AnimatedContainer(
-                        duration: const Duration(milliseconds: 300),
+                        duration: const Duration(milliseconds: 400),
+                        curve: Curves.easeInOutBack,
                         width: _getOrbSize(tutorState.status),
                         height: _getOrbSize(tutorState.status),
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: _getOrbColor(tutorState.status),
+                          gradient: RadialGradient(
+                            colors: [
+                              _getOrbColor(tutorState.status).withValues(alpha: 1.0),
+                              _getOrbColor(tutorState.status).withValues(alpha: 0.6),
+                            ],
+                          ),
                           boxShadow: [
                             BoxShadow(
-                              color: _getOrbColor(tutorState.status).withValues(alpha: 0.4),
-                              blurRadius: 20 + pulse,
-                              spreadRadius: 5 + pulse / 2,
+                              color: _getOrbColor(tutorState.status).withValues(alpha: 0.3),
+                              blurRadius: 30 + pulse,
+                              spreadRadius: 10 + pulse / 2,
+                            ),
+                            BoxShadow(
+                              color: _getOrbColor(tutorState.status).withValues(alpha: 0.2),
+                              blurRadius: 60 + pulse,
+                              spreadRadius: 20 + pulse / 3,
                             )
                           ],
                         ),
                         child: Icon(
                           _getOrbIcon(tutorState.status),
-                          size: 32,
+                          size: 40,
                           color: Colors.white,
                         ),
                       );

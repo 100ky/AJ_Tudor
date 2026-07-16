@@ -1,8 +1,8 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import '../../providers/config_provider.dart';
 import '../../core/constants/gemini_models.dart';
+import '../../core/utils/logger.dart';
 import '../prompt/system_prompt_builder.dart';
 
 final geminiBatchClientProvider = Provider<GeminiBatchClient?>((ref) {
@@ -27,6 +27,7 @@ class GeminiBatchClient {
     String? systemPrompt,
   }) async {
     // Definice waterfall (pořadí fallbacků)
+
     final modelsToTry = {
       primaryModelName,
       GeminiModels.flashLite3_1,
@@ -37,7 +38,7 @@ class GeminiBatchClient {
 
     for (var modelName in modelsToTry) {
       try {
-        debugPrint('Zkouším model: $modelName...');
+        L.i('Zkouším model: $modelName...');
         
         final model = GenerativeModel(
           model: modelName,
@@ -54,7 +55,7 @@ class GeminiBatchClient {
         
         if (response.text != null) {
           if (modelName != primaryModelName) {
-            debugPrint('⚠️ Fallback úspěšný s modelem: $modelName');
+            L.w('⚠️ Fallback úspěšný s modelem: $modelName');
           }
           return response.text!;
         }
@@ -71,12 +72,13 @@ class GeminiBatchClient {
                            msg.contains('overloaded');
 
         if (!isOverloaded) {
+          L.e('Trvalá chyba u modelu $modelName: ${e.message}');
           return _handlePermanentError(e);
         }
         
-        debugPrint('Model $modelName je přetížený. Zkouším další v pořadí...');
+        L.w('Model $modelName je přetížený. Zkouším další v pořadí...');
       } catch (e) {
-        debugPrint('Neočekávaná chyba u modelu $modelName: $e');
+        L.e('Neočekávaná chyba u modelu $modelName', e);
         lastError = e.toString();
       }
     }

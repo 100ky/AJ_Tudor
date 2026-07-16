@@ -1,11 +1,16 @@
+import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter_pcm_sound/flutter_pcm_sound.dart';
-
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 
 class AudioPlaybackService {
   bool _isInitialized = false;
   bool _isSupported = true;
+
+  final StreamController<double> _volumeController = StreamController<double>.broadcast();
+  Stream<double> get volumeStream => _volumeController.stream;
+  DateTime _lastVolumeUpdate = DateTime.now();
 
   Future<void> init() async {
     if (!_isInitialized && _isSupported) {
@@ -28,6 +33,9 @@ class AudioPlaybackService {
     if (!_isSupported) return;
     
     try {
+      // Výpočet hlasitosti pro vizualizaci
+      _calculateAndEmitVolume(pcmBytes);
+
       // Převod surových bytů na PcmArrayInt16
       final uint8List = Uint8List.fromList(pcmBytes);
       final byteData = ByteData.sublistView(uint8List);
@@ -39,12 +47,41 @@ class AudioPlaybackService {
     }
   }
 
+  void _calculateAndEmitVolume(List<int> buffer) {
+    if (buffer.isEmpty) return;
+
+    // THROTTLING pro UI plynulost
+    final now = DateTime.now();
+    if (now.difference(_lastVolumeUpdate).inMilliseconds < 33) {
+      return;
+    }
+    _lastVolumeUpdate = now;
+    
+    double sum = 0;
+    final int sampleCount = buffer.length ~/ 2;
+    final byteData = ByteData.sublistView(Uint8List.fromList(buffer));
+    
+    for (int i = 0; i < buffer.length - 1; i += 2) {
+      final int sample = byteData.getInt16(i, Endian.little);
+      sum += sample * sample;
+    }
+    
+    final double rms = math.sqrt(sum / sampleCount);
+    double volume = math.sqrt(rms / 32768.0); 
+    _volumeController.add(volume.clamp(0.0, 1.0));
+  }
+
   Future<void> stop() async {
     if (_isSupported && _isInitialized) {
       try {
         await FlutterPcmSound.release();
+        _volumeController.add(0.0);
       } catch (_) {}
     }
     _isInitialized = false;
+  }
+
+  void dispose() {
+    _volumeController.close();
   }
 }

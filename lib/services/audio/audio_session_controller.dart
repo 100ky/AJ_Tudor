@@ -30,9 +30,11 @@ class AudioSessionController {
     await _captureSubscription?.cancel();
     _captureSubscription = null;
     await _captureService.stopRecording();
-    // Přehrávání stopovat nemusíme explicitně, pokud nechceme useknout probíhající zvuk, 
-    // ale můžeme vyčistit buffery pokud by to bylo potřeba.
+    await _playbackService.stop();
   }
+
+  Stream<double> get captureVolumeStream => _captureService.volumeStream;
+  Stream<double> get playbackVolumeStream => _playbackService.volumeStream;
 
   void playPcm(List<int> bytes) {
     _playbackService.playPcmData(bytes);

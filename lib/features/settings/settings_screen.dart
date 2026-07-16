@@ -279,12 +279,30 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           ),
                         ),
                         const Divider(),
-                        ListTile(
+                         ListTile(
                           leading: const Icon(Icons.school),
                           title: const Text('Úroveň angličtiny'),
-                          trailing: Text(
-                            profile.targetLevel,
-                            style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueAccent),
+                          subtitle: const Text('Změnit obtížnost konverzace s učitelem'),
+                          trailing: DropdownButton<String>(
+                            value: ['A1', 'A2', 'B1', 'B2'].contains(profile.targetLevel) ? profile.targetLevel : 'B1',
+                            underline: const SizedBox(),
+                            style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueAccent, fontSize: 16),
+                            onChanged: (String? newLevel) async {
+                              if (newLevel != null) {
+                                await ref.read(sessionRepositoryProvider).updateTargetLevel(newLevel);
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('Úroveň angličtiny byla změněna na $newLevel! 🎯')),
+                                  );
+                                }
+                              }
+                            },
+                            items: const [
+                              DropdownMenuItem(value: 'A1', child: Text('A1')),
+                              DropdownMenuItem(value: 'A2', child: Text('A2')),
+                              DropdownMenuItem(value: 'B1', child: Text('B1')),
+                              DropdownMenuItem(value: 'B2', child: Text('B2')),
+                            ],
                           ),
                         ),
                         ListTile(
