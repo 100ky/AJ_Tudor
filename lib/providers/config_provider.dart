@@ -3,40 +3,49 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../core/constants/gemini_models.dart';
 
-// Provider pro SharedPreferences instanci
+/// Provider pro standardní SharedPreferences (lokální nastavení, která nejsou citlivá).
+/// 
+/// Hodnota musí být přepsána v `main.dart` po inicializaci pluginu.
 final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
   throw UnimplementedError('sharedPreferencesProvider must be overridden in main.dart');
 });
 
-// Provider pro Secure Storage
+/// Provider pro šifrované úložiště (pro citlivá data jako API klíče).
+/// 
+/// Používá EncryptedSharedPreferences na Androidu a Keychain na iOS.
 final secureStorageProvider = Provider<FlutterSecureStorage>((ref) {
   return const FlutterSecureStorage(
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
   );
 });
 
-// Notifier pro API klíč (nyní v Secure Storage)
+/// Správce API klíče pro Gemini.
+/// 
+/// Zajišťuje bezpečné uložení klíče a automatickou migraci ze starého
+/// nezabezpečeného úložiště (SharedPreferences) do Secure Storage.
 class ApiKeyNotifier extends Notifier<String?> {
   static const _key = 'gemini_api_key';
 
   @override
   String? build() {
-    // build() nemůže být asynchronní, takže načtení uděláme v init nebo se spolehneme na state update
+    // build() je synchronní, načtení klíče probíhá na pozadí v [_loadKey]
     _loadKey();
     return null;
   }
 
+  /// Asynchronně načte klíč a provede případnou migraci.
   Future<void> _loadKey() async {
     final storage = ref.read(secureStorageProvider);
     final key = await storage.read(key: _key);
     
-    // Fallback na SharedPreferences (migrace)
+    // Zpětná kompatibilita: Pokud klíč není v secure storage, zkusíme SharedPreferences
     if (key == null) {
       final prefs = ref.read(sharedPreferencesProvider);
       final oldKey = prefs.getString(_key);
       if (oldKey != null) {
+        // Migrace klíče do bezpečného úložiště a smazání starého záznamu
         await saveKey(oldKey);
-        await prefs.remove(_key); // Smazat po migraci
+        await prefs.remove(_key);
         return;
       }
     }
@@ -44,12 +53,14 @@ class ApiKeyNotifier extends Notifier<String?> {
     state = key;
   }
 
+  /// Uloží nový API klíč do šifrovaného úložiště.
   Future<void> saveKey(String key) async {
     final storage = ref.read(secureStorageProvider);
     await storage.write(key: _key, value: key);
     state = key;
   }
   
+  /// Odstraní API klíč z úložiště.
   Future<void> clearKey() async {
     final storage = ref.read(secureStorageProvider);
     await storage.delete(key: _key);
@@ -57,9 +68,10 @@ class ApiKeyNotifier extends Notifier<String?> {
   }
 }
 
+/// Globální přístup k API klíči.
 final apiKeyProvider = NotifierProvider<ApiKeyNotifier, String?>(ApiKeyNotifier.new);
 
-// Notifier pro vybraný model Gemini
+/// Správce vybraného AI modelu pro textový chat.
 class ModelNotifier extends Notifier<String> {
   static const _key = 'gemini_model';
 
@@ -67,13 +79,16 @@ class ModelNotifier extends Notifier<String> {
   String build() {
     final prefs = ref.watch(sharedPreferencesProvider);
     final saved = prefs.getString(_key);
+    
+    // Validace, zda je uložený model stále v seznamu povolených
     if (saved != null && GeminiModels.allowedChatModels.contains(saved)) {
       return saved;
     }
-    // Uložený model je zastaralý nebo žádný není → resetovat na výchozí
+    // Pokud není vybráno nic nebo neplatný model, použije se výchozí (3.5 Flash)
     return GeminiModels.defaultModel;
   }
 
+  /// Uloží volbu modelu do nastavení.
   Future<void> saveModel(String model) async {
     final prefs = ref.read(sharedPreferencesProvider);
     await prefs.setString(_key, model);
@@ -81,9 +96,10 @@ class ModelNotifier extends Notifier<String> {
   }
 }
 
+/// Globální přístup k vybranému modelu.
 final modelProvider = NotifierProvider<ModelNotifier, String>(ModelNotifier.new);
 
-// Notifier pro upozornění (Reminders)
+/// Správce nastavení připomínek lekcí.
 class RemindersNotifier extends Notifier<bool> {
   static const _key = 'reminders_enabled';
 
@@ -93,6 +109,7 @@ class RemindersNotifier extends Notifier<bool> {
     return prefs.getBool(_key) ?? false;
   }
 
+  /// Zapne nebo vypne notifikace připomínek.
   Future<void> toggle(bool enabled) async {
     final prefs = ref.read(sharedPreferencesProvider);
     await prefs.setBool(_key, enabled);
@@ -100,9 +117,10 @@ class RemindersNotifier extends Notifier<bool> {
   }
 }
 
+/// Globální stav notifikací.
 final remindersEnabledProvider = NotifierProvider<RemindersNotifier, bool>(RemindersNotifier.new);
 
-// Notifier pro "Otravný režim"
+/// Správce "Otravného režimu" (např. častější notifikace).
 class AnnoyingModeNotifier extends Notifier<bool> {
   static const _key = 'annoying_mode';
 
@@ -112,6 +130,7 @@ class AnnoyingModeNotifier extends Notifier<bool> {
     return prefs.getBool(_key) ?? false;
   }
 
+  /// Zapne nebo vypne otravný režim.
   Future<void> toggle(bool enabled) async {
     final prefs = ref.read(sharedPreferencesProvider);
     await prefs.setBool(_key, enabled);
@@ -119,9 +138,10 @@ class AnnoyingModeNotifier extends Notifier<bool> {
   }
 }
 
+/// Globální stav otravného režimu.
 final annoyingModeProvider = NotifierProvider<AnnoyingModeNotifier, bool>(AnnoyingModeNotifier.new);
 
-// Notifier pro čas upozornění
+/// Správce nastaveného času pro denní připomínku.
 class ReminderTimeNotifier extends Notifier<String> {
   static const _key = 'reminder_time';
 
@@ -131,6 +151,7 @@ class ReminderTimeNotifier extends Notifier<String> {
     return prefs.getString(_key) ?? '18:00';
   }
 
+  /// Uloží čas připomínky (formát HH:mm).
   Future<void> saveTime(String time) async {
     final prefs = ref.read(sharedPreferencesProvider);
     await prefs.setString(_key, time);
@@ -138,9 +159,10 @@ class ReminderTimeNotifier extends Notifier<String> {
   }
 }
 
+/// Globální stav času připomínky.
 final reminderTimeProvider = NotifierProvider<ReminderTimeNotifier, String>(ReminderTimeNotifier.new);
 
-// Notifier pro vybraný hlas Gemini Live (Puck, Kore, Aoede, Fenrir, Charon)
+/// Správce hlasu pro Gemini Live (např. Puck, Kore, Aoede).
 class VoiceNotifier extends Notifier<String> {
   static const _key = 'gemini_voice';
 
@@ -150,6 +172,7 @@ class VoiceNotifier extends Notifier<String> {
     return prefs.getString(_key) ?? 'Puck';
   }
 
+  /// Uloží vybraný hlas pro hlasového tutora.
   Future<void> saveVoice(String voice) async {
     final prefs = ref.read(sharedPreferencesProvider);
     await prefs.setString(_key, voice);
@@ -157,9 +180,12 @@ class VoiceNotifier extends Notifier<String> {
   }
 }
 
+/// Globální stav vybraného hlasu.
 final voiceProvider = NotifierProvider<VoiceNotifier, String>(VoiceNotifier.new);
 
-// Notifier pro pohlcující anglický režim (Immersive Mode)
+/// Správce pohlcujícího anglického režimu (Immersive Mode).
+/// 
+/// V tomto režimu tutor mluví výhradně anglicky a nevyžaduje překlady.
 class ImmersiveModeNotifier extends Notifier<bool> {
   static const _key = 'immersive_mode';
 
@@ -169,6 +195,7 @@ class ImmersiveModeNotifier extends Notifier<bool> {
     return prefs.getBool(_key) ?? false;
   }
 
+  /// Zapne nebo vypne pohlcující režim.
   Future<void> toggle(bool enabled) async {
     final prefs = ref.read(sharedPreferencesProvider);
     await prefs.setBool(_key, enabled);
@@ -176,4 +203,5 @@ class ImmersiveModeNotifier extends Notifier<bool> {
   }
 }
 
+/// Globální stav pohlcujícího režimu.
 final immersiveModeProvider = NotifierProvider<ImmersiveModeNotifier, bool>(ImmersiveModeNotifier.new);

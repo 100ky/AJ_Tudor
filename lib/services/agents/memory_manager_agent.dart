@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/database_provider.dart';
 import '../../providers/gemini_provider.dart';
@@ -7,21 +6,40 @@ import '../../core/utils/logger.dart';
 import '../prompt/system_prompt_builder.dart';
 import 'scenario_planner_agent.dart';
 
+/// Agent zodpovědný za správu dlouhodobé paměti a analýzu ukončených lekcí.
+/// 
+/// Po dokončení lekce (audio sezení) tento agent načte transkripty z databáze,
+/// odešle je k analýze do Gemini (pomocí Structured Outputs s JSON schématem)
+/// a získá vyhodnocení (plynulost, chyby, nová slovíčka, briefing pro příště atd.).
+/// Následně tyto informace uloží zpět do lokální databáze a vyvolá plánovač scénářů.
 class MemoryManagerAgent {
+  /// Reference na Riverpod kontejner pro přístup k dalším službám a providerům.
   final Ref _ref;
 
+  /// Inicializuje agenta paměti.
   MemoryManagerAgent(this._ref);
 
+  /// Spustí asynchronní analýzu ukončené lekce podle jejího ID.
+  /// 
+  /// 1. Načte transkripci rozhovoru (uživatel vs. tutor).
+  /// 2. Odešle historii do Gemini s definovaným JSON schématem.
+  /// 3. Aktualizuje uživatelský profil v databázi (skóre plynulosti, odhadnutou úroveň, paměťový briefing).
+  /// 4. Uloží nově naučená slovíčka a podrobný log chyb.
+  /// 5. Spustí plánovač scénářů [ScenarioPlannerAgent] pro přípravu témat na příští lekce.
   Future<void> analyzeSession(int sessionId) async {
-    debugPrint('Zahajuji analýzu session $sessionId pomocí Structured Outputs...');
+    L.i('Zahajuji analýzu session $sessionId pomocí Structured Outputs...');
     
+    // Načtení repozitáře pro přístup k databázi a batch klienta Gemini určeného pro analýzy.
     final repo = _ref.read(sessionRepositoryProvider);
     final gemini = _ref.read(geminiAnalysisClientProvider);
     
-    if (gemini == null) return;
+    if (gemini == null) {
+      L.e('Gemini Analysis Client není k dispozici (chybí API klíč). Analýza zrušena.');
+      return;
+    }
 
     try {
-      // 1. Načtení transkriptů
+      // 1. Načtení historie transkriptu pro zadané sezení z databáze
       final transcripts = await repo.getTranscripts(sessionId);
       L.i('Nalezeno ${transcripts.length} záznamů v transkriptu pro session $sessionId');
       
@@ -30,20 +48,22 @@ class MemoryManagerAgent {
         return;
       }
 
+      // Sestavení textové reprezentace rozhovoru zabalené do XML tagu pro lepší separaci dat
       final chatHistory = transcripts.map((t) => '${t.speaker}: ${t.content}').join('\n');
       final wrappedHistory = '<transcript>\n$chatHistory\n</transcript>';
 
-      // 2. Analýza pomocí Gemini a JSON Schema
+      // 2. Analýza textu pomocí Gemini a vynucení strukturovaného výstupu (JSON Schema)
       L.i('Odesílám transkript k analýze do Gemini (Structured Outputs)...');
       final analysisResult = await gemini.sendMessage(
         wrappedHistory,
         responseSchema: SystemPromptBuilder.getAnalysisResponseSchema(),
       );
-      L.i('Analýza od Gemini přijata.');
+      L.i('Analýza od Gemini úspěšně přijata.');
       
+      // Dekódování strukturovaného JSON výsledku
       final data = jsonDecode(analysisResult);
 
-      // 3. Uložení výsledků
+      // 3. Uložení globálních výsledků analýzy do databáze
       L.i('Ukládám výsledky analýzy do databáze...');
       await repo.updateSessionAnalysis(
         sessionId: sessionId,
@@ -52,9 +72,10 @@ class MemoryManagerAgent {
         totalErrors: (data['totalErrors'] ?? 0).toInt(),
       );
 
+      // Uložení shrnutí/briefingu pro příští lekci do profilu studenta
       await repo.updateUserMemory(data['briefing'] ?? '');
       
-      // Aktualizace odhadované úrovně angličtiny v profilu
+      // Aktualizace odhadované úrovně angličtiny v profilu studenta (pokud byla rozpoznána)
       if (data['estimatedLevel'] != null) {
         final estLevel = data['estimatedLevel'].toString().toUpperCase();
         if (['A1', 'A2', 'B1', 'B2'].contains(estLevel)) {
@@ -63,17 +84,18 @@ class MemoryManagerAgent {
         }
       }
       
-      // Uložení slovíček
+      // Uložení nově zaznamenaných slovíček do databáze
       if (data['vocabulary'] != null && data['vocabulary'] is List) {
         final List<String> newWords = List<String>.from(data['vocabulary']);
         await repo.updateUserVocabulary(newWords);
       }
 
-      // 4. Uložení jednotlivých chyb
+      // 4. Uložení jednotlivých gramatických/výslovnostních chyb do detailního chybového logu
       if (data['errors'] != null && data['errors'] is List) {
         for (var err in data['errors']) {
           await repo.addErrorLog(
             sessionId: sessionId,
+            // Výchozí typ chyby je grammar, pokud není uveden
             errorType: err['type'] ?? 'grammar',
             userSaid: err['userSaid'] ?? '',
             correctForm: err['correctForm'] ?? '',
@@ -82,15 +104,16 @@ class MemoryManagerAgent {
         }
       }
       
-      debugPrint('Analýza session $sessionId dokončena přesně (JSON).');
+      L.i('Analýza session $sessionId dokončena přesně (JSON).');
 
-      // 5. Spuštění plánování scénářů na příště
+      // 5. Spuštění plánování nových scénářů na příště (asynchronně na pozadí)
       _ref.read(scenarioPlannerAgentProvider).planScenarios();
 
-    } catch (e) {
-      debugPrint('Chyba při strukturované analýze session: $e');
+    } catch (e, stack) {
+      L.e('Chyba při strukturované analýze session', e, stack);
     }
   }
 }
 
+/// Poskytuje globální instanci [MemoryManagerAgent] napříč aplikací.
 final memoryManagerAgentProvider = Provider<MemoryManagerAgent>((ref) => MemoryManagerAgent(ref));

@@ -7,12 +7,17 @@ import '../../services/agents/voice_tutor_agent.dart';
 import '../../services/agents/scenario_planner_agent.dart';
 import '../../data/database/app_database.dart';
 
+/// Jednoduchá datová třída pro zprávu v chatu.
 class ChatMessage {
   final String text;
   final bool isUser;
   ChatMessage(this.text, {required this.isUser});
 }
 
+/// Obrazovka pro textovou konverzaci s AI a výběr scénářů.
+/// 
+/// Umožňuje uživateli psát si s Gemini (Batch režim) a vybírat si
+/// personalizované scénáře pro následný hlasový trénink.
 class ConversationScreen extends ConsumerStatefulWidget {
   const ConversationScreen({super.key});
 
@@ -25,6 +30,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
   final List<ChatMessage> _messages = [];
   bool _isLoading = false;
 
+  /// Odešle textovou zprávu do Gemini a přidá odpověď do seznamu.
   void _sendMessage() async {
     final text = _textController.text.trim();
     if (text.isEmpty) return;
@@ -43,6 +49,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
       _textController.clear();
     });
 
+    // Volání asynchronní metody pro získání odpovědi od AI
     final response = await client.sendMessage(text);
 
     setState(() {
@@ -55,6 +62,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
   Widget build(BuildContext context) {
     final repo = ref.watch(sessionRepositoryProvider);
     
+    // Posloucháme změny modelu – pokud se změní model, vymažeme historii (kontext se mění)
     ref.listen(modelProvider, (previous, next) {
       if (previous != next) {
         setState(() {
@@ -70,11 +78,13 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
       ),
       body: Column(
         children: [
-          // Sekce Scénáře (Scenario Planner)
+          // Sekce Doporučené Scénáře (Scenario Planner)
           StreamBuilder<List<Scenario>>(
             stream: repo.watchAvailableScenarios(),
             builder: (context, snapshot) {
               final scenarios = snapshot.data ?? [];
+              
+              // Pokud nejsou dostupné žádné scénáře, nabídneme jejich vygenerování
               if (scenarios.isEmpty) {
                 return Padding(
                   padding: const EdgeInsets.all(16.0),
@@ -85,6 +95,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                   ),
                 );
               }
+              
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -113,6 +124,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
             },
           ),
           
+          // Seznam zpráv v chatu
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.all(16.0),
@@ -134,11 +146,14 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
               },
             ),
           ),
+          
           if (_isLoading)
             const Padding(
               padding: EdgeInsets.all(8.0),
               child: CircularProgressIndicator(),
             ),
+            
+          // Vstupní pole pro text
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Row(
@@ -167,6 +182,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     );
   }
 
+  /// Sestaví kartu s náhledem scénáře.
   Widget _buildScenarioCard(Scenario s) {
     return Container(
       width: 200,
@@ -176,7 +192,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         child: InkWell(
           onTap: () {
-            // Výběr scénáře a přepnutí na Voice Tutor tab
+            // Výběr scénáře a přepnutí instrukcí pro Voice Tutor agenta
             ref.read(voiceTutorAgentProvider.notifier).selectScenario(s.id, s.tutorInstruction);
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -222,6 +238,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     );
   }
 
+  /// Pomocný widget pro zobrazení obtížnosti scénáře.
   Widget _buildDifficultyBadge(String difficulty) {
     Color color;
     switch (difficulty.toLowerCase()) {

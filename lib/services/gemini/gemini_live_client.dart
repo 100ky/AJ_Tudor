@@ -1,15 +1,24 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../../core/utils/logger.dart';
 import '../audio/audio_playback_service.dart';
 
+/// Klient pro obousměrnou real-time komunikaci s Gemini Live API přes WebSocket.
+/// 
+/// Zajišťuje odesílání hlasových (PCM 16-bit) a textových dat do Gemini a asynchronní
+/// zpracování odpovědí (audio streamování zpět, transkripce řeči studenta i AI, tool calling atd.).
+/// Obsahuje automatickou logiku znovupřipojení s exponenciálním backoffem.
 class GeminiLiveClient {
+  /// Aktivní WebSocket kanál pro bidi-streamování.
   WebSocketChannel? _channel;
+
+  /// API klíč pro autentizaci vůči Gemini.
   final String _apiKey;
+
+  /// Služba pro přehrávání přijatých audio dat.
   final AudioPlaybackService _playbackService;
   
-  // Reconnect logika
+  // Reconnect logika a stavové proměnné
   int _reconnectAttempts = 0;
   final int _maxReconnectAttempts = 5;
   bool _isManualDisconnect = false;
@@ -18,19 +27,41 @@ class GeminiLiveClient {
   String _lastVoiceName = 'Puck';
   String? _lastResumptionHandle;
 
+  /// Vrací [bool] vyjadřující, zda je klient momentálně připojen a nemá aktivní pokusy o reconnect.
   bool get isConnected => _channel != null && _reconnectAttempts == 0;
 
-  // Callbacky pro UI
+  // Callbacky pro předávání událostí do UI/agenta
+  
+  /// Vyvoláno při přijetí části textové odpovědi od tutora.
   Function(String)? onTextReceived;
+
+  /// Vyvoláno při dokončení přepisu řeči uživatele (STT - Speech to Text).
   Function(String)? onUserTranscriptReceived;
+
+  /// Vyvoláno při zahájení příjmu audia od tutora.
   Function()? onAudioReceived;
+
+  /// Vyvoláno, když tutor dokončí svůj promluvový blok (turn complete).
   Function()? onTurnComplete;
+
+  /// Vyvoláno při jakékoliv chybě v komunikaci.
   Function(String)? onError;
+
+  /// Vyvoláno při změně stavu připojení (true = připojeno, false = odpojeno).
   Function(bool)? onConnectionStatusChanged;
+
+  /// Vyvoláno, když model zavolá externí nástroj (Function Calling).
   Function(String name, Map<String, dynamic> args)? onToolCall;
 
+  /// Konstruktor vyžadující API klíč a instanci služby přehrávání zvuku.
   GeminiLiveClient(this._apiKey, this._playbackService);
 
+  /// Naváže WebSocket spojení s Gemini Live API.
+  /// 
+  /// [modelName] definuje použitý model (např. gemini-2.0-flash-exp).
+  /// [systemPrompt] předává instrukce pro chování tutora.
+  /// [voiceName] určuje hlas pro syntézu řeči.
+  /// [isReconnect] indikuje, zda jde o pokus o obnovení spadlého spojení.
   void connect({
     required String modelName,
     required String systemPrompt,
@@ -42,44 +73,50 @@ class GeminiLiveClient {
     _lastSystemPrompt = systemPrompt;
     _lastVoiceName = voiceName;
     
+    // Pokud se nejedná o reconnect, zahazujeme starý resumption handle (nové sezení).
     if (!isReconnect) {
-      _lastResumptionHandle = null; // Fresh session reset
+      _lastResumptionHandle = null;
     }
     
-    // Čištění starého spojení, pokud existuje
+    // Čištění starého spojení, pokud existuje.
     _channel?.sink.close();
     
+    // Sestavení URI pro bidi-generate WebSocket.
     final uri = Uri.parse(
         'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=$_apiKey');
     
-    debugPrint('Připojování k: $uri');
+    L.i('Připojování k: $uri');
     _channel = WebSocketChannel.connect(uri);
 
+    // Naslouchání na příchozím streamu WebSocketu.
     _channel!.stream.listen(
       (message) {
-        _reconnectAttempts = 0; // Resetujeme pokusy při úspěšném příjmu dat
+        _reconnectAttempts = 0; // Resetujeme pokusy při úspěšném příjmu jakýchkoliv dat.
         if (onConnectionStatusChanged != null) onConnectionStatusChanged!(true);
 
+        // Diagnostické logování zpráv (pokud neobsahují obrovská binární data audia).
         if (message is String && !message.contains('inlineData') && !message.contains('inline_data')) {
-          debugPrint('WebSocket PŘIJATO: $message');
+          L.d('WebSocket PŘIJATO: $message');
         }
         _handleIncomingMessage(message);
       },
       onError: (error) {
-        debugPrint('WebSocket CHYBA: $error');
+        L.e('WebSocket CHYBA: $error');
         if (onConnectionStatusChanged != null) onConnectionStatusChanged!(false);
         _handleError(error.toString());
       },
       onDone: () {
-        debugPrint('WebSocket spojení UZAVŘENO. Code: ${_channel?.closeCode}, Reason: ${_channel?.closeReason}');
+        L.w('WebSocket spojení UZAVŘENO. Code: ${_channel?.closeCode}, Reason: ${_channel?.closeReason}');
         if (onConnectionStatusChanged != null) onConnectionStatusChanged!(false);
         
+        // Pokud nebylo spojení zavřeno ručně uživatelem, pokusíme se o reconnect.
         if (!_isManualDisconnect) {
           _attemptReconnect();
         }
       },
     );
 
+    // Odeslání konfigurační (SETUP) zprávy s krátkou prodlevou po navázání socketu.
     Future.delayed(const Duration(milliseconds: 300), () {
       if (_channel != null) {
         _sendSetupMessage(modelName, systemPrompt, voiceName);
@@ -87,11 +124,13 @@ class GeminiLiveClient {
     });
   }
 
+  /// Pokusí se o automatické znovupřipojení s exponenciálním backoffem.
   void _attemptReconnect() {
     if (_reconnectAttempts < _maxReconnectAttempts && _lastModelName != null && _lastSystemPrompt != null) {
       _reconnectAttempts++;
-      final delay = Duration(seconds: _reconnectAttempts * 2); // Exponenciální backoff
-      debugPrint('Pokus o znovupřipojení č. $_reconnectAttempts za ${delay.inSeconds}s...');
+      // Exponenciální prodleva mezi pokusy (2s, 4s, 6s, 8s, 10s).
+      final delay = Duration(seconds: _reconnectAttempts * 2);
+      L.i('Pokus o znovupřipojení č. $_reconnectAttempts za ${delay.inSeconds}s...');
       
       Future.delayed(delay, () {
         if (!_isManualDisconnect) {
@@ -108,11 +147,12 @@ class GeminiLiveClient {
     }
   }
 
+  /// Vyhodnocuje chybové kódy a zprávy z WebSocketu.
   void _handleError(String errorMsg) {
     if (errorMsg.contains('429')) {
       if (onError != null) onError!('Překročena kvóta API (Rate limit). Zkuste to za chvíli.');
     } else if (errorMsg.contains('1008')) {
-      debugPrint('GoAway detekován, zkouším reconnect...');
+      L.w('GoAway detekován (kód 1008), zkouším reconnect...');
       _attemptReconnect();
     } else {
       L.e('WebSocket CHYBA: $errorMsg');
@@ -120,12 +160,14 @@ class GeminiLiveClient {
     }
   }
 
+  /// Odešle počáteční SETUP zprávu pro definování modelu, hlasu, promptu a nástrojů (Function Calling).
   void _sendSetupMessage(String modelName, String systemPrompt, String voiceName) {
     final setupMessage = {
       'setup': {
+        // Kontrola správného formátu názvu modelu
         'model': modelName.startsWith('models/') ? modelName : 'models/$modelName',
         'generationConfig': {
-          'responseModalities': ['AUDIO'],
+          'responseModalities': ['AUDIO'], // Chceme, aby model odpovídal primárně zvukem
           'speechConfig': {
             'voiceConfig': {
               'prebuiltVoiceConfig': {
@@ -137,12 +179,15 @@ class GeminiLiveClient {
         'systemInstruction': {
           'parts': [{'text': systemPrompt}]
         },
+        // Povolíme transkripci jak pro vstup, tak pro výstup
         'inputAudioTranscription': {},
         'outputAudioTranscription': {},
+        // Pokud máme resumption handle z předchozího odpojení, pokusíme se navázat na kontext
         if (_lastResumptionHandle != null)
           'sessionResumptionConfig': {
             'handle': _lastResumptionHandle,
           },
+        // Deklarace funkcí (Function Calling)
         'tools': [
           {
             'functionDeclarations': [
@@ -178,10 +223,11 @@ class GeminiLiveClient {
         ]
       }
     };
-    debugPrint('Odesílám SETUP s nástroji: ${jsonEncode(setupMessage)}');
+    L.d('Odesílám SETUP s nástroji: ${jsonEncode(setupMessage)}');
     _channel?.sink.add(jsonEncode(setupMessage));
   }
 
+  /// Odešle raw audio data (PCM 16-bit, 16kHz) zakódovaná do Base64.
   void sendAudioChunk(List<int> pcm16Data) {
     if (_channel == null) return;
     
@@ -199,6 +245,7 @@ class GeminiLiveClient {
     _channel?.sink.add(jsonEncode(clientContent));
   }
 
+  /// Odešle textový vstup od uživatele (např. při psaní na klávesnici v UI).
   void sendText(String text) {
     if (_channel == null) return;
     final clientContent = {
@@ -215,6 +262,7 @@ class GeminiLiveClient {
     _channel?.sink.add(jsonEncode(clientContent));
   }
 
+  /// Zpracovává a analyzuje všechny příchozí WebSocket zprávy z Gemini serveru.
   void _handleIncomingMessage(dynamic message) {
     try {
       String messageString;
@@ -228,7 +276,7 @@ class GeminiLiveClient {
       
       final data = jsonDecode(messageString);
       
-      // DIAGNOSTIKA: Vypíšeme klíče v rootu zprávy
+      // Diagnostika: Vypíšeme kořenové klíče zprávy, pokud nejde o běžný přenos audia
       if (data is Map) {
         final keys = data.keys.toList();
         if (!keys.contains('inlineData') && !keys.contains('inline_data')) {
@@ -236,6 +284,7 @@ class GeminiLiveClient {
         }
       }
 
+      // Detekce systémové chyby ze strany API
       if (data.containsKey('error')) {
         final error = data['error'];
         final msg = error['message'] ?? 'Neznámá chyba serveru';
@@ -244,7 +293,7 @@ class GeminiLiveClient {
         return;
       }
 
-      // Podpora pro camelCase (Google standard) i snake_case (některé proxy/SDK)
+      // Podpora pro camelCase (Google standard) i snake_case (který mohou posílat některé proxy)
       final serverContent = data['serverContent'] ?? data['server_content'];
       
       if (serverContent != null) {
@@ -252,7 +301,7 @@ class GeminiLiveClient {
           L.d('serverContent sub-keys: ${serverContent.keys.toList()}');
         }
         
-        // Přepis toho, co řekl uživatel (STT)
+        // Zpracování Speech-to-Text přepisu řeči uživatele
         final inputTranscription = serverContent['inputTranscription'] ?? serverContent['input_transcription'];
         if (inputTranscription != null) {
           final text = inputTranscription['text'];
@@ -262,7 +311,7 @@ class GeminiLiveClient {
           }
         }
 
-        // Přepis toho, co říká model (STT) - obvykle chodí průběžně
+        // Zpracování textového přepisu mluveného slova tutora
         final outputTranscription = serverContent['outputTranscription'] ?? serverContent['output_transcription'];
         if (outputTranscription != null) {
           final text = outputTranscription['text'];
@@ -272,21 +321,24 @@ class GeminiLiveClient {
           }
         }
 
+        // Zpracování modelTurn (audio data nebo textové odpovědi)
         final modelTurn = serverContent['modelTurn'] ?? serverContent['model_turn'];
         if (modelTurn != null) {
           final parts = modelTurn['parts'] as List?;
           if (parts != null) {
             for (var part in parts) {
-              // Ignorujeme myšlenkové pochody modelu (reasoning/thought)
+              // Ignorujeme myšlenkové pochody modelu (reasoning/thought), pokud jsou posílány
               if (part['thought'] == true) {
                 continue;
               }
 
               final inlineData = part['inlineData'] ?? part['inline_data'];
               if (inlineData != null) {
-                if (inlineData['mimeType'].startsWith('audio/pcm') || inlineData['mime_type'].startsWith('audio/pcm')) {
+                final mimeType = inlineData['mimeType'] ?? inlineData['mime_type'] ?? '';
+                if (mimeType.startsWith('audio/pcm')) {
                   final audioBytes = base64Decode(inlineData['data']);
                   if (onAudioReceived != null) onAudioReceived!(); 
+                  // Přehrání audia přes audio playback service
                   _playbackService.playPcmData(audioBytes);
                 }
               } 
@@ -299,6 +351,7 @@ class GeminiLiveClient {
           }
         }
         
+        // Detekce konce tahu (model domluvil)
         final turnComplete = serverContent['turnComplete'] ?? serverContent['turn_complete'];
         if (turnComplete == true) {
           L.i('TurnComplete signál přijat.');
@@ -306,7 +359,7 @@ class GeminiLiveClient {
         }
       }
 
-      // Zpracování Tool Calls (Function Calling) v rootu i v serverContent
+      // Zpracování Tool Calls (Function Calling) - může přijít v rootu i pod serverContent
       final toolCall = data['toolCall'] ?? data['tool_call'] ?? (serverContent is Map ? (serverContent['toolCall'] ?? serverContent['tool_call']) : null);
       if (toolCall != null) {
         final functionCalls = toolCall['functionCalls'] ?? toolCall['function_calls'] as List?;
@@ -319,18 +372,18 @@ class GeminiLiveClient {
             L.i('Model volá funkci: $name s argumenty: $args');
             if (onToolCall != null) onToolCall!(name, args);
 
-            // Okamžitá odpověď modelu, aby mohl pokračovat
+            // Okamžitá automatická odpověď modelu, aby se Live relace nezasekla a mohl pokračovat v řeči
             _sendToolResponse(id, name, {'status': 'ok'});
           }
         }
       }
 
-      // Detekce zrušení tool call (např. při přerušení)
+      // Detekce zrušení rozpracovaného tool callu (např. při přerušení uživatelem)
       if (data.containsKey('toolCallCancellation') || data.containsKey('tool_call_cancellation')) {
         L.w('ToolCall zrušen serverem.');
       }
 
-      // Zpracování SessionResumptionUpdate
+      // Zpracování aktualizace Session Resumption (ukládání handle pro případný reconnect)
       if (data.containsKey('sessionResumptionUpdate') || data.containsKey('session_resumption_update')) {
         final update = data['sessionResumptionUpdate'] ?? data['session_resumption_update'];
         if (update != null && update is Map) {
@@ -342,15 +395,16 @@ class GeminiLiveClient {
         }
       }
 
-      // Zpracování GoAway
+      // Detekce signálu GoAway (server plánuje brzy ukončit socket)
       if (data.containsKey('goAway') || data.containsKey('go_away')) {
         L.w('GoAway signál přijat od serveru. Spojení bude brzy ukončeno.');
       }
-    } catch (e) {
-      debugPrint('Chyba zpracování zprávy: $e');
+    } catch (e, stack) {
+      L.e('Chyba zpracování zprávy', e, stack);
     }
   }
 
+  /// Odešle odpověď na vykonaný tool call zpět do WebSocketu.
   void _sendToolResponse(String? id, String name, Map<String, dynamic> response) {
     if (_channel == null) return;
     
@@ -368,13 +422,14 @@ class GeminiLiveClient {
     _channel?.sink.add(jsonEncode(responseMsg));
   }
 
+  /// Vynutí restartování spojení (zavře socket a spustí reconnect mechanismus).
   void forceReconnect() {
-    debugPrint('WebSocket: Vynucený reconnect...');
+    L.w('WebSocket: Vynucený reconnect...');
     _isManualDisconnect = false;
     _channel?.sink.close();
-    // Tím se vyvolá onDone a následný _attemptReconnect
   }
 
+  /// Ručně odpojí klienta a zruší všechny probíhající operace.
   void disconnect() {
     _isManualDisconnect = true;
     _channel?.sink.close();

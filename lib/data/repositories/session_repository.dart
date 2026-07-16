@@ -5,12 +5,19 @@ import '../../core/error/error_handling.dart';
 import '../../core/utils/result.dart';
 import '../../core/utils/logger.dart';
 
+/// Repozitář pro správu dat souvisejících s výukovými lekcemi (sessions).
+/// 
+/// Zapouzdřuje přímé volání databáze a poskytuje čisté rozhraní pro zbytek aplikace.
+/// Využívá třídu [Result] pro bezpečné zpracování chyb.
 class SessionRepository {
   final AppDatabase _db;
 
+  /// Inicializuje repozitář s instancí databáze.
   SessionRepository(this._db);
 
-  /// Vytvoří novou session v databázi a vrátí její ID
+  /// Vytvoří novou lekci (session) v databázi a vrátí její ID.
+  /// 
+  /// Automaticky nastaví čas zahájení na aktuální čas.
   Future<Result<int>> startNewSession() async {
     try {
       final id = await _db.into(_db.sessions).insert(
@@ -25,7 +32,9 @@ class SessionRepository {
     }
   }
 
-  /// Přidá záznam do transkriptu
+  /// Přidá záznam promluvy (textu) do historie dané lekce.
+  /// 
+  /// [speaker] může být 'user' (student) nebo 'tutor' (AI).
   Future<Result<void>> addTranscript({
     required int sessionId,
     required String speaker,
@@ -47,7 +56,7 @@ class SessionRepository {
     }
   }
 
-  /// Uzavře session
+  /// Označí lekci jako ukončenou a uloží čas konce.
   Future<Result<void>> closeSession(int sessionId) async {
     try {
       await (_db.update(_db.sessions)..where((t) => t.id.equals(sessionId))).write(
@@ -62,12 +71,14 @@ class SessionRepository {
     }
   }
 
-  /// Načte transkripty pro danou session
+  /// Načte všechny textové záznamy (transkripty) pro konkrétní lekci.
   Future<List<Transcript>> getTranscripts(int sessionId) async {
     return await (_db.select(_db.transcripts)..where((t) => t.sessionId.equals(sessionId))).get();
   }
 
-  /// Aktualizuje výsledky analýzy session
+  /// Aktualizuje výsledky analýzy lekce (shrnutí, plynulost, počet chyb).
+  /// 
+  /// Volá se typicky po skončení lekce, kdy AI provede vyhodnocení celého hovoru.
   Future<void> updateSessionAnalysis({
     required int sessionId,
     required String topicSummary,
@@ -83,7 +94,9 @@ class SessionRepository {
     );
   }
 
-  /// Aktualizuje briefing v profilu uživatele
+  /// Aktualizuje "dlouhodobou paměť" tutora (briefing) v profilu uživatele.
+  /// 
+  /// Briefing obsahuje shrnutí toho, co si student z lekce odnesl a na čem je třeba pracovat.
   Future<void> updateUserMemory(String briefing) async {
     // Pro zjednodušení předpokládáme ID 1 pro hlavního uživatele
     final exists = await (_db.select(_db.userProfiles)..where((t) => t.id.equals(1))).getSingleOrNull();
@@ -96,6 +109,7 @@ class SessionRepository {
         ),
       );
     } else {
+      // Pokud profil neexistuje, vytvoříme nový s výchozími hodnotami
       await _db.into(_db.userProfiles).insert(
         UserProfilesCompanion.insert(
           id: const Value(1),
@@ -112,7 +126,9 @@ class SessionRepository {
     }
   }
 
-  /// Aktualizuje slovní zásobu uživatele
+  /// Aktualizuje seznam známých slovíček uživatele.
+  /// 
+  /// Přidá nová slova do existujícího JSON pole, přičemž duplicity jsou automaticky odstraněny.
   Future<void> updateUserVocabulary(List<String> newWords) async {
     final user = await (_db.select(_db.userProfiles)..where((t) => t.id.equals(1))).getSingleOrNull();
     if (user == null) return;
@@ -129,7 +145,7 @@ class SessionRepository {
     );
   }
 
-  /// Získá aktuální briefing pro tutora
+  /// Načte poslední uložený briefing (paměť) pro potřeby AI tutora.
   Future<Result<String?>> getLatestBriefing() async {
     try {
       final user = await (_db.select(_db.userProfiles)..where((t) => t.id.equals(1))).getSingleOrNull();
@@ -140,12 +156,12 @@ class SessionRepository {
     }
   }
 
-  /// Sleduje změny v profilu uživatele
+  /// Stream pro sledování změn v uživatelském profilu (reaktivní UI).
   Stream<UserProfile?> watchUserProfile() {
     return (_db.select(_db.userProfiles)..where((t) => t.id.equals(1))).watchSingleOrNull();
   }
 
-  /// Přidá záznam o chybě
+  /// Uloží záznam o gramatické nebo výslovnostní chybě uživatele.
   Future<Result<void>> addErrorLog({
     required int sessionId,
     required String errorType,
@@ -171,22 +187,22 @@ class SessionRepository {
     }
   }
 
-  /// Načte všechny chyby pro danou session
+  /// Načte všechny chyby zaznamenané v konkrétní lekci.
   Future<List<ErrorLog>> getErrorLogs(int sessionId) async {
     return await (_db.select(_db.errorLogs)..where((t) => t.sessionId.equals(sessionId))).get();
   }
 
-  /// Sleduje všechny chyby (pro dashboard)
+  /// Sleduje všechny zaznamenané chyby (např. pro zobrazení v dashboardu statistik).
   Stream<List<ErrorLog>> watchAllErrorLogs() {
     return (_db.select(_db.errorLogs)..orderBy([(t) => OrderingTerm.desc(t.timestamp)])).watch();
   }
 
-  /// Načte seznam všech sessions
+  /// Sleduje seznam všech absolvovaných lekcí seřazený od nejnovější.
   Stream<List<Session>> watchAllSessions() {
     return (_db.select(_db.sessions)..orderBy([(t) => OrderingTerm.desc(t.startedAt)])).watch();
   }
 
-  /// Smaže paměť uživatele (včetně briefingu)
+  /// Resetuje veškerý pokrok a paměť uživatele (návrat do výchozího stavu).
   Future<void> resetUserMemory() async {
     await (_db.update(_db.userProfiles)..where((t) => t.id.equals(1))).write(
       const UserProfilesCompanion(
@@ -200,7 +216,7 @@ class SessionRepository {
     );
   }
 
-  /// Aktualizuje cílovou úroveň angličtiny uživatele
+  /// Aktualizuje preferovanou cílovou úroveň angličtiny (např. A2, B2, C1).
   Future<void> updateTargetLevel(String level) async {
     final user = await (_db.select(_db.userProfiles)..where((t) => t.id.equals(1))).getSingleOrNull();
     if (user != null) {
@@ -228,12 +244,15 @@ class SessionRepository {
 
   // --- SCÉNÁŘE ---
 
-  /// Uloží nové scénáře (a smaže staré nepoužité)
+  /// Nahradí staré nevyužité konverzační scénáře nově vygenerovanými.
+  /// 
+  /// Celý proces probíhá v jedné DB transakci pro zajištění konzistence.
   Future<void> replaceScenarios(List<Scenario> newScenarios) async {
     await _db.transaction(() async {
-      // Smažeme staré, které nebyly využity (nebo prostě všechny nepoužité)
+      // Odstranění všech scénářů, které uživatel ještě nepoužil
       await (_db.delete(_db.scenarios)..where((t) => t.isUsed.equals(false))).go();
       
+      // Vložení nových scénářů
       for (var s in newScenarios) {
         await _db.into(_db.scenarios).insert(
           ScenariosCompanion.insert(
@@ -248,19 +267,19 @@ class SessionRepository {
     });
   }
 
-  /// Načte dostupné scénáře
+  /// Sleduje seznam dostupných (nepoužitých) scénářů pro výběr v UI.
   Stream<List<Scenario>> watchAvailableScenarios() {
     return (_db.select(_db.scenarios)..where((t) => t.isUsed.equals(false))).watch();
   }
 
-  /// Označí scénář jako použitý
+  /// Označí vybraný scénář jako použitý, aby se již nenabízel.
   Future<void> markScenarioUsed(int id) async {
     await (_db.update(_db.scenarios)..where((t) => t.id.equals(id))).write(
       const ScenariosCompanion(isUsed: Value(true)),
     );
   }
 
-  /// Načte profil uživatele
+  /// Načte aktuální uživatelský profil (pokud existuje).
   Future<UserProfile?> getUserProfile() async {
     return await (_db.select(_db.userProfiles)..where((t) => t.id.equals(1))).getSingleOrNull();
   }

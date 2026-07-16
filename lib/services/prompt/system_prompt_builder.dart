@@ -1,4 +1,20 @@
+/// Třída odpovědná za sestavování systémových promptů a definici JSON schémat pro Gemini API.
+/// 
+/// Centralizuje instrukce pro různé agenty (tutor, analytik, plánovač scénářů) a zaručuje,
+/// že se chování AI řídí jednotnými pedagogickými a konverzačními pravidly.
 class SystemPromptBuilder {
+  
+  /// Sestaví systémový prompt pro Voice Tutora (AJ Tudor).
+  /// 
+  /// Prompt definuje:
+  /// - **Roli**: Trpělivý a přátelský učitel angličtiny pro Čechy.
+  /// - **Immersive Mode**: Pokud je [isImmersive] zapnut, tutor mluví 100% anglicky a neupozorňuje na chyby nahlas.
+  /// - **Konverzační pravidlo "Nebuď detektiv"**: Zabraňuje modelu pokládat jen otázky za sebou.
+  ///   Tutor musí: reagovat -> sdílet něco o sobě -> položit 1 otázku.
+  /// - **Adaptivní úroveň**: Přizpůsobuje gramatiku a tempo podle [targetLevel] (A1, A2, B1, B2).
+  /// - **Pedagogický protokol**: V běžném režimu přísně opravuje každou chybu v češtině, ve immersive režimu pokračuje plynule.
+  /// - **Logování chyb**: Instruuje model k volání funkce `log_error` při každé chybě.
+  /// - **Role-play**: Připojí volitelný kontext aktuálně procvičovaného scénáře [scenarioContext].
   static String buildTutorPrompt({String? scenarioContext, String targetLevel = 'B1', bool isImmersive = false}) {
     return '''Jsi AJ Tudor, přátelský, upovídaný a trpělivý učitel angličtiny pro české studenty.
 ${isImmersive 
@@ -47,6 +63,11 @@ ${scenarioContext != null ? 'AKTUÁLNÍ SCÉNÁŘ (ROLE-PLAY):\n$scenarioContext
 ''';
   }
 
+  /// Sestaví systémový prompt pro analýzu lekce (Memory Manager Agent).
+  /// 
+  /// Instruuje AI, jak vyhodnotit transkript a na co se zaměřit (skóre plynulosti,
+  /// slabiny, nová slovíčka, gramatika). Obsahuje důležité bezpečnostní
+  /// instrukce proti zneužití dat studenta (prompt injection v transkriptu).
   static String buildAnalysisPrompt() {
     return '''Jsi analytik výuky angličtiny. Tvým úkolem je projít transkript konverzace mezi tutorem a studentem a vytvořit strukturované shrnutí.
 Historie konverzace je uzavřena v tagu <transcript>. 
@@ -62,6 +83,10 @@ VÝSTUPNÍ INSTRUKCE:
 ''';
   }
 
+  /// Vrátí JSON schéma pro strukturovaný výstup analýzy lekce.
+  /// 
+  /// Definuje formát klíčů jako: `topicSummary`, `fluencyScore`, `estimatedLevel`,
+  /// `totalErrors`, `briefing`, `vocabulary`, `errors` (pole chybových objektů).
   static Map<String, dynamic> getAnalysisResponseSchema() {
     return {
       'type': 'object',
@@ -98,6 +123,10 @@ VÝSTUPNÍ INSTRUKCE:
     };
   }
 
+  /// Sestaví systémový prompt pro plánování scénářů (Scenario Planner Agent).
+  /// 
+  /// AI na základě zájmů, chyb a slovní zásoby navrhne 3 role-play scénáře.
+  /// Obsahuje bezpečnostní stop-bias, aby negenerovala školní témata pro dospělé studenty.
   static String buildScenarioPlannerPrompt({
     required String userInterests,
     required String recentErrors,
@@ -118,13 +147,16 @@ ${memoryBriefing != null && memoryBriefing.isNotEmpty ? '- Kontext z minulých l
 POŽADAVKY NA SCÉNÁŘE:
 1. Musí být zajímavé a relevantní k zájmům studenta.
 2. Musí být navrženy tak, aby přirozeně vyžadovaly procvičení gramatiky, ve které student chybuje.
-3. Každý scénář musí mít název, krátký popis situace a "instrukci pro tutora" (jakou roli má AI hrát v angličtině).
+3. Každý scénář must mít název, krátký popis situace a "instrukci pro tutora" (jakou roli má AI hrát v angličtině).
 4. Jazyk výstupu (název a popis) je ČEŠTINA. Instrukce pro tutora je ANGLIČTINA.
 5. ZAJISTI MAXIMÁLNÍ PESTROST A RŮZNORODOST! Generuj scénáře z běžného života dospělých (např. v restauraci, na letišti, v hotelu, pracovní pohovor, nákupy, domlouvání schůzky, plánování dovolené, v autoservisu, diskuse o hobby).
 6. BEZPEČNOSTNÍ STOP-BIAS: Vyhni se za každou cenu tématům jako jsou "děti", "škola", "školní třída" nebo "školní jídelna", pokud to student nemá výslovně uvedeno v zájmech. Uvědom si, že student je dospělý člověk učící se anglicky, nikoliv dítě ve škole!
 ''';
   }
 
+  /// Vrátí JSON schéma pro strukturovaný výstup generátoru scénářů.
+  /// 
+  /// Každý scénář obsahuje: `id`, `title`, `description`, `tutorInstruction` a `difficulty`.
   static Map<String, dynamic> getScenarioResponseSchema() {
     return {
       'type': 'object',
