@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../services/gemini/gemini_batch_client.dart';
+import '../../providers/gemini_provider.dart';
 import '../../providers/config_provider.dart';
 import '../../providers/database_provider.dart';
 import '../../services/agents/voice_tutor_agent.dart';

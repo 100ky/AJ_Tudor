@@ -139,3 +139,41 @@ class ReminderTimeNotifier extends Notifier<String> {
 }
 
 final reminderTimeProvider = NotifierProvider<ReminderTimeNotifier, String>(ReminderTimeNotifier.new);
+
+// Notifier pro vybraný hlas Gemini Live (Puck, Kore, Aoede, Fenrir, Charon)
+class VoiceNotifier extends Notifier<String> {
+  static const _key = 'gemini_voice';
+
+  @override
+  String build() {
+    final prefs = ref.watch(sharedPreferencesProvider);
+    return prefs.getString(_key) ?? 'Puck';
+  }
+
+  Future<void> saveVoice(String voice) async {
+    final prefs = ref.read(sharedPreferencesProvider);
+    await prefs.setString(_key, voice);
+    state = voice;
+  }
+}
+
+final voiceProvider = NotifierProvider<VoiceNotifier, String>(VoiceNotifier.new);
+
+// Notifier pro pohlcující anglický režim (Immersive Mode)
+class ImmersiveModeNotifier extends Notifier<bool> {
+  static const _key = 'immersive_mode';
+
+  @override
+  bool build() {
+    final prefs = ref.watch(sharedPreferencesProvider);
+    return prefs.getBool(_key) ?? false;
+  }
+
+  Future<void> toggle(bool enabled) async {
+    final prefs = ref.read(sharedPreferencesProvider);
+    await prefs.setBool(_key, enabled);
+    state = enabled;
+  }
+}
+
+final immersiveModeProvider = NotifierProvider<ImmersiveModeNotifier, bool>(ImmersiveModeNotifier.new);

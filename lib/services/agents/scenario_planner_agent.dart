@@ -29,6 +29,8 @@ class ScenarioPlannerAgent {
         userInterests: profile.topicPreferences,
         recentErrors: profile.recurringErrors,
         currentVocabulary: profile.vocabulary,
+        targetLevel: profile.targetLevel,
+        memoryBriefing: profile.memoryBriefing,
       );
 
       // 3. Generování pomocí Structured Outputs

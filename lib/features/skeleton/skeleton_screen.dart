@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../conversation/conversation_screen.dart';
 import '../conversation/voice_tutor_screen.dart';
+import '../agents/agents_screen.dart';
 import '../progress/progress_screen.dart';
 import '../history/history_screen.dart';
 import '../settings/settings_screen.dart';
@@ -24,6 +25,7 @@ class SkeletonScreen extends ConsumerWidget {
   static const List<Widget> _pages = [
     ConversationScreen(),
     VoiceTutorScreen(),
+    AgentsScreen(),
     ProgressScreen(),
     HistoryScreen(),
     SettingsScreen(),
@@ -50,6 +52,11 @@ class SkeletonScreen extends ConsumerWidget {
             icon: Icon(Icons.mic_none),
             selectedIcon: Icon(Icons.mic),
             label: 'Voice',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.smart_toy_outlined),
+            selectedIcon: Icon(Icons.smart_toy),
+            label: 'Agenti',
           ),
           NavigationDestination(
             icon: Icon(Icons.show_chart),

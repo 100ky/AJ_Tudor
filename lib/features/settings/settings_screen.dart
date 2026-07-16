@@ -211,6 +211,53 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           const SizedBox(height: 24),
           const Text(
+            'Hlasové a výukové nastavení',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Card(
+            elevation: 2,
+            child: Column(
+              children: [
+                SwitchListTile(
+                  title: const Text('Pohlcující režim (Immersive Mode)'),
+                  subtitle: const Text('Učitel bude mluvit 100% anglicky a nebude opravovat chyby nahlas.'),
+                  value: ref.watch(immersiveModeProvider),
+                  onChanged: (value) {
+                    ref.read(immersiveModeProvider.notifier).toggle(value);
+                  },
+                ),
+                const Divider(),
+                ListTile(
+                  leading: const Icon(Icons.record_voice_over),
+                  title: const Text('Hlas učitele (Gemini Voice)'),
+                  subtitle: const Text('Vyberte přednastavený hlas Gemini Live.'),
+                  trailing: DropdownButton<String>(
+                    value: ref.watch(voiceProvider),
+                    underline: const SizedBox(),
+                    style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueAccent, fontSize: 16),
+                    onChanged: (String? newVoice) {
+                      if (newVoice != null) {
+                        ref.read(voiceProvider.notifier).saveVoice(newVoice);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Hlas učitele změněn na: $newVoice 🗣️')),
+                        );
+                      }
+                    },
+                    items: const [
+                      DropdownMenuItem(value: 'Puck', child: Text('Puck (Male)')),
+                      DropdownMenuItem(value: 'Charon', child: Text('Charon (Male)')),
+                      DropdownMenuItem(value: 'Kore', child: Text('Kore (Female)')),
+                      DropdownMenuItem(value: 'Fenrir', child: Text('Fenrir (Male)')),
+                      DropdownMenuItem(value: 'Aoede', child: Text('Aoede (Female)')),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          const Text(
             'AI Model (Textový chat)',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),

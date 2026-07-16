@@ -15,6 +15,8 @@ class GeminiLiveClient {
   bool _isManualDisconnect = false;
   String? _lastModelName;
   String? _lastSystemPrompt;
+  String _lastVoiceName = 'Puck';
+  String? _lastResumptionHandle;
 
   bool get isConnected => _channel != null && _reconnectAttempts == 0;
 
@@ -29,10 +31,20 @@ class GeminiLiveClient {
 
   GeminiLiveClient(this._apiKey, this._playbackService);
 
-  void connect({required String modelName, required String systemPrompt}) {
+  void connect({
+    required String modelName,
+    required String systemPrompt,
+    String voiceName = 'Puck',
+    bool isReconnect = false,
+  }) {
     _isManualDisconnect = false;
     _lastModelName = modelName;
     _lastSystemPrompt = systemPrompt;
+    _lastVoiceName = voiceName;
+    
+    if (!isReconnect) {
+      _lastResumptionHandle = null; // Fresh session reset
+    }
     
     // Čištění starého spojení, pokud existuje
     _channel?.sink.close();
@@ -70,7 +82,7 @@ class GeminiLiveClient {
 
     Future.delayed(const Duration(milliseconds: 300), () {
       if (_channel != null) {
-        _sendSetupMessage(modelName, systemPrompt);
+        _sendSetupMessage(modelName, systemPrompt, voiceName);
       }
     });
   }
@@ -83,7 +95,12 @@ class GeminiLiveClient {
       
       Future.delayed(delay, () {
         if (!_isManualDisconnect) {
-          connect(modelName: _lastModelName!, systemPrompt: _lastSystemPrompt!);
+          connect(
+            modelName: _lastModelName!,
+            systemPrompt: _lastSystemPrompt!,
+            voiceName: _lastVoiceName,
+            isReconnect: true,
+          );
         }
       });
     } else if (_reconnectAttempts >= _maxReconnectAttempts) {
@@ -103,7 +120,7 @@ class GeminiLiveClient {
     }
   }
 
-  void _sendSetupMessage(String modelName, String systemPrompt) {
+  void _sendSetupMessage(String modelName, String systemPrompt, String voiceName) {
     final setupMessage = {
       'setup': {
         'model': modelName.startsWith('models/') ? modelName : 'models/$modelName',
@@ -112,7 +129,7 @@ class GeminiLiveClient {
           'speechConfig': {
             'voiceConfig': {
               'prebuiltVoiceConfig': {
-                'voiceName': 'Puck', 
+                'voiceName': voiceName, 
               }
             }
           }
@@ -122,6 +139,10 @@ class GeminiLiveClient {
         },
         'inputAudioTranscription': {},
         'outputAudioTranscription': {},
+        if (_lastResumptionHandle != null)
+          'sessionResumptionConfig': {
+            'handle': _lastResumptionHandle,
+          },
         'tools': [
           {
             'functionDeclarations': [
@@ -307,6 +328,23 @@ class GeminiLiveClient {
       // Detekce zrušení tool call (např. při přerušení)
       if (data.containsKey('toolCallCancellation') || data.containsKey('tool_call_cancellation')) {
         L.w('ToolCall zrušen serverem.');
+      }
+
+      // Zpracování SessionResumptionUpdate
+      if (data.containsKey('sessionResumptionUpdate') || data.containsKey('session_resumption_update')) {
+        final update = data['sessionResumptionUpdate'] ?? data['session_resumption_update'];
+        if (update != null && update is Map) {
+          final newHandle = update['newHandle'] ?? update['new_handle'];
+          if (newHandle != null && newHandle is String) {
+            L.i('SessionResumptionUpdate: Obdržen nový resumption handle: $newHandle');
+            _lastResumptionHandle = newHandle;
+          }
+        }
+      }
+
+      // Zpracování GoAway
+      if (data.containsKey('goAway') || data.containsKey('go_away')) {
+        L.w('GoAway signál přijat od serveru. Spojení bude brzy ukončeno.');
       }
     } catch (e) {
       debugPrint('Chyba zpracování zprávy: $e');

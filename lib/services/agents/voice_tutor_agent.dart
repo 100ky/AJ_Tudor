@@ -83,7 +83,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     // Registrace observeru životního cyklu
     WidgetsBinding.instance.addObserver(this);
 
-    // Pokud se změní API klíč nebo model, ukončíme aktivní hovor
+    // Pokud se změní API klíč, model nebo hlas, ukončíme aktivní hovor
     ref.listen(apiKeyProvider, (previous, next) {
       if (previous != next && state.status != TutorState.idle) {
         stopSession('apiKey changed');
@@ -92,6 +92,11 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     ref.listen(modelProvider, (previous, next) {
       if (previous != next && state.status != TutorState.idle) {
         stopSession('model changed');
+      }
+    });
+    ref.listen(voiceProvider, (previous, next) {
+      if (previous != next && state.status != TutorState.idle) {
+        stopSession('voice changed');
       }
     });
 
@@ -168,10 +173,13 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       
       final userProfile = await _repo.getUserProfile();
       final targetLevel = userProfile?.targetLevel ?? 'B1';
+      final voice = ref.read(voiceProvider);
+      final isImmersive = ref.read(immersiveModeProvider);
       
       var systemPrompt = SystemPromptBuilder.buildTutorPrompt(
         scenarioContext: state.scenarioContext,
         targetLevel: targetLevel,
+        isImmersive: isImmersive,
       );
       
       if (lastBriefing != null && lastBriefing.isNotEmpty) {
@@ -179,7 +187,11 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       }
       
       const liveModelName = 'models/${GeminiModels.defaultLiveModel}';
-      client.connect(modelName: liveModelName, systemPrompt: systemPrompt);
+      client.connect(
+        modelName: liveModelName,
+        systemPrompt: systemPrompt,
+        voiceName: voice,
+      );
 
       _setupClientCallbacks(client, _repo);
 
