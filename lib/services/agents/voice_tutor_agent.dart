@@ -163,7 +163,11 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
 
   /// Nastaví aktivní scénář a jeho roli pro aktuální lekci.
   void selectScenario(int id, String context) {
-    state = state.copyWith(selectedScenarioId: id, scenarioContext: context);
+    if (id == 0 || context.trim().isEmpty) {
+      state = state.copyWith(selectedScenarioId: null, scenarioContext: null);
+    } else {
+      state = state.copyWith(selectedScenarioId: id, scenarioContext: context);
+    }
   }
 
   /// Zahájí novou hlasovou lekci.
@@ -262,6 +266,16 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
 
       state = state.copyWith(status: TutorState.listening, currentTranscript: '');
       _resetWatchdog();
+
+      // Aktivně spustíme konverzaci ze strany AI zasláním skrytého inicializačního textu
+      Future.delayed(const Duration(milliseconds: 1000), () {
+        if (!ref.mounted) return;
+        final currentClient = ref.read(geminiLiveClientProvider);
+        if (currentClient != null && currentClient.isConnected && state.status == TutorState.listening) {
+          state = state.copyWith(status: TutorState.thinking);
+          currentClient.sendText("Hello! Please greet me and start the conversation according to your instructions (e.g. role-play scenario or memory briefing/follow-up from the last lesson).");
+        }
+      });
       
     } catch (e, stack) {
       L.e('Chyba startu session', e, stack);
@@ -441,7 +455,12 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       L.e('Neočekávaná chyba při ukončování session', globalError, stack);
     } finally {
       if (ref.mounted) {
-        state = state.copyWith(status: TutorState.idle, currentTranscript: '');
+        state = state.copyWith(
+          status: TutorState.idle,
+          currentTranscript: '',
+          selectedScenarioId: null,
+          scenarioContext: null,
+        );
         L.i('UI resetováno do stavu idle');
       }
       _isStopping = false;
