@@ -15,6 +15,14 @@ class AgentsScreen extends ConsumerStatefulWidget {
 
 class _AgentsScreenState extends ConsumerState<AgentsScreen> {
   bool _isPlanningScenarios = false;
+  bool _isCreatingCustom = false;
+  final _customTopicController = TextEditingController();
+
+  @override
+  void dispose() {
+    _customTopicController.dispose();
+    super.dispose();
+  }
 
   Future<void> _triggerScenarioPlanning() async {
     setState(() {
@@ -44,6 +52,43 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
       if (mounted) {
         setState(() {
           _isPlanningScenarios = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _createCustomScenario() async {
+    final text = _customTopicController.text.trim();
+    if (text.isEmpty) return;
+
+    setState(() {
+      _isCreatingCustom = true;
+    });
+
+    try {
+      await ref.read(scenarioPlannerAgentProvider).planCustomScenario(text);
+      if (mounted) {
+        _customTopicController.clear();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Vlastní scénář "$text" úspěšně vytvořen! 🎯'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Chyba při vytváření scénáře: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCreatingCustom = false;
         });
       }
     }
@@ -161,6 +206,10 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
       case TutorState.error:
         statusColor = Colors.redAccent;
         statusText = 'Chyba spojení';
+        break;
+      case TutorState.paused:
+        statusColor = Colors.amberAccent;
+        statusText = 'Pozastaveno';
         break;
       case TutorState.idle:
         statusColor = Colors.grey;
@@ -437,6 +486,45 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
                     : const Icon(Icons.auto_awesome),
                 label: Text(_isPlanningScenarios ? 'Plánování nových témat...' : 'Vymyslet nová témata'),
               ),
+            ),
+            const SizedBox(height: 16),
+            // TEXTOVÝ INPUT PRO VLASTNÍ TÉMA
+            const Divider(height: 24),
+            const Text(
+              'Nebo napiš své vlastní téma:',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _customTopicController,
+                    decoration: InputDecoration(
+                      hintText: 'Napiš stručně téma (např. "objednávka jídla v restauraci")...',
+                      border: const OutlineInputBorder(),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      suffixIcon: _isCreatingCustom
+                          ? const Padding(
+                              padding: EdgeInsets.all(12.0),
+                              child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                            )
+                          : null,
+                    ),
+                    onSubmitted: (_) => _createCustomScenario(),
+                    textInputAction: TextInputAction.send,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton.filled(
+                  onPressed: _isCreatingCustom ? null : _createCustomScenario,
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.orangeAccent,
+                    foregroundColor: Colors.black,
+                  ),
+                  icon: const Icon(Icons.send),
+                ),
+              ],
             ),
           ],
         ),

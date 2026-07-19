@@ -10,6 +10,10 @@ final audioCaptureServiceProvider = Provider<AudioCaptureService>((ref) {
 
 final audioPlaybackServiceProvider = Provider<AudioPlaybackService>((ref) {
   final service = AudioPlaybackService();
-  ref.onDispose(() => service.stop());
+  ref.onDispose(() {
+    service.stop();
+    service.dispose();
+  });
   return service;
 });
+

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../services/agents/voice_tutor_agent.dart';
 import '../../services/audio/audio_session_controller.dart';
+import '../../data/models/chat_message.dart';
 import 'widgets/waveform_visualizer.dart';
 
 class VoiceTutorScreen extends ConsumerStatefulWidget {
@@ -12,7 +13,6 @@ class VoiceTutorScreen extends ConsumerStatefulWidget {
 }
 
 class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen> with SingleTickerProviderStateMixin {
-  final _textController = TextEditingController();
   final _scrollController = ScrollController();
   late AnimationController _pulseController;
 
@@ -27,7 +27,6 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen> with Single
 
   @override
   void dispose() {
-    _textController.dispose();
     _scrollController.dispose();
     _pulseController.dispose();
     super.dispose();
@@ -191,32 +190,67 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen> with Single
             ),
           ),
 
-          // Spodní lišta - pouze obrovské tlačítko mikrofonu (čistě hlasový mód)
+          // Spodní lišta – tlačítka pro ovíládání hlasového módu
           Padding(
             padding: const EdgeInsets.only(bottom: 32.0, top: 16.0),
-            child: SizedBox(
-              width: 80,
-              height: 80,
-              child: FloatingActionButton(
-                heroTag: 'mic_btn',
-                onPressed: () {
-                  final notifier = ref.read(voiceTutorAgentProvider.notifier);
-                  if (tutorState.status == TutorState.idle || tutorState.status == TutorState.error) {
-                    notifier.startSession();
-                  } else {
-                    notifier.stopSession();
-                  }
-                },
-                backgroundColor: tutorState.status == TutorState.idle || tutorState.status == TutorState.error
-                    ? Colors.blueAccent
-                    : Colors.redAccent,
-                child: Icon(
-                  tutorState.status == TutorState.idle || tutorState.status == TutorState.error
-                      ? Icons.mic
-                      : Icons.stop,
-                  size: 36,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // PAUSE / RESUME tlačítko (zobrazí se jen během aktivního hovoru)
+                if (tutorState.status != TutorState.idle && tutorState.status != TutorState.error) ...[
+                  SizedBox(
+                    width: 56,
+                    height: 56,
+                    child: FloatingActionButton(
+                      heroTag: 'pause_btn',
+                      onPressed: () {
+                        final notifier = ref.read(voiceTutorAgentProvider.notifier);
+                        if (tutorState.status == TutorState.paused) {
+                          notifier.resumeSession();
+                        } else {
+                          notifier.pauseSession();
+                        }
+                      },
+                      backgroundColor: tutorState.status == TutorState.paused
+                          ? Colors.greenAccent
+                          : Colors.amberAccent,
+                      child: Icon(
+                        tutorState.status == TutorState.paused
+                            ? Icons.play_arrow
+                            : Icons.pause,
+                        size: 28,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 24),
+                ],
+                // HLAVNÍ MIC / STOP tlačítko
+                SizedBox(
+                  width: 80,
+                  height: 80,
+                  child: FloatingActionButton(
+                    heroTag: 'mic_btn',
+                    onPressed: () {
+                      final notifier = ref.read(voiceTutorAgentProvider.notifier);
+                      if (tutorState.status == TutorState.idle || tutorState.status == TutorState.error) {
+                        notifier.startSession();
+                      } else {
+                        notifier.stopSession();
+                      }
+                    },
+                    backgroundColor: tutorState.status == TutorState.idle || tutorState.status == TutorState.error
+                        ? Colors.blueAccent
+                        : Colors.redAccent,
+                    child: Icon(
+                      tutorState.status == TutorState.idle || tutorState.status == TutorState.error
+                          ? Icons.mic
+                          : Icons.stop,
+                      size: 36,
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
         ],
@@ -237,6 +271,8 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen> with Single
       case TutorState.reconnecting:
       case TutorState.error:
         return 120.0;
+      case TutorState.paused:
+        return 100.0;
     }
   }
 
@@ -253,6 +289,8 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen> with Single
         return Colors.purpleAccent;
       case TutorState.error:
         return Colors.redAccent;
+      case TutorState.paused:
+        return Colors.amberAccent;
       case TutorState.idle:
         return Colors.grey;
     }
@@ -271,6 +309,8 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen> with Single
       case TutorState.connecting:
       case TutorState.reconnecting:
         return Icons.wifi;
+      case TutorState.paused:
+        return Icons.pause_circle_outline;
       case TutorState.idle:
         return Icons.mic_off;
     }
@@ -288,6 +328,8 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen> with Single
         return 'Tutor přemýšlí...';
       case TutorState.speaking:
         return 'Tutor mluví...';
+      case TutorState.paused:
+        return 'Pozastaveno – klepni \u25B6 pro pokračování';
       case TutorState.error:
         return 'Chyba spojení';
       case TutorState.idle:
@@ -297,7 +339,7 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen> with Single
 
   // Pomocné metody pro dynamické UI zpráv
 
-  List<LiveChatMessage> _getVisibleMessages(VoiceTutorState state) {
+  List<ChatMessage> _getVisibleMessages(VoiceTutorState state) {
     // Zobrazíme celou historii aktuální session, auto-scroll se postará o zbytek
     return state.messages;
   }
@@ -371,7 +413,7 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen> with Single
     );
   }
 
-  Widget _buildMessageBubble(LiveChatMessage msg) {
+  Widget _buildMessageBubble(ChatMessage msg) {
     return Align(
       alignment: msg.isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(

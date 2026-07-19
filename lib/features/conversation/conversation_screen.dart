@@ -3,16 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/gemini_provider.dart';
 import '../../providers/config_provider.dart';
 import '../../providers/database_provider.dart';
+import '../../providers/profile_provider.dart';
 import '../../services/agents/voice_tutor_agent.dart';
 import '../../services/agents/scenario_planner_agent.dart';
+import '../../services/prompt/system_prompt_builder.dart';
 import '../../data/database/app_database.dart';
-
-/// Jednoduchá datová třída pro zprávu v chatu.
-class ChatMessage {
-  final String text;
-  final bool isUser;
-  ChatMessage(this.text, {required this.isUser});
-}
+import '../../data/models/chat_message.dart';
 
 /// Obrazovka pro textovou konverzaci s AI a výběr scénářů.
 /// 
@@ -29,6 +25,21 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
   final _textController = TextEditingController();
   final List<ChatMessage> _messages = [];
   bool _isLoading = false;
+  bool _isGrammarDrill = false;
+
+  /// Přepne režim chatu na gramatický drill nebo běžný rozhovor.
+  void _toggleGrammarDrill(bool value) {
+    setState(() {
+      _isGrammarDrill = value;
+      _messages.clear();
+      if (_isGrammarDrill) {
+        _messages.add(ChatMessage(
+          'Ahoj! Vítej v gramatickém drilu. Podívám se na tvé minulé chyby a připravím pro tebe překladová cvičení. Napiš cokoliv (např. "start" nebo "začít") pro spuštění!',
+          isUser: false,
+        ));
+      }
+    });
+  }
 
   /// Odešle textovou zprávu do Gemini a přidá odpověď do seznamu.
   void _sendMessage() async {
@@ -49,8 +60,20 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
       _textController.clear();
     });
 
+    String? systemPrompt;
+    if (_isGrammarDrill) {
+      final profile = ref.read(userProfileProvider).value;
+      if (profile != null) {
+        systemPrompt = SystemPromptBuilder.buildGrammarDrillPrompt(
+          recurringErrors: profile.recurringErrors,
+          targetLevel: profile.targetLevel,
+          vocabulary: profile.vocabulary,
+        );
+      }
+    }
+
     // Volání asynchronní metody pro získání odpovědi od AI
-    final response = await client.sendMessage(text);
+    final response = await client.sendMessage(text, systemPrompt: systemPrompt);
 
     setState(() {
       _messages.add(ChatMessage(response, isUser: false));
@@ -78,8 +101,38 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
       ),
       body: Column(
         children: [
-          // Sekce Doporučené Scénáře (Scenario Planner)
-          StreamBuilder<List<Scenario>>(
+          // Volba režimu (Segmented Button)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: SegmentedButton<bool>(
+                    segments: const [
+                      ButtonSegment<bool>(
+                        value: false,
+                        icon: Icon(Icons.chat_bubble_outline),
+                        label: Text('Běžný rozhovor'),
+                      ),
+                      ButtonSegment<bool>(
+                        value: true,
+                        icon: Icon(Icons.psychology_alt_outlined),
+                        label: Text('Gramatický dril'),
+                      ),
+                    ],
+                    selected: {_isGrammarDrill},
+                    onSelectionChanged: (newSelection) {
+                      _toggleGrammarDrill(newSelection.first);
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          // Sekce Doporučené Scénáře (Scenario Planner) - zobrazíme jen v běžném rozhovoru
+          if (!_isGrammarDrill)
+            StreamBuilder<List<Scenario>>(
             stream: repo.watchAvailableScenarios(),
             builder: (context, snapshot) {
               final scenarios = snapshot.data ?? [];
