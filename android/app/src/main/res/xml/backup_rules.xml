@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!-- Zahrnuje databáze SQLite (obsahuje db.sqlite) -->
+    <include domain="database" path="."/>
+    <!-- Zahrnuje sdílená nastavení (SharedPreferences a SecureStorage) -->
+    <include domain="sharedpref" path="."/>
+    <!-- Zahrnuje soubory z getFilesDir() (v Flutteru getApplicationDocumentsDirectory()) -->
+    <include domain="file" path="."/>
+</full-backup-content>

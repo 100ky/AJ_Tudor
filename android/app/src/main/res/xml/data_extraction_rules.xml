@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<data-extraction-rules>
+    <cloud-backup>
+        <!-- Zahrnuje databáze (obsahuje db.sqlite) -->
+        <include domain="database" path="."/>
+        <!-- Zahrnuje sdílená nastavení (SharedPreferences a SecureStorage) -->
+        <include domain="sharedpref" path="."/>
+        <!-- Zahrnuje soubory z getFilesDir() (v Flutteru getApplicationDocumentsDirectory()) -->
+        <include domain="file" path="."/>
+    </cloud-backup>
+    <device-to-device-transfer>
+        <!-- Zahrnuje databáze (obsahuje db.sqlite) -->
+        <include domain="database" path="."/>
+        <!-- Zahrnuje sdílená nastavení (SharedPreferences a SecureStorage) -->
+        <include domain="sharedpref" path="."/>
+        <!-- Zahrnuje soubory z getFilesDir() (v Flutteru getApplicationDocumentsDirectory()) -->
+        <include domain="file" path="."/>
+    </device-to-device-transfer>
+</data-extraction-rules>

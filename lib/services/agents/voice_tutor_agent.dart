@@ -93,6 +93,9 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   int? _currentSessionId;
   bool _isStopping = false;
 
+  // Průběžný nashromážděný přepis řeči uživatele pro aktuální repliku.
+  String _currentUserTranscript = '';
+
   late final WakelockService _wakelock;
   late final AudioSessionController _audio;
   late final SessionRepository _repo;
@@ -210,6 +213,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         return; 
       }
       _currentSessionId = sessionResult.getOrThrow();
+      _currentUserTranscript = '';
 
       // Pokud máme vybraný scénář, označíme ho jako použitý v databázi
       if (state.selectedScenarioId != null) {
@@ -297,10 +301,29 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     }
   }
 
+  /// Uloží nashromážděný transkript řeči uživatele do databáze a vymaže ho z paměti.
+  void _flushUserTranscript() {
+    if (_currentUserTranscript.trim().isNotEmpty) {
+      final userText = _currentUserTranscript.trim();
+      final sessionId = _currentSessionId;
+      _currentUserTranscript = '';
+      
+      if (sessionId != null) {
+        L.i('Ukládám nashromážděný transkript uživatele do DB: "$userText"');
+        _repo.addTranscript(
+          sessionId: sessionId,
+          speaker: 'user',
+          content: userText,
+        );
+      }
+    }
+  }
+
   /// Zaregistruje všechny události příchozí z WebSocket klienta Gemini.
   void _setupClientCallbacks(GeminiLiveClient client, SessionRepository repo) {
     // Příjem textové části odpovědi AI
     client.onTextReceived = (text) {
+      _flushUserTranscript();
       _resetWatchdog();
       _resetStuckTimer();
       L.i('Text z Gemini: $text');
@@ -315,24 +338,44 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     client.onUserTranscriptReceived = (text) {
       _resetWatchdog();
       HapticFeedback.lightImpact();
-      L.i('Uživatel řekl: "$text"');
       
-      final newMessages = List<ChatMessage>.from(state.messages)
-        ..add(ChatMessage(text, isUser: true));
-      state = state.copyWith(messages: newMessages);
+      final trimmedText = text.trim();
+      if (trimmedText.isEmpty) return;
+
+      L.i('STT chunk uživatele: "$trimmedText"');
       
-      // Uložení přepisu řeči uživatele do historie sezení v DB
-      if (_currentSessionId != null) {
-        repo.addTranscript(
-          sessionId: _currentSessionId!,
-          speaker: 'user',
-          content: text,
-        );
+      final isNewTurn = _currentUserTranscript.isEmpty;
+      
+      if (isNewTurn) {
+        _currentUserTranscript = text;
+      } else {
+        // Pokud předchozí nekončí mezerou a nový nezačíná mezerou, přidáme ji
+        final needsLeadingSpace = !_currentUserTranscript.endsWith(' ') && !text.startsWith(' ');
+        _currentUserTranscript += (needsLeadingSpace ? ' ' : '') + text;
+      }
+
+      final displayTranscript = _currentUserTranscript.trim();
+
+      if (isNewTurn) {
+        final newMessages = List<ChatMessage>.from(state.messages)
+          ..add(ChatMessage(displayTranscript, isUser: true));
+        state = state.copyWith(messages: newMessages);
+      } else {
+        if (state.messages.isNotEmpty && state.messages.last.isUser) {
+          final newMessages = List<ChatMessage>.from(state.messages);
+          newMessages[newMessages.length - 1] = ChatMessage(displayTranscript, isUser: true);
+          state = state.copyWith(messages: newMessages);
+        } else {
+          final newMessages = List<ChatMessage>.from(state.messages)
+            ..add(ChatMessage(displayTranscript, isUser: true));
+          state = state.copyWith(messages: newMessages);
+        }
       }
     };
 
     // Detekce, že začala téct audio data z AI
     client.onAudioReceived = () {
+      _flushUserTranscript();
       _resetWatchdog();
       _resetStuckTimer();
       if (state.status != TutorState.speaking) {
@@ -447,6 +490,22 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       if (_currentSessionId != null) {
         final sessionId = _currentSessionId!;
         
+        // Flush any remaining user transcript
+        if (_currentUserTranscript.trim().isNotEmpty) {
+          final userText = _currentUserTranscript.trim();
+          L.i('Flush: Ukládám zbývající transkript uživatele před koncem session: "$userText"');
+          try {
+            await _repo.addTranscript(
+              sessionId: sessionId,
+              speaker: 'user',
+              content: userText,
+            );
+          } catch (e, stack) {
+            L.e('Chyba při flushování transkriptu uživatele', e, stack);
+          }
+          _currentUserTranscript = '';
+        }
+
         // Pokud model zrovna mluvil a nestihl odeslat turnComplete, flushneme rozpracovaný text
         if (state.currentTranscript.isNotEmpty) {
           final tutorText = state.currentTranscript;
@@ -502,6 +561,8 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     L.i('Pozastavuji konverzaci...');
     HapticFeedback.lightImpact();
     
+    _flushUserTranscript();
+    
     // Zastavíme watchdog a stuck timer, aby nespustily reconnect během pauzy
     _watchdogTimer?.cancel();
     _stuckTimer?.cancel();
@@ -556,12 +617,23 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     _resetWatchdog();
     final client = ref.read(geminiLiveClientProvider);
     if (client != null && state.status != TutorState.idle && state.status != TutorState.error && state.status != TutorState.paused) {
+      _flushUserTranscript(); // Flush voice transcript if any was in progress
+      
       final newMessages = List<ChatMessage>.from(state.messages)
         ..add(ChatMessage(text, isUser: true));
       
       // Přepneme stav do 'thinking', dokud AI neodpoví
       state = state.copyWith(messages: newMessages, status: TutorState.thinking);
       client.sendText(text);
+
+      // Uložení manuálního textu do DB
+      if (_currentSessionId != null) {
+        _repo.addTranscript(
+          sessionId: _currentSessionId!,
+          speaker: 'user',
+          content: text.trim(),
+        );
+      }
     }
   }
 

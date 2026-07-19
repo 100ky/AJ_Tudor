@@ -4,6 +4,7 @@ import '../../providers/config_provider.dart';
 import '../../providers/database_provider.dart';
 import '../../providers/profile_provider.dart';
 import '../../core/constants/gemini_models.dart';
+import '../../services/system/backup_service.dart';
 
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -372,6 +373,104 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 error: (e, _) => Text('Chyba načítání profilu: $e'),
               );
             },
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            'Zálohování a obnova dat',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Card(
+            elevation: 2,
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.backup_outlined),
+                  title: const Text('Vytvořit zálohu pokroku'),
+                  subtitle: const Text('Exportuje váš pokrok do souboru, který můžete uložit nebo sdílet.'),
+                  onTap: () async {
+                    final success = await ref.read(backupServiceProvider).exportBackup();
+                    if (context.mounted) {
+                      if (success) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Záloha byla úspěšně exportována! 📤')),
+                        );
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Export zálohy se nezdařil nebo byl stornován. ❌')),
+                        );
+                      }
+                    }
+                  },
+                ),
+                const Divider(),
+                ListTile(
+                  leading: const Icon(Icons.settings_backup_restore_outlined),
+                  title: const Text('Obnovit pokrok ze zálohy'),
+                  subtitle: const Text('Načte data ze záložního souboru SQLite a přepíše aktuální stav.'),
+                  onTap: () async {
+                    // Zobrazit potvrzovací dialog
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Obnovit data?'),
+                        content: const Text('Tato akce nahradí všechna stávající data v aplikaci vybranou zálohou. Nelze vrátit zpět.'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text('Zrušit'),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            child: const Text('Obnovit', style: TextStyle(color: Colors.red)),
+                          ),
+                        ],
+                      ),
+                    );
+
+                    if (confirm == true) {
+                      if (context.mounted) {
+                        // Zobrazit indikátor průběhu
+                        showDialog(
+                          context: context,
+                          barrierDismissible: false,
+                          builder: (context) => const Center(
+                            child: Card(
+                              child: Padding(
+                                padding: EdgeInsets.all(24.0),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    CircularProgressIndicator(),
+                                    SizedBox(height: 16),
+                                    Text('Probíhá obnova dat...'),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+
+                      final success = await ref.read(backupServiceProvider).importBackup();
+
+                      if (context.mounted) {
+                        Navigator.pop(context); // Zavřít progress dialog
+                        if (success) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Data byla úspěšně obnovena! 🎉')),
+                          );
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Obnova dat se nezdařila. Vyberte platný soubor zálohy. ❌')),
+                          );
+                        }
+                      }
+                    }
+                  },
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 24),
           const Divider(),
