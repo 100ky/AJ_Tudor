@@ -27,6 +27,9 @@ class GeminiLiveClient {
   String _lastVoiceName = 'Puck';
   String? _lastResumptionHandle;
 
+  // Pocitadlo po sobe jdoucich ridicich tokenu (ochrana pred zaseknutim v loopu)
+  int _consecutiveControlTokens = 0;
+
   /// Vrací [bool] vyjadřující, zda je klient momentálně připojen a nemá aktivní pokusy o reconnect.
   bool get isConnected => _channel != null && _reconnectAttempts == 0;
 
@@ -83,7 +86,7 @@ class GeminiLiveClient {
     
     // Sestavení URI pro bidi-generate WebSocket.
     final uri = Uri.parse(
-        'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=$_apiKey');
+        'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=$_apiKey');
     
     L.i('Připojování k: $uri');
     _channel = WebSocketChannel.connect(uri);
@@ -317,7 +320,10 @@ class GeminiLiveClient {
           final text = outputTranscription['text'];
           if (text != null) {
             L.d('STT (Tutor kousek): $text');
-            if (onTextReceived != null) onTextReceived!(text);
+            final cleanText = _processTextAndDetectStuck(text);
+            if (cleanText.isNotEmpty && onTextReceived != null) {
+              onTextReceived!(cleanText);
+            }
           }
         }
 
@@ -336,6 +342,7 @@ class GeminiLiveClient {
               if (inlineData != null) {
                 final mimeType = inlineData['mimeType'] ?? inlineData['mime_type'] ?? '';
                 if (mimeType.startsWith('audio/pcm')) {
+                  _consecutiveControlTokens = 0; // Resetujeme pocitadlo pri prijmu realnych audio dat
                   final audioBytes = base64Decode(inlineData['data']);
                   if (onAudioReceived != null) onAudioReceived!(); 
                   // Přehrání audia přes audio playback service
@@ -345,7 +352,10 @@ class GeminiLiveClient {
               else if (part.containsKey('text')) {
                 final text = part['text'];
                 L.i('Text z modelTurn: $text');
-                if (onTextReceived != null) onTextReceived!(text);
+                final cleanText = _processTextAndDetectStuck(text);
+                if (cleanText.isNotEmpty && onTextReceived != null) {
+                  onTextReceived!(cleanText);
+                }
               }
             }
           }
@@ -420,6 +430,30 @@ class GeminiLiveClient {
       }
     };
     _channel?.sink.add(jsonEncode(responseMsg));
+  }
+
+  /// Filtruje ridici tokeny a detekuje pripadne zacykleni modelu.
+  String _processTextAndDetectStuck(String text) {
+    final controlTokenRegex = RegExp('<' 'ctrl\\d+>');
+    final matches = controlTokenRegex.allMatches(text);
+    
+    if (matches.isNotEmpty) {
+      _consecutiveControlTokens += matches.length;
+      L.w('Detekovan control token v textu z Gemini. Celkem po sobe: $_consecutiveControlTokens');
+      
+      if (_consecutiveControlTokens >= 5) {
+        L.e('Detekovano zaseknuti Gemini Live API (prilis mnoho control tokenu). Spoustim forceReconnect...');
+        _consecutiveControlTokens = 0; // reset
+        forceReconnect();
+      }
+    }
+    
+    final cleanText = text.replaceAll(controlTokenRegex, '');
+    if (cleanText.trim().isNotEmpty) {
+      // Pokud mame regulerni netridici text, resetujeme pocitadlo
+      _consecutiveControlTokens = 0;
+    }
+    return cleanText;
   }
 
   /// Vynutí restartování spojení (zavře socket a spustí reconnect mechanismus).

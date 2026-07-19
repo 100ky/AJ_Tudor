@@ -32,12 +32,19 @@ class AudioPlaybackService {
     if (!_isInitialized && _isSupported) await init();
     if (!_isSupported) return;
     
+    // Ensure even length for 16-bit PCM (2 bytes per sample)
+    List<int> safeBytes = pcmBytes;
+    if (safeBytes.length % 2 != 0) {
+      safeBytes = safeBytes.sublist(0, safeBytes.length - 1);
+    }
+    if (safeBytes.isEmpty) return;
+    
     try {
       // Výpočet hlasitosti pro vizualizaci
-      _calculateAndEmitVolume(pcmBytes);
+      _calculateAndEmitVolume(safeBytes);
 
       // Převod surových bytů na PcmArrayInt16
-      final uint8List = Uint8List.fromList(pcmBytes);
+      final uint8List = Uint8List.fromList(safeBytes);
       final byteData = ByteData.sublistView(uint8List);
       final pcmArray = PcmArrayInt16(bytes: byteData);
       
@@ -57,8 +64,10 @@ class AudioPlaybackService {
     }
     _lastVolumeUpdate = now;
     
-    double sum = 0;
     final int sampleCount = buffer.length ~/ 2;
+    if (sampleCount == 0) return; // Prevent division by zero
+    
+    double sum = 0;
     final byteData = ByteData.sublistView(Uint8List.fromList(buffer));
     
     for (int i = 0; i < buffer.length - 1; i += 2) {
@@ -67,7 +76,13 @@ class AudioPlaybackService {
     }
     
     final double rms = math.sqrt(sum / sampleCount);
-    double volume = math.sqrt(rms / 32768.0); 
+    double volume = math.sqrt(rms / 32768.0);
+    
+    // Safety check against NaN to avoid crashes on clamp()
+    if (volume.isNaN) {
+      volume = 0.0;
+    }
+    
     _volumeController.add(volume.clamp(0.0, 1.0));
   }
 

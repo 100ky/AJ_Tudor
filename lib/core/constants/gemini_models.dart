@@ -11,7 +11,7 @@ class GeminiModels {
   // --- Model pro Multimodal Live API (WebSocket / Voice Tutor) ---
   /// Model optimalizovaný pro zpracování audia v reálném čase s nízkou latencí.
   /// Podporuje přímý audio vstup i výstup (Native Audio).
-  static const String liveVoiceModel = 'gemini-2.5-flash-native-audio-preview-12-2025';
+  static const String liveVoiceModel = 'gemini-2.5-flash-native-audio-latest';
   
   /// Výchozí model používaný pro hlasového tutora.
   static const String defaultLiveModel = liveVoiceModel;
