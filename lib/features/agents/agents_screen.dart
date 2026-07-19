@@ -277,8 +277,8 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
             ),
             const SizedBox(height: 4),
             const Text(
-              '• AJ Tudor je rodilý mluvčí z Londýna, který momentálně žije v Praze.\n'
-              '• NEBUDE tě jen vyslýchat! Rád reaguje, sdílí vlastní historky o vaření, procházkách v parku nebo o tom, jak si zvyká na české pivo.\n'
+              '• AJ Tudor je rodilý mluvčí z Velké Británie, který momentálně žije v České republice.\n'
+              '• NEBUDE tě jen vyslýchat! Rád reaguje, sdílí vlastní historky o svém dni, vaření, výletech nebo o tom, jak zápasí s češtinou.\n'
               '• Mluví pomalu a přizpůsobuje slova tvé úrovni angličtiny.',
               style: TextStyle(fontSize: 13, height: 1.4, color: Colors.grey),
             ),

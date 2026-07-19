@@ -52,10 +52,23 @@ class MemoryManagerAgent {
       final chatHistory = transcripts.map((t) => '${t.speaker}: ${t.content}').join('\n');
       final wrappedHistory = '<transcript>\n$chatHistory\n</transcript>';
 
+      // Načtení předchozího profilu pro získání staršího briefingu (dlouhodobé paměti)
+      final userProfile = await repo.getUserProfile();
+      final previousBriefing = userProfile?.memoryBriefing;
+      
+      // Zjistíme, zda byla lekce příliš krátká (méně než 2 zprávy od uživatele)
+      final userMessagesCount = transcripts.where((t) => t.speaker == 'user').length;
+      final isTooShort = userMessagesCount < 2;
+      
+      if (isTooShort) {
+        L.i('Session $sessionId byla příliš krátká ($userMessagesCount replik uživatele). Dlouhodobý briefing nebudeme přepisovat.');
+      }
+
       // 2. Analýza textu pomocí Gemini a vynucení strukturovaného výstupu (JSON Schema)
       L.i('Odesílám transkript k analýze do Gemini (Structured Outputs)...');
       final analysisResult = await gemini.sendMessage(
         wrappedHistory,
+        systemPrompt: SystemPromptBuilder.buildAnalysisPrompt(previousBriefing: previousBriefing),
         responseSchema: SystemPromptBuilder.getAnalysisResponseSchema(),
       );
       L.i('Analýza od Gemini úspěšně přijata.');
@@ -72,8 +85,10 @@ class MemoryManagerAgent {
         totalErrors: (data['totalErrors'] ?? 0).toInt(),
       );
 
-      // Uložení shrnutí/briefingu pro příští lekci do profilu studenta
-      await repo.updateUserMemory(data['briefing'] ?? '');
+      // Uložení shrnutí/briefingu pro příští lekci do profilu studenta (pouze pokud nebyla lekce příliš krátká)
+      if (!isTooShort && data['briefing'] != null) {
+        await repo.updateUserMemory(data['briefing']);
+      }
       
       // Aktualizace odhadované úrovně angličtiny v profilu studenta (pokud byla rozpoznána)
       if (data['estimatedLevel'] != null) {
@@ -90,8 +105,9 @@ class MemoryManagerAgent {
         await repo.updateUserVocabulary(newWords);
       }
 
-      // 4. Uložení jednotlivých gramatických/výslovnostních chyb do detailního chybového logu
+      // 4. Uložení jednotlivých gramatických/výslovnostních chyb do detailního chybového logu a profilu
       if (data['errors'] != null && data['errors'] is List) {
+        final List<String> newErrors = [];
         for (var err in data['errors']) {
           await repo.addErrorLog(
             sessionId: sessionId,
@@ -101,6 +117,17 @@ class MemoryManagerAgent {
             correctForm: err['correctForm'] ?? '',
             explanation: err['explanation'] ?? '',
           );
+          
+          final userSaid = err['userSaid'] ?? '';
+          final correctForm = err['correctForm'] ?? '';
+          if (userSaid.isNotEmpty && correctForm.isNotEmpty) {
+            newErrors.add('Řekl: "$userSaid", ale správně je: "$correctForm" (${err['explanation'] ?? ''})');
+          }
+        }
+        
+        if (newErrors.isNotEmpty) {
+          await repo.updateUserRecurringErrors(newErrors);
+          L.i('Přidáno ${newErrors.length} chyb do opakujících se chyb v profilu.');
         }
       }
       

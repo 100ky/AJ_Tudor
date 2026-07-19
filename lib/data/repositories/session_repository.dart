@@ -145,6 +145,31 @@ class SessionRepository {
     );
   }
 
+  /// Aktualizuje seznam opakujících se chyb uživatele v profilu.
+  /// 
+  /// Přidá nové chyby do existujícího JSON pole, přičemž duplicity jsou odstraněny a počet je limitován (např. max 10 chyb).
+  Future<void> updateUserRecurringErrors(List<String> newErrors) async {
+    final user = await (_db.select(_db.userProfiles)..where((t) => t.id.equals(1))).getSingleOrNull();
+    if (user == null) return;
+
+    final List<dynamic> currentErrors = jsonDecode(user.recurringErrors);
+    final Set<String> errorsSet = Set<String>.from(currentErrors.map((e) => e.toString()));
+    
+    errorsSet.addAll(newErrors.map((e) => e.trim()));
+    
+    // Udržíme pouze posledních 10 chyb pro zamezení nafukování promptu
+    List<String> updatedErrorsList = errorsSet.toList();
+    if (updatedErrorsList.length > 10) {
+      updatedErrorsList = updatedErrorsList.sublist(updatedErrorsList.length - 10);
+    }
+
+    await (_db.update(_db.userProfiles)..where((t) => t.id.equals(1))).write(
+      UserProfilesCompanion(
+        recurringErrors: Value(jsonEncode(updatedErrorsList)),
+      ),
+    );
+  }
+
   /// Načte poslední uložený briefing (paměť) pro potřeby AI tutora.
   Future<Result<String?>> getLatestBriefing() async {
     try {

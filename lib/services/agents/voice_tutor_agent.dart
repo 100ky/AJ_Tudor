@@ -222,6 +222,9 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       final voice = ref.read(voiceProvider);
       final isImmersive = ref.read(immersiveModeProvider);
       
+      // Získáme náhodný osobní fakt pro zamezení opakování úvodu
+      final personalFact = SystemPromptBuilder.getRandomPersonalFact();
+
       // Sestavení dynamického promptu s kompletním kontextem z profilu
       final systemPrompt = SystemPromptBuilder.buildTutorPrompt(
         scenarioContext: state.scenarioContext,
@@ -231,6 +234,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         vocabulary: userProfile?.vocabulary,
         recentTopics: userProfile?.topicPreferences,
         memoryBriefing: userProfile?.memoryBriefing,
+        personalFact: personalFact,
       );
       
       const liveModelName = 'models/${GeminiModels.defaultLiveModel}';
@@ -273,7 +277,17 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         final currentClient = ref.read(geminiLiveClientProvider);
         if (currentClient != null && currentClient.isConnected && state.status == TutorState.listening) {
           state = state.copyWith(status: TutorState.thinking);
-          currentClient.sendText("Hello! Please greet me and start the conversation according to your instructions (e.g. role-play scenario or memory briefing/follow-up from the last lesson).");
+          
+          String initialPrompt = "Hello! Please greet me and start the conversation according to your instructions.";
+          final briefing = userProfile?.memoryBriefing;
+          if (state.scenarioContext != null) {
+            initialPrompt += " Introduce the role-play scenario and immediately start playing your role.";
+          } else if (briefing != null && briefing.isNotEmpty) {
+            initialPrompt += " Refer briefly to our last lesson and follow up on the recommended topic or question.";
+          } else {
+            initialPrompt += " Start with a casual and warm greeting as a friend (do NOT introduce yourself, say your name or where you are from). Share a small, natural detail about your day or mood (following your system instructions example) and ask how my day is going.";
+          }
+          currentClient.sendText(initialPrompt);
         }
       });
       
