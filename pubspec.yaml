@@ -35,8 +35,7 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
   flutter_riverpod: ^3.3.2
-  drift: ^2.34.1
-  sqlite3_flutter_libs: ^0.6.0+eol
+  drift: ^2.34.2
   path_provider: ^2.1.6
   path: ^1.9.1
   record: ^7.1.1
@@ -109,3 +108,9 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+# Následující sekce zajistí kompilaci SQLite včetně podpory šifrování
+hooks:
+  user_defines:
+    sqlite3:
+      source: sqlite3mc

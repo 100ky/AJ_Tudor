@@ -86,6 +86,10 @@ class AudioPlaybackService {
     _volumeController.add(volume.clamp(0.0, 1.0));
   }
 
+  Future<void> interrupt() async {
+    await stop();
+  }
+
   Future<void> stop() async {
     if (_isSupported && _isInitialized) {
       try {

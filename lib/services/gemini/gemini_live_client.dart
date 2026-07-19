@@ -56,6 +56,9 @@ class GeminiLiveClient {
   /// Vyvoláno, když model zavolá externí nástroj (Function Calling).
   Function(String name, Map<String, dynamic> args)? onToolCall;
 
+  /// Vyvoláno, když uživatel přeruší mluvení modelu (interruption).
+  Function()? onInterrupted;
+
   /// Konstruktor vyžadující API klíč a instanci služby přehrávání zvuku.
   GeminiLiveClient(this._apiKey, this._playbackService);
 
@@ -302,6 +305,16 @@ class GeminiLiveClient {
       if (serverContent != null) {
         if (serverContent is Map) {
           L.d('serverContent sub-keys: ${serverContent.keys.toList()}');
+          
+          // Zpracování přerušení (user interruption)
+          final interrupted = serverContent['interrupted'];
+          if (interrupted == true) {
+            L.w('Detekováno přerušení ze strany serveru (uživatel skočil do řeči).');
+            _playbackService.interrupt();
+            if (onInterrupted != null) {
+              onInterrupted!();
+            }
+          }
         }
         
         // Zpracování Speech-to-Text přepisu řeči uživatele

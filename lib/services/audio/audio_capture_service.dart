@@ -20,6 +20,9 @@ class AudioCaptureService {
           encoder: AudioEncoder.pcm16bits,
           sampleRate: 16000,
           numChannels: 1, // Mono zvuk pro Gemini Live API
+          echoCancel: true,
+          noiseSuppress: true,
+          autoGain: true,
         ),
       );
 

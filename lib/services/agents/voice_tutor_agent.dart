@@ -384,6 +384,17 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       }
     };
 
+    // Zpracování přerušení mluvení modelu uživatelem
+    client.onInterrupted = () {
+      _resetWatchdog();
+      _resetStuckTimer();
+      L.i('Model byl přerušen uživatelem.');
+      state = state.copyWith(
+        status: TutorState.listening,
+        currentTranscript: '',
+      );
+    };
+
     // Změna stavu připojení na síťové vrstvě
     client.onConnectionStatusChanged = (isConnected) {
       if (!isConnected && state.status != TutorState.idle && state.status != TutorState.error && !_isStopping) {
