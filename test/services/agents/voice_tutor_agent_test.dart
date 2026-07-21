@@ -12,6 +12,7 @@ import 'package:aj_tudor/services/agents/memory_manager_agent.dart';
 import 'package:aj_tudor/services/system/wakelock_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:aj_tudor/core/utils/result.dart';
 
 class MockGeminiLiveClient extends Mock implements GeminiLiveClient {}
 class MockAudioSessionController extends Mock implements AudioSessionController {}
@@ -84,5 +85,43 @@ void main() {
     final state = container.read(voiceTutorAgentProvider);
     expect(state.selectedScenarioId, 1);
     expect(state.scenarioContext, 'Test context');
+  });
+
+  test('onUserTranscriptReceived correctly concatenates sub-word tokens', () async {
+    Function(String)? userTranscriptCallback;
+
+    when(() => mockRepo.startNewSession()).thenAnswer((_) async => Result.success(123));
+    when(() => mockRepo.getUserProfile()).thenAnswer((_) async => null);
+    when(() => mockRepo.addTranscript(
+      sessionId: any(named: 'sessionId'),
+      speaker: any(named: 'speaker'),
+      content: any(named: 'content'),
+    )).thenAnswer((_) async => Result.success(1));
+    when(() => mockAudio.start(onAudioChunk: any(named: 'onAudioChunk'))).thenAnswer((_) async {});
+    when(() => mockClient.connect(
+      modelName: any(named: 'modelName'),
+      systemPrompt: any(named: 'systemPrompt'),
+      voiceName: any(named: 'voiceName'),
+    )).thenAnswer((_) {});
+
+    // Intercept setter for onUserTranscriptReceived
+    when(() => mockClient.onUserTranscriptReceived = any()).thenAnswer((invocation) {
+      userTranscriptCallback = invocation.positionalArguments[0] as Function(String)?;
+    });
+
+    final agent = container.read(voiceTutorAgentProvider.notifier);
+    await agent.startSession();
+
+    expect(userTranscriptCallback, isNotNull);
+
+    // Simulate Gemini sending sub-word tokens: " Hi", "s", " fa", "vorite"
+    userTranscriptCallback!(' Hi');
+    userTranscriptCallback!('s');
+    userTranscriptCallback!(' fa');
+    userTranscriptCallback!('vorite');
+
+    final state = container.read(voiceTutorAgentProvider);
+    expect(state.messages.length, 1);
+    expect(state.messages.first.text, 'His favorite');
   });
 }

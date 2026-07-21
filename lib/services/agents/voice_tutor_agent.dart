@@ -339,20 +339,12 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       _resetWatchdog();
       HapticFeedback.lightImpact();
       
-      final trimmedText = text.trim();
-      if (trimmedText.isEmpty) return;
+      if (text.isEmpty) return;
 
-      L.i('STT chunk uživatele: "$trimmedText"');
+      L.i('STT chunk uživatele: "$text"');
       
       final isNewTurn = _currentUserTranscript.isEmpty;
-      
-      if (isNewTurn) {
-        _currentUserTranscript = text;
-      } else {
-        // Pokud předchozí nekončí mezerou a nový nezačíná mezerou, přidáme ji
-        final needsLeadingSpace = !_currentUserTranscript.endsWith(' ') && !text.startsWith(' ');
-        _currentUserTranscript += (needsLeadingSpace ? ' ' : '') + text;
-      }
+      _currentUserTranscript += text;
 
       final displayTranscript = _currentUserTranscript.trim();
 
