@@ -265,7 +265,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           const Padding(
             padding: EdgeInsets.only(top: 4.0, bottom: 8.0),
             child: Text(
-              'Hlasový mód používá automaticky model optimalizovaný pro zvuk (Gemini 2.5 Native Audio).',
+              'Hlasový mód používá automaticky model optimalizovaný pro zvuk (Gemini 3.1 Flash Live).',
               style: TextStyle(fontSize: 12, color: Colors.grey),
             ),
           ),

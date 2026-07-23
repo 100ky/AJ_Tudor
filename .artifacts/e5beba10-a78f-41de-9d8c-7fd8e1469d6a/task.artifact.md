@@ -1,0 +1,3 @@
+- [x] Fix Gradle build error on Windows (different drive roots)
+- [x] Update Gemini Live API to use `audio` instead of deprecated `mediaChunks`
+- [x] Verify build and connectivity

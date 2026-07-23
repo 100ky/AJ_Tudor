@@ -240,12 +240,10 @@ class GeminiLiveClient {
     final base64Audio = base64Encode(pcm16Data);
     final clientContent = {
       'realtimeInput': {
-        'mediaChunks': [
-          {
-            'mimeType': 'audio/pcm;rate=16000',
-            'data': base64Audio,
-          }
-        ]
+        'audio': {
+          'mimeType': 'audio/pcm;rate=16000',
+          'data': base64Audio,
+        }
       }
     };
     _channel?.sink.add(jsonEncode(clientContent));
