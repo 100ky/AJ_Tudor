@@ -250,6 +250,36 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen> with Single
                     ),
                   ),
                 ),
+                // ZMĚNIT TÉMA tlačítko (mid-session topic change)
+                if (tutorState.status == TutorState.listening || 
+                    tutorState.status == TutorState.speaking || 
+                    tutorState.status == TutorState.thinking) ...[
+                  const SizedBox(width: 24),
+                  SizedBox(
+                    width: 56,
+                    height: 56,
+                    child: FloatingActionButton(
+                      heroTag: 'topic_btn',
+                      onPressed: () {
+                        ref.read(voiceTutorAgentProvider.notifier).forceTopicChange();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Změna tématu odeslána...'),
+                            duration: Duration(seconds: 2),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      },
+                      tooltip: 'Změnit téma',
+                      backgroundColor: Colors.tealAccent.withValues(alpha: 0.8),
+                      child: const Icon(
+                        Icons.swap_horiz,
+                        size: 28,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

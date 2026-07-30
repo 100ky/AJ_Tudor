@@ -1,0 +1,277 @@
+Pokročilá architektura multi-agentních systémů: Řešení repetice témat a ředění pozornosti u konverzačních AI tutorůSoučasný návrh systému pro výuku jazyků vykazuje vysokou míru inženýrské vyspělosti. Oddělení agentů pro plánování scénářů, správu dlouhodobé paměti a samotnou konverzaci v reálném čase představuje robustní základ, který je plně v souladu s moderními trendy vývoje umělé inteligence. Implementace asynchronního volání funkcí (Function Calling) pro telemetrii chyb během hovoru a využití strukturovaných výstupů (Structured Outputs) pro extrakci znalostí zajišťují spolehlivý sběr pedagogických dat. Přesto se při extenzivním využívání konverzačních modelů objevují dva protichůdné, avšak fundamentálně propojené problémy: model má na jedné straně tendenci neustále se vracet ke stejným třem tématům, což vyvolává uživatelskou frustraci a repetitivní nudu, a na straně druhé nedokáže udržet souvislou nit konverzace, čímž dochází k chaotickému přeskakování mezi nesouvisejícími okruhy.Tato analýza se do hloubky zabývá příčinami těchto jevů na úrovni architektury neuronových sítí a mechanismu pozornosti. Následně představuje komplexní strategii pro jejich mitigaci, která integruje poznatky z kognitivní psychologie, dynamickou orchestraci kontextu prostřednictvím protokolu WebSocket a pokročilé techniky strukturování promptů. Součástí je detailní návrh restrukturalizace kódu v jazyce Dart s využitím existujícího frameworku Flutter.Teoretický rámec kumulativního kontextového úpadkuZákladní příčinou, proč velký jazykový model (LLM) po určité době ztrácí schopnost přirozeně konverzovat a upadá do repetitivních smyček nebo sémantického chaosu, je fenomén označovaný v akademické literatuře jako kumulativní kontextový úpadek (Cumulative Contextual Decay). Tento úpadek není dán nedostatečným počtem parametrů modelu, nýbrž strukturálním defektem v tom, jak standardní mechanismus pozornosti (self-attention) přistupuje k nestrukturované historii konverzace.Mechanismus pozornosti přiřazuje váhu všem tokenům v aktivním kontextovém okně. S každou další replikou se kontext plní nejen relevantními informacemi, ale také šumem, redundantním textem a dřívějšími chybami. V multi-turn dialozích toto vede ke třem specifickým formám degradace. První formou je znečištění pozornosti (attention pollution), kdy se rané faktické chyby nebo halucinace modelu propagují napříč celou konverzací, protože jim model neustále věnuje část své výpočetní kapacity. Druhou formou je ředění pozornosti (attention dilution), což je stav, kdy jsou vysoce důležité systémové instrukce – například pokyn, aby tutor nehrál roli detektiva a nekladl pouze otázky – postupně přehlušeny objemem vygenerovaného textu. Třetím projevem je sémantický drift (attention drift), kdy se původní cíl konverzace postupně vytrácí a model reaguje pouze na nejrecentnější, avšak sémanticky okrajové tokeny, což vede k náhlým a nepřirozeným skokům v tématu.Kromě těchto forem degradace čelí konverzační systémy problému pozičního zkreslení. Modely mají tendenci alokovat neúměrné množství pozornosti na počáteční tokeny kontextu (tzv. "attention sinks") a naopak ignorovat střední část konverzace (efekt "lost-in-the-middle"). Pokud je profil studenta obsahující seznam dřívějších chyb fixně ukotven na začátku systémového promptu, stává se tento profil silným "attention sinkem". LLM tuto trvalou přítomnost sady chyb vnímá jako primární direktivu. Namísto přirozeného rozvoje konverzace se model začne zacyklovat v tzv. vyšetřovacím módu, kdy se neustále snaží tvořit situace, ve kterých by mohl studenta z těchto specifických chyb otestovat. Výsledkem je repetice týchž konverzačních témat.Projev degradaceArchitektonická příčinaSymptom z pohledu uživateleŘedění pozornostiZtráta vlivu systémových instrukcí v dlouhém kontextu.Tutor ignoruje pravidla pedagogického profilu, pokládá příliš mnoho otázek.Attention SinksNeúměrná váha přikládaná fixnímu profilu na začátku promptu.Neustálý návrat ke stejným 3 tématům, repetitivní nuda, testování stále stejných slovíček.Sémantický driftReakce na lokální tokeny bez udržení globální sémantické trajektorie.Neschopnost udržet téma, chaotické přeskakování z jednoho okruhu do druhého.Znečištění kontextuHromadění starých, již vyřešených problémů a chyb v historii.Opravování chyb, které student již dávno překonal, zastaralé reakce.Přirozený dialog vyžaduje organický vývoj. Analýzy lidské komunikace a systémy jako EVOLVCONV naznačují, že ideální míra posunu tématu se pohybuje v rozmezí 5 až 8 procent na jednu konverzační výměnu. Tato plynulá evoluce udržuje angažovanost, aniž by působila rušivě. Konverzační modely však bez explicitní architektonické podpory a správy paměti inklinují buď ke statickému zacyklení, nebo k překročení této hranice a rozbití tematické soudržnosti.Kognitivní modelování a prořezávání paměti (Memory Pruning)Zásadním nedostatkem mnoha LLM systémů je předpoklad, že shromažďování co největšího množství dat do vektorové databáze nebo kontextového okna automaticky zlepšuje výkon. V reálném vzdělávacím procesu však znalosti studenta nejsou časově invariantní. Tradiční architektury pouze přidávají nové záznamy o chybách (například prostřednictvím stávajícího MemoryManagerAgent), což vede k lineárnímu nárůstu položek v proměnné recurringErrors. Tento přístup ignoruje fakt, že jak se student zlepšuje, staré záznamy ztrácejí svou platnost. Ponechání těchto záznamů v paměti modelu způsobuje, že systém vykazuje sémantickou slepotu vůči pokroku uživatele.Ebbinghausova křivka a konceptuální odnaučováníPro efektivní správu paměti tutora je nezbytné aplikovat mechanismy inspirované kognitivní psychologií, konkrétně Ebbinghausovou křivkou zapomínání. Hermann Ebbinghaus v roce 1885 demonstroval, že paměťová stopa bez opakování exponenciálně klesá. Tento pokles lze matematicky vyjádřit vzorcem $R = e^{-t/S}$, kde $R$ představuje míru retence (vybavení), $t$ je čas uplynulý od poslední expozice a $S$ je stabilita paměťové stopy. V kontextu umělé inteligence se tento princip adaptuje pro navrhování systémů rozloženého opakování (Spaced Repetition Systems) a dynamického sledování znalostí (Knowledge Proficiency Tracing).Aplikace Ebbinghausova modelu na AI tutora znamená, že paměť systému nesmí být statická. Paměťové záznamy o chybách studenta musí podléhat časovému úpadku, pokud nejsou znovu pozorovány. Rámce jako TASA (Teaching According to Students' Aptitude) prokazují, že integrace křivky zapomínání do profilu studenta umožňuje generovat kontextově mnohem přiměřenější otázky a vysvětlení. V praxi to znamená, že pokud MemoryManagerAgent detekuje v transkriptu správné použití dříve chybného jevu (např. student správně použije minulý čas nepravidelného slovesa), musí dojít k cílenému snížení váhy tohoto jevu nebo k jeho úplnému smazání z aktivního kontextu.Tento mechanismus lze formalizovat v rámci paradigmatu "Memory-as-Action" (MemAct). MemAct definuje správu kontextu nikoliv jako externí fixní pravidlo, ale jako sadu operací pro úpravu pracovní paměti, které se systém učí provádět, typicky operace typu "prune" (ořezat) a "write" (zapsat). Zatímco plně autonomní MemAct spoléhá na zpětnovazební učení k provádění těchto akcí v reálném čase, pro produkční aplikace založené na volání API je mnohem stabilnější přístup označovaný jako Deterministický paměťový rámec (Deterministic Memory Framework). Ten provádí prořezávání paměti asynchronně po ukončení lekce na základě explicitní strukturální logiky a LLM analýzy.Analýza sentimentu a emocionální rekalibraceProces učení není ovlivněn pouze kognitivním stavem (znalostmi), ale také afektivním stavem (emocemi). Zacyklení tutora ve stejných tématech nevyhnutelně vede k uživatelské frustraci. Současný stav architektury hodnotí primárně plynulost (fluencyScore) a počet chyb, což je pro dynamickou rekalibraci přístupu nedostačující. Detekce frustrace ze sémantických a metadatových indikátorů (krátké, jednoslovné odpovědi, dlouhé odmlky, explicitní vyjádření nezájmu) představuje klíčový vstup pro orchestraci další lekce.Pokud analytický modul detekuje vzorce chování asociované s vyčerpáním nebo frustrací, uloží tento stav do asynchronní paměti ve formě specifického briefingu pro následující sezení. Tento briefing následně modifikuje systémové instrukce VoiceTutorAgenta tak, aby omezil objem korekcí, zvýšil míru pozitivní validace a přešel k méně kognitivně náročným tématům. Tento afektivní feedback loop (smyčka zpětné vazby) prokazatelně zvyšuje udržitelnost dlouhodobého vzdělávacího procesu.Dynamická kontrola toku a řízení pozornosti pomocí API Gemini LiveEliminace sémantického driftu a prevence zacyklení vyžaduje nejen čistý kontext z dlouhodobého hlediska (Memory Pruning), ale také prostředky k okamžitému zásahu do chování modelu v reálném čase. Aplikace využívající hlasovou komunikaci se spoléhají na Gemini Live API, které nabízí obousměrný tok audio a textových dat prostřednictvím WebSocketového (WSS) připojení. Tato architektura nativního audia představuje paradigmatický skok oproti tradičním systémům kombinujícím oddělené převodníky řeči na text, LLM a textu na řeč. Tím, že model přímo zpracovává raw audio v reálném čase (typicky 16-bit PCM s frekvencí 16kHz na vstupu a 24kHz na výstupu), dosahuje systém latence hluboko pod jednu sekundu a zprostředkovává zachycení nuancí intonace, emocí i přirozeného skákání do řeči (barge-in).Správa WebSocket relací a komprese oknaSpecifikem architektury nativního audia je masivní spotřeba tokenů. Zvuková data se kumulují rychlostí přibližně 25 tokenů za sekundu, což vede k exponenciálnímu nárůstu kontextu a s tím spojenému riziku náhlého vyčerpání paměťového limitu (128k tokenů), k čemuž u nekomprimovaného audia dochází zhruba po 15 minutách. Zásadní architektonickou nutností je proto využití konfigurace komprese kontextového okna (ContextWindowCompressionConfig), která zajišťuje průběžnou auto-kompresi historie bez nutnosti přerušení WebSocketu.Kromě tokenového limitu je samotné TCP/WebSocket připojení na straně infrastruktury Google Cloud často limitováno absolutním časem (přibližně 10 minut), po kterém server odesílá zprávu GoAway varující před blížícím se rozpadem spojení. Pro zamezení náhlého výpadku konverzace uprostřed věty se vyžaduje implementace logiky obnovení relace (Session Resumption). Server asynchronně zasílá zprávy SessionResumptionUpdate obsahující tokeny, které lze využít pro opětovné navázání připojení k již existujícímu kontextu v paměti na straně serveru.Typ WebSocket ZprávySměrÚčel a Využití v ArchitektuřeBidiGenerateContentSetupKlient $\rightarrow$ ServerÚvodní konfigurace modelu, definice systémového promptu, volání funkcí a nastavení komprese kontextu. Zasílá se pouze jednou.BidiGenerateContentRealtimeInputKlient $\rightarrow$ ServerKontinuální streamování raw audio dat nebo obrazu v reálném čase.BidiGenerateContentClientContentKlient $\rightarrow$ ServerInjektování textového kontextu nebo historie. Zásadní pro modifikaci systémových instrukcí (mid-session updates).BidiGenerateContentServerContentServer $\rightarrow$ KlientPrůběžný tok vygenerovaného audia a transkriptů.GoAway / SessionResumptionUpdateServer $\rightarrow$ KlientTelemetrie řízení životního cyklu relace, prevence výpadku.Mid-Session Updates pro prevenci repetice a driftuI přes pročištěný profil se LLM může v rámci jedné relace zaseknout v konverzační smyčce. Gemini Live API naštěstí poskytuje mechanismus pro aktualizaci systémových instrukcí uprostřed probíhající konverzace bez jejího přerušení. Prostřednictvím objektu BidiGenerateContentClientContent odeslaného s nastavením role na system (nebo v závislosti na konkrétní implementaci SDK pomocí specifických aplikačních rozhraní jako sendContent či odpovídajících obálek) je možné do kontextového okna nenápadně injektovat kontrolní povely.Tento mechanismus lze propojit s detekcí stagnace. Pokud analytická heuristika v klientské aplikaci (nebo uživatel stiskem tlačítka "Změnit téma") indikuje, že se debata točí v kruhu, klient asynchronně odešle po WebSocketu systémovou zprávu typu: "CRITICAL INSTRUCTION: Okamžitě opusti současné téma, ignoruj předchozí kontext týkající se [TÉMA] a plynule přejdi na zcela nový, nesouvisející okruh z oblasti zájmů studenta.". Tato direktiva se zařadí na konec aktuálního kontextového okna (jako nejčerstvější informace pro mechanismus pozornosti), čímž zvrátí vliv dřívějších attention sinks a model bez přerušení audio výstupu přejde k jinému tématu. Důležité je, aby tato textová aktualizace byla odeslána s parametrem indikujícím, že tah ještě neskončil (např. turnComplete: false), což modelu zabrání ve vygenerování zmatečné odpovědi předtím, než dorazí další audio vstup od uživatele.Strukturální optimalizace a integrace v jazyce DartŘešení výše popsaných architektonických úskalí vyžaduje koordinované změny ve třech stěžejních komponentách kódu: v konstruktoru promptů, v analytickém agentovi dlouhodobé paměti a ve stavovém automatu WebSocket klienta.Restrukturalizace systémových promptů a podpora JSON analýzySoučasný SystemPromptBuilder obsahuje silné pedagogické protokoly, avšak neposkytuje modelu explicitní topologická pravidla pro pohyb v konverzaci. Dlouhé prompty jsou náchylné k ignorování, a proto je nutné zavést jasně ohraničené "konverzační smyčky" (conversational loops). LLM musí dostat přesné pokyny, jak hluboko má v daném tématu jít, než přejde dál, a že se nesmí vracet zpět.Zároveň je nutné rozšířit JSON schéma (Structured Outputs) zvané getAnalysisResponseSchema. Z pohledu implementace deterministického prořezávání paměti a sebereflexe jsou přidány dva nové klíče: resolvedErrors (pro vymazání starých chyb) a tutorFeedback (pro hodnocení samotné AI). Vynucení této sémantické struktury na straně LLM slouží jako kognitivní "Chain-of-Thought" proces; model je donucen před finálním zhodnocením podrobně zkoumat vývoj studenta napříč časem.Dartimport 'dart:math';
+
+/// Třída odpovědná za sestavování systémových promptů a definici JSON schémat.
+/// Integrace kognitivních principů pro omezení sémantického driftu a repetice.
+class SystemPromptBuilder {
+  
+  /// Sestaví systémový prompt pro Voice Tutora (AJ Tudor).
+  /// Obsahuje striktní pravidla pro řízení konverzačního toku.
+  static String buildTutorPrompt({
+    String? scenarioContext,
+    String targetLevel = 'B1',
+    bool isImmersive = false,
+    String? recurringErrors,
+    String? vocabulary,
+    String? recentTopics,
+    String? memoryBriefing,
+    String? personalFact,
+  }) {
+    return '''Jsi AJ Tudor, 29letý rodilý mluvčí z Bristolu v Anglii, který žije v Praze.
+Tvá empatie je vysoká, chováš se přátelsky. Využij občas tento osobní detail k oživení: ${personalFact ?? 'Právě piješ kávu'}.
+${isImmersive 
+  ? 'REŽIM: POHLCUJÍCÍ (Immersive Mode). Mluv VÝHRADNĚ anglicky. Neopravuj chyby nahlas. Zaloguj je tiše přes `log_error`.'
+  : 'REŽIM: BĚŽNÝ. Konverzuj primárně anglicky, ale v případě chyb využívej Sokratovskou metodu.'}
+
+KRITICKÁ PRAVIDLA PRO PREVENCI REPETICE A SÉMANTICKÉHO DRIFTU:
+1. **Zákaz repetice okruhů:** NIKDY se nevracej k tématům, otázkám nebo úkolům, které se objevily v posledních 10 minutách, pokud o to student výslovně nepožádá. 
+2. **Konzistence konverzační smyčky:** Pokud otevřeš nové téma (např. jídlo, práce), neopouštěj ho hned. Vyviň konverzační smyčku: zeptej se na názor, reaguj, prozkoumej detaily (2-3 výměny k jednomu tématu). Teprve poté plynule přejdi na téma jiné. Zabraň prudkému skákání od věci k věci.
+3. **Pravidlo "Nebýt detektivem":** Nezahlcuj studenta sérií izolovaných otázek. Tvá replika musí vždy obsahovat tvůj vlastní přirozený komentář, reakci nebo historku (1-2 věty) předtím, než položíš právě jednu doplňující otázku.
+
+AFEKTIVNÍ PŘIZPŮSOBENÍ:
+Pokud v paměti z minulé lekce vidíš, že byl student frustrovaný, vyčerpaný nebo měl tendenci odpovídat jednoslovně, omez opravování chyb na absolutní minimum, buď maximálně povzbudivý, chval každý pokus o komunikaci a vol lehká, zábavná témata.
+
+PEDAGOGICKÝ PROTOKOL:
+- Pokud student chybuje, pozastav konverzaci, upozorni ho v češtině a použij "Scaffolding" (navádění).
+- Po jedné opravě téhož jevu aplikuj Cooldown. Pokud udělá student stejnou chybu znovu, ignoruj ji a neopravuj ji, aby nedošlo ke ztrátě pozornosti (attention dilution).
+
+LOGOVÁNÍ CHYB:
+Při detekci volej funkci `log_error` asynchronně bez přerušení toku.
+
+${scenarioContext != null ? 'AKTUÁLNÍ SCÉNÁŘ (ROLE-PLAY):\n$scenarioContext' : ''}
+${_buildProfileContext(recurringErrors: recurringErrors, vocabulary: vocabulary, recentTopics: recentTopics, memoryBriefing: memoryBriefing)}
+''';
+  }
+
+  /// Sestaví systémový prompt pro analýzu lekce v rámci MemoryManagerAgent.
+  static String buildAnalysisPrompt({String? previousBriefing}) {
+    return '''Jsi expertní pedagogický analytik provádějící post-procesing konverzace (umístěné v tagu <transcript>).
+
+${previousBriefing != null && previousBriefing.isNotEmpty ? 'PAMĚŤ Z MINULOSTI (Historický kontext):\n$previousBriefing\n' : ''}
+
+ÚKOLY PRO ZPRACOVÁNÍ STRUKTUROVANÉHO VÝSTUPU:
+1. Zhodnoť plynulost a odhadni úroveň (A1-B2).
+2. Identifikuj aktuální chyby (gramatika, lexikum).
+3. **MEMORY PRUNING (Zapomínání):** Křížově porovnej studentův výkon s polem "PAMĚŤ Z MINULOSTI" a aktuálními chybami. Identifikuj jevy, ve kterých student dříve chyboval, ale nyní je prokázal správně. Vypiš je do pole `resolvedErrors`. Tím zajistíš, že model přestane tyto jevy v budoucnu zbytečně testovat.
+4. **ANALÝZA FRUSTRACE A SENTIMENTU:** Analyzuj délky odpovědí a tón studenta. Pokud zaznamenáš známky únavy nebo krátké odpovědi ("I don't know"), zohledni to doporučením v poli `briefing` (např. "Student byl frustrovaný, buď extra povzbudivý").
+5. **SEBE-REFLEXE TUTORA (Self-Correction):** Objektivně zhodnoť chování AI tutora v tomto rozhovoru. Mluvil příliš dlouho? Zacyklil se v jednom tématu? Hrál si na vyšetřovatele a jen kladl otázky? Vygeneruj pro něj ostrou zpětnou vazbu do pole `tutorFeedback`. Pokud si vedl dobře, nech prázdné.
+6. Vytvoř celkový briefing pro příští lekci.
+''';
+  }
+
+  /// JSON schéma s podporou prořezávání chyb, sebe-reflexe tutora a analýzy sentimentu.
+  static Map<String, dynamic> getAnalysisResponseSchema() {
+    return {
+      'type': 'object',
+      'properties': {
+        'topicSummary': {'type': 'string', 'description': 'Stručné shrnutí probíraných témat v češtině.'},
+        'fluencyScore': {'type': 'number'},
+        'estimatedLevel': {'type': 'string', 'enum': ['A1', 'A2', 'B1', 'B2']},
+        'totalErrors': {'type': 'integer'},
+        'briefing': {'type': 'string', 'description': 'Vzkaz pro tutora na příště. Zahrň identifikovanou frustraci studenta a doporučený postup.'},
+        'tutorFeedback': {'type': 'string', 'description': 'Kritika samotného AI tutora. Pokud udělal chybu, například se opakoval nebo moc mluvil, napiš zde jasnou instrukci k nápravě.'},
+        'resolvedErrors': {
+          'type': 'array',
+          'items': {'type': 'string'},
+          'description': 'Pole gramatických jevů, které student dříve kazil, ale dnes je řekl správně (pro účely Memory Pruning).'
+        },
+        'vocabulary': {
+          'type': 'array',
+          'items': {'type': 'string'},
+        },
+        'errors': {
+          'type': 'array',
+          'items': {
+            'type': 'object',
+            'properties': {
+              'type': {'type': 'string', 'enum': ['grammar', 'vocabulary', 'pronunciation']},
+              'userSaid': {'type': 'string'},
+              'correctForm': {'type': 'string'},
+              'explanation': {'type': 'string'}
+            },
+            'required': ['type', 'userSaid', 'correctForm', 'explanation']
+          }
+        }
+      },
+      'required': ['topicSummary', 'fluencyScore', 'estimatedLevel', 'totalErrors', 'briefing', 'resolvedErrors', 'vocabulary', 'errors']
+    };
+  }
+
+  static String _buildProfileContext({
+    String? recurringErrors,
+    String? vocabulary,
+    String? recentTopics,
+    String? memoryBriefing,
+  }) {
+    final parts = <String>[];
+    if (memoryBriefing != null && memoryBriefing.isNotEmpty) {
+      parts.add('KONTEXT Z MINULÉ LEKCE A SEBE-REFLEXE (PAMĚŤ):\n$memoryBriefing');
+    }
+    if (recurringErrors != null && recurringErrors.isNotEmpty && recurringErrors != '[]') {
+      parts.add('AKTUÁLNÍ OPRAVOVANÉ CHYBY STUDENTA (Nezmiňuj je, ale organicky je sleduj):\n$recurringErrors');
+    }
+    if (vocabulary != null && vocabulary.isNotEmpty && vocabulary != '[]') {
+      parts.add('ZVLÁDNUTÁ SLOVÍČKA:\n$vocabulary');
+    }
+    if (recentTopics != null && recentTopics.isNotEmpty && recentTopics != '[]') {
+      parts.add('ZÁJMY STUDENTA:\n$recentTopics');
+    }
+    return parts.isEmpty ? '' : 'DATOVÝ PROFIL STUDENTA:\n${parts.join('\n\n')}';
+  }
+}
+Očista dlouhodobé paměti v MemoryManagerAgentS novým JSON schématem je proces prořezávání paměti převeden z teoretické abstrakce do konkrétní procedury databázového řízení. Získaný seznam resolvedErrors slouží jako deterministický filtr aplikovaný na tabulku perzistentních chyb studenta. Pokud je nalezena sémantická shoda, je záznam smazán. Následující úprava kódu vkládá tento mechanismus společně se začleněním sebehodnocení (tutorFeedback) přímo do procesu uložení profilu.Dartimport 'dart:convert';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../providers/database_provider.dart';
+import '../../providers/gemini_provider.dart';
+import '../../core/utils/logger.dart';
+import '../prompt/system_prompt_builder.dart';
+import 'scenario_planner_agent.dart';
+
+/// Agent zodpovědný za post-procesing, detekci sentimentu a Memory Pruning (MemAct).
+class MemoryManagerAgent {
+  final Ref _ref;
+
+  MemoryManagerAgent(this._ref);
+
+  Future<void> analyzeSession(int sessionId) async {
+    L.i('Zahajuji analytickou relaci a prořezávání paměti (Memory Pruning) pro session $sessionId...');
+    
+    final repo = _ref.read(sessionRepositoryProvider);
+    final gemini = _ref.read(geminiAnalysisClientProvider);
+    
+    if (gemini == null) return;
+
+    try {
+      final transcripts = await repo.getTranscripts(sessionId);
+      if (transcripts.isEmpty) return;
+
+      final chatHistory = transcripts.map((t) => '${t.speaker}: ${t.content}').join('\n');
+      final wrappedHistory = '<transcript>\n$chatHistory\n</transcript>';
+
+      final userProfile = await repo.getUserProfile();
+      final previousBriefing = userProfile?.memoryBriefing;
+      
+      // Detekce validity analýzy vzhledem k délce konverzace
+      final userMessagesCount = transcripts.where((t) => t.speaker == 'user').length;
+      final isTooShort = userMessagesCount < 2;
+
+      final analysisResult = await gemini.sendMessage(
+        wrappedHistory,
+        systemPrompt: SystemPromptBuilder.buildAnalysisPrompt(previousBriefing: previousBriefing),
+        responseSchema: SystemPromptBuilder.getAnalysisResponseSchema(),
+      );
+      
+      final data = jsonDecode(analysisResult);
+
+      await repo.updateSessionAnalysis(
+        sessionId: sessionId,
+        topicSummary: data['topicSummary'] ?? 'Bez popisu',
+        fluencyScore: (data['fluencyScore'] ?? 0.0).toDouble(),
+        totalErrors: (data['totalErrors'] ?? 0).toInt(),
+      );
+
+      // --- ALGORITMUS ODNAUČOVÁNÍ (Memory Pruning) ---
+      // Extrahujeme seznam chyb, které student přestal opakovat.
+      if (data['resolvedErrors'] != null && data['resolvedErrors'] is List) {
+        final List<String> resolved = List<String>.from(data['resolvedErrors']);
+        if (resolved.isNotEmpty) {
+          L.i('Detekováno zlepšení studenta. Aplikuji Ebbinghausův úpadek a prořezávám chyby: $resolved');
+          
+          // Repozitář provede vyhledání a odstranění těchto jevů z opakujících se chyb
+          // čímž se efektivně uvolní kapacita kontextového okna a zabrání zacyklení
+          await repo.pruneResolvedErrors(resolved); 
+        }
+      }
+
+      // --- INTEGRACE FRUSTRACE A SEBE-REFLEXE ---
+      if (!isTooShort) {
+        String finalBriefing = data['briefing'] ?? '';
+        final tutorFeedback = data['tutorFeedback'];
+        
+        // Zřetězení analytického briefingu s kritikou chování AI
+        if (tutorFeedback != null && tutorFeedback.toString().isNotEmpty) {
+           finalBriefing += '\n\nKRITICKÁ SEBE-REFLEXE (Self-Correction pro tutora na příště): $tutorFeedback';
+        }
+        await repo.updateUserMemory(finalBriefing);
+      }
+      
+      if (data['estimatedLevel'] != null) {
+        await repo.updateTargetLevel(data['estimatedLevel'].toString().toUpperCase());
+      }
+      
+      if (data['vocabulary'] != null && data['vocabulary'] is List) {
+        await repo.updateUserVocabulary(List<String>.from(data['vocabulary']));
+      }
+
+      // Logování nových chyb z aktuální relace
+      if (data['errors'] != null && data['errors'] is List) {
+        final List<String> newErrors = [];
+        for (var err in data['errors']) {
+          await repo.addErrorLog(
+            sessionId: sessionId,
+            errorType: err['type'] ?? 'grammar',
+            userSaid: err['userSaid'] ?? '',
+            correctForm: err['correctForm'] ?? '',
+            explanation: err['explanation'] ?? '',
+          );
+          newErrors.add('Řekl: "${err['userSaid']}", správně: "${err['correctForm']}"');
+        }
+        if (newErrors.isNotEmpty) {
+          await repo.updateUserRecurringErrors(newErrors);
+        }
+      }
+
+      // Spuštění prediktivního generování nových scénářů
+      _ref.read(scenarioPlannerAgentProvider).planScenarios();
+
+    } catch (e, stack) {
+      L.e('Kritická chyba při strukturované analýze session', e, stack);
+    }
+  }
+}
+Tím, že model vyhodnocuje historický kontext a odstraňuje fixované chyby, dochází k průběžnému osvěžování pracovního profilu. Zacyklení tutora je výrazně redukováno, jelikož zmizí hlavní "attention sink" – seznam již nesouvisejících oprav z minulosti. Zároveň se implementací sebereflexe eliminuje syndrom vyšetřovatele; pokud model dříve nedodržel příkaz "nebuď detektiv", obdrží pro další sezení natvrdo instrukci, která koriguje jeho pravděpodobnostní rozložení vah k tvorbě empatičtějších a košatějších odpovědí.Zásah v reálném čase: VoiceTutorAgent a Mid-Session UpdatesKoncept "mid-session updates" řeší symptom sémantického driftu a lokální nudy během aktivního hovoru. Rozhraní Gemini Live API přijímá v otevřeném WebSocket spojení zprávy formátu BidiGenerateContentClientContent, jejichž obsah je bezpodmínečně připojen k historii konverzace. To umožňuje do systému provést bezvýpadkovou injekci, která model "vytrhne" z opakujícího se bloku bez nutnosti ukončit a znovu inicializovat nahrávání zvuku.Níže je uvedeno rozšíření pro VoiceTutorAgent, obsahující metodu, která asynchronně zasílá instrukce formátu "SYSTEM" pro okamžité přepojení sémantické pozornosti modelu. Zásadní je v tomto kroku konfigurace zprávy tak, aby se odesílala s příznakem, že klientský tah ještě neskončil (turnComplete: false), což zabraňuje modelu ve spuštění halucinované odpovědi.Dartimport 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+// Ostatní systémové importy (AudioSessionController, Repositories...)
+
+class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObserver {
+  // ... existující časovače a stavové proměnné (watchdog, wakelock, atd.)
+
+  /// Dynamická injekce instrukcí v reálném čase.
+  /// Slouží k vynucenému řízení témat a prevenci repetice uprostřed běžícího hovoru
+  /// přes strukturu BidiGenerateContentClientContent protokolu WebSocket.
+  void injectMidSessionGuidance(String hiddenInstruction) {
+    final client = ref.read(geminiLiveClientProvider);
+    
+    if (client != null && client.isConnected && state.status != TutorState.idle) {
+      L.i('Injektuji systémový mid-session update pro modifikaci pozornosti modelu: $hiddenInstruction');
+      
+      // Využití API Firebase AI nebo Google Gen AI SDK k zaslání ClientContent.
+      // Posíláme instrukci s rolí SYSTEM.
+      // DŮLEŽITÉ: turnComplete = false informuje server, že toto není signál k 
+      // zahájení generování audia; server pouze absorbuje instrukci a čeká 
+      // na další audio od uživatele.
+      client.sendClientContent(
+        role: 'system',
+        text: hiddenInstruction,
+        turnComplete: false, 
+      );
+    }
+  }
+
+  /// Příklad využití Watchdogu pro detekci zacyklení nebo frustrace (Nuda z repetice).
+  /// Metoda by byla volána uživatelským tlačítkem "Změnit téma" nebo heuristikou
+  /// sledující nadměrnou sémantickou podobnost posledních tahů.
+  void forceTopicChange() {
+    HapticFeedback.lightImpact();
+    injectMidSessionGuidance(
+      "CRITICAL SYSTEM INSTRUCTION: Okamžitě opusti současné téma hovoru, "
+      "protože se konverzace zacyklila. Přestaň klást otázky k dosavadnímu okruhu "
+      "a plynule přejdi na absolutně novou oblast zájmů studenta. Použij přirozený "
+      "oslí můstek. Neupozorňuj nahlas, že měníš téma na příkaz systému."
+    );
+  }
+
+  // ... (Zbytek standardní startSession logiky, zpracování GoAway událostí atd.)
+}
+Tímto mechanismem lze zcela potlačit nechtěné zacyklení, kdy uživatel musí pasivně poslouchat stejné okruhy otázek. Schopnost zasáhnout do pozornosti modelu se ukazuje jako nejúčinnější prostředek obrany proti driftu.Multi-Agentní design: Dynamické profily a simulace personDosažení skutečné diverzity v obsahu a přirozenosti dialogu může být výrazně urychleno opuštěním rigidního paradigmatu jednoho statického tutora (tzv. AJ Tudor, 29 let z Bristolu). Z psychologického hlediska přítomnost diverzifikovaných person pomáhá bourat únavu z interakce a nabízí různorodé sémantické kontexty, čímž inherentně ztěžuje vznik kumulativního úpadku.Rámec architektury umožňuje integraci objektu TutorPersona. Při spuštění relace si uživatel zvolí profil lektora, což dynamicky přepíše generovaný prompt (tón, použitý slang a míru tolerance chyb). Proměnná by definovala atributy jako Business kouč z Londýna (vysoce formální slovní zásoba, zaměření na profesní dráhu) nebo Mladá americká surfařka (hovorový jazyk, vysoká latence oprav, důraz na plynulost).Ještě sofistikovanější je přístup Persona Multiplexing v rámci pokročilých rolí, určený například pro úroveň B2. V těchto situacích může systémový prompt simulovat multi-agentní debatu (Multi-Agent Debate) v jediném kontextovém okně LLM. Protože technologie Gemini Live API nativně neumožňuje paralelní udržování vícero nezávislých WebSocket streamů pro různé agenty v jednom klientovi bez značných komplikací v latenci, přenáší se multiplexing na stranu samotného LLM:"Instrukce pro model: Nyní funguješ ve dvou oddělených entitách. První je 'Naštvaný číšník v restauraci', se kterým se student pře o účet. Číšník mluví rázně a odmítavě. Druhou entitou je tvá klasická role 'Tutor AJ', který studentovi tiše a podpůrně radí. Když mluví Tutor, začni větu šeptem slovy: 'Psst, zkus mu říct...'."Tento druh role-play sémanticky rozděluje kontext, nutí model generovat různorodé tokeny z odlišných vnitřních distribucí a prakticky zcela potlačuje pravděpodobnost, že by došlo k monotónní repetici.Závěrečné zhodnoceníPředložená integrace analytického odnaučování (Memory Pruning), asynchronní sebereflexe a úprav chování modelu v reálném čase prostřednictvím modifikace kontextu představuje signifikantní architektonický posun v oblasti konverzační umělé inteligence pro vzdělávání. Problém neustálého točení se v kruhu a ztráty tematické souvislosti je vyřešen eliminací kognitivních úzkých hrdel v mechanismu pozornosti LLM. Nucená auto-korekce v MemoryManagerAgent zabraňuje zahlcení dlouhodobého profilu studenta nepodstatným nebo zastaralým šumem. Současně schopnost klienta zasílat tiché naváděcí instrukce (mid-session updates) v aktivním stavu zajišťuje naprostou dynamickou kontrolu nad sémantickým směřováním debaty. Aplikace této vylepšené strategie transformuje dosavadní reaktivní chování hlasového agenta do vysoce stabilního a adaptivního edukačního prostředí schopného plnohodnotné, přirozené konverzace bez únavy a opakování.

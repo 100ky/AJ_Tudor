@@ -76,18 +76,63 @@ class MemoryManagerAgent {
       // Dekódování strukturovaného JSON výsledku
       final data = jsonDecode(analysisResult);
 
+      // --- BEZPEČNÉ PARSOVÁNÍ ČÍSEL ---
+      double fluency = 0.0;
+      if (data['fluencyScore'] != null) {
+        fluency = double.tryParse(data['fluencyScore'].toString()) ?? 0.0;
+      }
+      
+      int totalErr = 0;
+      if (data['totalErrors'] != null) {
+        totalErr = int.tryParse(data['totalErrors'].toString()) ?? 0;
+      }
+
       // 3. Uložení globálních výsledků analýzy do databáze
       L.i('Ukládám výsledky analýzy do databáze...');
       await repo.updateSessionAnalysis(
         sessionId: sessionId,
-        topicSummary: data['topicSummary'] ?? 'Bez popisu',
-        fluencyScore: (data['fluencyScore'] ?? 0.0).toDouble(),
-        totalErrors: (data['totalErrors'] ?? 0).toInt(),
+        topicSummary: data['topicSummary']?.toString() ?? 'Bez popisu',
+        fluencyScore: fluency,
+        totalErrors: totalErr,
       );
 
+      // --- ALGORITMUS ODNAUČOVÁNÍ (Memory Pruning) ---
+      // Extrahujeme seznam chyb, které student přestal opakovat.
+      if (data['resolvedErrors'] != null && data['resolvedErrors'] is List) {
+        // Bezpečné parsování pouze stringů z pole
+        final List<String> resolved = (data['resolvedErrors'] as List)
+            .map((e) => e?.toString() ?? '')
+            .where((s) => s.isNotEmpty)
+            .toList();
+            
+        if (resolved.isNotEmpty) {
+          L.i('Detekováno zlepšení studenta. Aplikuji Memory Pruning a prořezávám chyby: $resolved');
+          
+          // Repozitář provede vyhledání a odstranění těchto jevů z opakujících se chyb,
+          // čímž se efektivně uvolní kapacita kontextového okna a zabrání zacyklení
+          await repo.pruneResolvedErrors(resolved); 
+        }
+      }
+
+      // --- INTEGRACE FRUSTRACE A SEBE-REFLEXE ---
       // Uložení shrnutí/briefingu pro příští lekci do profilu studenta (pouze pokud nebyla lekce příliš krátká)
-      if (!isTooShort && data['briefing'] != null) {
-        await repo.updateUserMemory(data['briefing']);
+      if (!isTooShort) {
+        String finalBriefing = data['briefing'] ?? '';
+        final tutorFeedback = data['tutorFeedback'];
+        
+        // Zřetězení analytického briefingu s kritikou chování AI
+        if (tutorFeedback != null && tutorFeedback.toString().isNotEmpty) {
+           finalBriefing += '\n\nKRITICKÁ SEBE-REFLEXE (Self-Correction pro tutora na příště): $tutorFeedback';
+        }
+        
+        // --- PREVENCE NAFUKOVÁNÍ PROMPTU ---
+        // Analytik má tendenci nabalovat staré briefingy. Ořízneme briefing,
+        // aby nepřekročil ~500-600 znaků a nestal se attention sinkem.
+        if (finalBriefing.length > 600) {
+           finalBriefing = '...${finalBriefing.substring(finalBriefing.length - 600)}';
+        }
+        
+        await repo.updateUserMemory(finalBriefing);
       }
       
       // Aktualizace odhadované úrovně angličtiny v profilu studenta (pokud byla rozpoznána)
@@ -101,27 +146,36 @@ class MemoryManagerAgent {
       
       // Uložení nově zaznamenaných slovíček do databáze
       if (data['vocabulary'] != null && data['vocabulary'] is List) {
-        final List<String> newWords = List<String>.from(data['vocabulary']);
-        await repo.updateUserVocabulary(newWords);
+        final List<String> newWords = (data['vocabulary'] as List)
+            .map((e) => e?.toString() ?? '')
+            .where((s) => s.isNotEmpty)
+            .toList();
+        if (newWords.isNotEmpty) {
+          await repo.updateUserVocabulary(newWords);
+        }
       }
 
       // 4. Uložení jednotlivých gramatických/výslovnostních chyb do detailního chybového logu a profilu
       if (data['errors'] != null && data['errors'] is List) {
         final List<String> newErrors = [];
         for (var err in data['errors']) {
-          await repo.addErrorLog(
-            sessionId: sessionId,
-            // Výchozí typ chyby je grammar, pokud není uveden
-            errorType: err['type'] ?? 'grammar',
-            userSaid: err['userSaid'] ?? '',
-            correctForm: err['correctForm'] ?? '',
-            explanation: err['explanation'] ?? '',
-          );
-          
-          final userSaid = err['userSaid'] ?? '';
-          final correctForm = err['correctForm'] ?? '';
-          if (userSaid.isNotEmpty && correctForm.isNotEmpty) {
-            newErrors.add('Řekl: "$userSaid", ale správně je: "$correctForm" (${err['explanation'] ?? ''})');
+          if (err is Map) {
+            final type = err['type']?.toString() ?? 'grammar';
+            final userSaid = err['userSaid']?.toString() ?? '';
+            final correctForm = err['correctForm']?.toString() ?? '';
+            final explanation = err['explanation']?.toString() ?? '';
+            
+            await repo.addErrorLog(
+              sessionId: sessionId,
+              errorType: type,
+              userSaid: userSaid,
+              correctForm: correctForm,
+              explanation: explanation,
+            );
+            
+            if (userSaid.isNotEmpty && correctForm.isNotEmpty) {
+              newErrors.add('Řekl: "$userSaid", ale správně je: "$correctForm" ($explanation)');
+            }
           }
         }
         

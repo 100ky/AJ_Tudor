@@ -180,7 +180,13 @@ class GeminiLiveClient {
                 'voiceName': voiceName, 
               }
             }
-          }
+          },
+          // POZNÁMKA: contextWindowCompression není podporováno modelem gemini-3.1-flash-live-preview.
+          // Pokud bude v budoucnu podporováno, přidat zpět:
+          // 'contextWindowCompression': {
+          //   'triggerTokens': 100000,
+          //   'slidingWindow': { 'targetTokens': 80000 }
+          // }
         },
         'systemInstruction': {
           'parts': [{'text': systemPrompt}]
@@ -263,6 +269,33 @@ class GeminiLiveClient {
         'turnComplete': true
       }
     };
+    _channel?.sink.add(jsonEncode(clientContent));
+  }
+
+  /// Odešle textový obsah do kontextu relace bez vyvolání odpovědi modelu.
+  ///
+  /// Slouží pro mid-session updates – tiché injektování instrukcí (např. změna tématu,
+  /// korekce chování tutora) do aktivního WebSocket spojení.
+  /// S [turnComplete] nastaveným na `false` model instrukci absorbuje a čeká na další
+  /// audio vstup od uživatele, místo aby okamžitě generoval odpověď.
+  void sendClientContent({
+    required String role,
+    required String text,
+    bool turnComplete = false,
+  }) {
+    if (_channel == null) return;
+    final clientContent = {
+      'clientContent': {
+        'turns': [
+          {
+            'role': role,
+            'parts': [{'text': text}]
+          }
+        ],
+        'turnComplete': turnComplete
+      }
+    };
+    L.i('Odesílám mid-session ClientContent (role: $role, turnComplete: $turnComplete)');
     _channel?.sink.add(jsonEncode(clientContent));
   }
 
@@ -417,8 +450,11 @@ class GeminiLiveClient {
       }
 
       // Detekce signálu GoAway (server plánuje brzy ukončit socket)
+      // Proaktivní reconnect – nečekáme na uzavření, ale ihned se pokusíme
+      // o reconnect s resumption handle, aby nedošlo k výpadku uprostřed věty.
       if (data.containsKey('goAway') || data.containsKey('go_away')) {
-        L.w('GoAway signál přijat od serveru. Spojení bude brzy ukončeno.');
+        L.w('GoAway signál přijat od serveru. Proaktivně spouštím reconnect před uzavřením...');
+        _attemptReconnect();
       }
     } catch (e, stack) {
       L.e('Chyba zpracování zprávy', e, stack);

@@ -170,6 +170,40 @@ class SessionRepository {
     );
   }
 
+  /// Prořezává (odstraňuje) vyřešené chyby z profilu studenta (Memory Pruning).
+  ///
+  /// Porovnává seznam [resolvedErrors] z analýzy s aktuálními `recurringErrors` v profilu.
+  /// Používá case-insensitive `contains` pro fuzzy shodu, protože formulace chyb
+  /// se mohou mezi analýzami mírně lišit.
+  Future<void> pruneResolvedErrors(List<String> resolvedErrors) async {
+    if (resolvedErrors.isEmpty) return;
+
+    final user = await (_db.select(_db.userProfiles)..where((t) => t.id.equals(1))).getSingleOrNull();
+    if (user == null) return;
+
+    final List<dynamic> currentErrors = jsonDecode(user.recurringErrors);
+    final List<String> errorsList = currentErrors.map((e) => e.toString()).toList();
+
+    final int originalCount = errorsList.length;
+
+    // Pro každou vyřešenou chybu hledáme sémantickou shodu v existujících záznamech
+    errorsList.removeWhere((existingError) {
+      final lowerExisting = existingError.toLowerCase();
+      return resolvedErrors.any((resolved) =>
+          lowerExisting.contains(resolved.toLowerCase()) ||
+          resolved.toLowerCase().contains(lowerExisting));
+    });
+
+    if (errorsList.length < originalCount) {
+      L.i('Memory Pruning: Odstraněno ${originalCount - errorsList.length} vyřešených chyb z profilu.');
+      await (_db.update(_db.userProfiles)..where((t) => t.id.equals(1))).write(
+        UserProfilesCompanion(
+          recurringErrors: Value(jsonEncode(errorsList)),
+        ),
+      );
+    }
+  }
+
   /// Načte poslední uložený briefing (paměť) pro potřeby AI tutora.
   Future<Result<String?>> getLatestBriefing() async {
     try {

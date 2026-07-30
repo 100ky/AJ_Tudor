@@ -95,6 +95,10 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
 
   // Průběžný nashromážděný přepis řeči uživatele pro aktuální repliku.
   String _currentUserTranscript = '';
+  
+  // Heuristiky pro detekci frustrace a stagnace
+  int _consecutiveShortAnswers = 0;
+  String _lastTutorText = '';
 
   late final WakelockService _wakelock;
   late final AudioSessionController _audio;
@@ -308,6 +312,19 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       final sessionId = _currentSessionId;
       _currentUserTranscript = '';
       
+      // --- DETEKCE FRUSTRACE (Krátké odpovědi) ---
+      final wordCount = userText.split(RegExp(r'\s+')).where((w) => w.length > 1).length;
+      if (wordCount <= 3) {
+        _consecutiveShortAnswers++;
+        if (_consecutiveShortAnswers >= 3) {
+           L.w('Detekována frustrace/nezájem (3x krátká odpověď za sebou). Injektuji afektivní rekalibraci.');
+           injectMidSessionGuidance('STUDENT IS GIVING VERY SHORT ANSWERS. They might be frustrated or tired. STOP asking difficult questions. Validate their effort, be extremely encouraging, and switch to a very easy, fun, and relaxing topic immediately.');
+           _consecutiveShortAnswers = 0; // reset po injekci
+        }
+      } else {
+        _consecutiveShortAnswers = 0;
+      }
+      
       if (sessionId != null) {
         L.i('Ukládám nashromážděný transkript uživatele do DB: "$userText"');
         _repo.addTranscript(
@@ -382,6 +399,31 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       if (state.currentTranscript.isNotEmpty) {
         final tutorText = state.currentTranscript;
         L.i('Tutor řekl: "$tutorText"');
+        
+        // --- DETEKCE STAGNACE (Opakování slovníku) ---
+        if (_lastTutorText.isNotEmpty) {
+           // Jednoduchý Jaccardův index podobnosti pro slova delší než 3 znaky
+           final currentWords = tutorText.toLowerCase().split(RegExp(r'\W+')).where((w) => w.length > 3).toSet();
+           final lastWords = _lastTutorText.toLowerCase().split(RegExp(r'\W+')).where((w) => w.length > 3).toSet();
+           
+           if (currentWords.isNotEmpty && lastWords.isNotEmpty) {
+             final intersection = currentWords.intersection(lastWords).length;
+             final union = currentWords.union(lastWords).length;
+             final similarity = intersection / union;
+             
+             if (similarity > 0.45) {
+               L.w('Detekována stagnace (Tutor se opakuje z ${ (similarity * 100).toInt() }%). Vynucuji změnu tématu.');
+               forceTopicChange();
+               _lastTutorText = ''; // Zabrání okamžitému dalšímu spuštění
+             } else {
+               _lastTutorText = tutorText;
+             }
+           } else {
+             _lastTutorText = tutorText;
+           }
+        } else {
+           _lastTutorText = tutorText;
+        }
         
         final newMessages = List<ChatMessage>.from(state.messages)
           ..add(ChatMessage(tutorText, isUser: false));
@@ -627,6 +669,42 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         );
       }
     }
+  }
+
+  /// Dynamická injekce instrukcí v reálném čase.
+  ///
+  /// Slouží k vynucenému řízení témat a prevenci repetice uprostřed běžícího hovoru
+  /// přes strukturu BidiGenerateContentClientContent protokolu WebSocket.
+  /// Instrukce se odesílá s `turnComplete: false`, takže model ji absorbuje
+  /// bez spuštění halucinované odpovědi.
+  void injectMidSessionGuidance(String hiddenInstruction) {
+    final client = ref.read(geminiLiveClientProvider);
+    
+    if (client != null && client.isConnected && state.status != TutorState.idle) {
+      L.i('Injektuji systémový mid-session update pro modifikaci pozornosti modelu.');
+      
+      // Posíláme jako 'user' s prefixem, protože Gemini Live API
+      // nepodporuje roli 'system' v clientContent po úvodním setupu.
+      client.sendClientContent(
+        role: 'user',
+        text: '[SYSTEM INSTRUCTION - NOT FROM STUDENT] $hiddenInstruction',
+        turnComplete: false, 
+      );
+    }
+  }
+
+  /// Vynucená změna tématu konverzace.
+  ///
+  /// Volá se uživatelským tlačítkem "Změnit téma" nebo heuristikou
+  /// detekující nadměrnou sémantickou podobnost posledních tahů.
+  void forceTopicChange() {
+    HapticFeedback.lightImpact();
+    injectMidSessionGuidance(
+      "CRITICAL INSTRUCTION: Okamžitě opusti současné téma hovoru, "
+      "protože se konverzace zacyklila. Přestaň klást otázky k dosavadnímu okruhu "
+      "a plynule přejdi na absolutně novou oblast zájmů studenta. Použij přirozený "
+      "oslí můstek. Neupozorňuj nahlas, že měníš téma na příkaz systému."
+    );
   }
 
   /// Resetuje watchdog časovač aktivity.
