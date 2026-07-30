@@ -129,18 +129,28 @@ class SessionRepository {
   /// Aktualizuje seznam známých slovíček uživatele.
   /// 
   /// Přidá nová slova do existujícího JSON pole, přičemž duplicity jsou automaticky odstraněny.
+  /// Udržuje maximálně 50 nejnovějších slovíček, aby se zbytečně nenafukoval systémový prompt.
   Future<void> updateUserVocabulary(List<String> newWords) async {
     final user = await (_db.select(_db.userProfiles)..where((t) => t.id.equals(1))).getSingleOrNull();
     if (user == null) return;
 
     final List<dynamic> currentVocab = jsonDecode(user.vocabulary);
-    final Set<String> vocabSet = Set<String>.from(currentVocab.map((e) => e.toString()));
+    // Převedeme na List místo Set, abychom zachovali pořadí (nejnovější na konci)
+    final List<String> vocabList = currentVocab.map((e) => e.toString()).toList();
     
-    vocabSet.addAll(newWords.map((e) => e.trim()));
+    for (final word in newWords.map((e) => e.trim())) {
+      vocabList.remove(word); // Odstraníme duplicitu, pokud existuje
+      vocabList.add(word);    // Přidáme na konec (nejnovější)
+    }
+    
+    // Udržíme pouze posledních 50 slovíček pro zamezení nafukování promptu
+    final List<String> trimmedVocab = vocabList.length > 50
+        ? vocabList.sublist(vocabList.length - 50)
+        : vocabList;
     
     await (_db.update(_db.userProfiles)..where((t) => t.id.equals(1))).write(
       UserProfilesCompanion(
-        vocabulary: Value(jsonEncode(vocabSet.toList())),
+        vocabulary: Value(jsonEncode(trimmedVocab)),
       ),
     );
   }

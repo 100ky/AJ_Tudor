@@ -90,6 +90,7 @@ class VoiceTutorState {
 class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObserver {
   Timer? _watchdogTimer;
   Timer? _stuckTimer;
+  Timer? _thinkingTimer;
   int? _currentSessionId;
   bool _isStopping = false;
 
@@ -141,6 +142,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       // Zrušení všech běžících časovačů
       _watchdogTimer?.cancel();
       _stuckTimer?.cancel();
+      _thinkingTimer?.cancel();
       
       try {
         stopSession('disposed');
@@ -185,6 +187,11 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   /// 4. Připojí WebSocket klienta k Gemini Live API a zaregistruje callbacky.
   /// 5. Inicializuje mikrofon a spustí nahrávání audia.
   Future<void> startSession() async {
+    if (_currentSessionId != null) {
+      L.w('Pokus o startSession, ale předchozí session ($_currentSessionId) nebyla uzavřena. Uzavírám a odesílám k analýze.');
+      await stopSession('forced_restart');
+    }
+
     state = state.copyWith(
       status: TutorState.connecting, 
       errorMessage: '',
@@ -285,6 +292,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         final currentClient = ref.read(geminiLiveClientProvider);
         if (currentClient != null && currentClient.isConnected && state.status == TutorState.listening) {
           state = state.copyWith(status: TutorState.thinking);
+          _resetThinkingTimer();
           
           String initialPrompt = "Hello! Please greet me and start the conversation according to your instructions.";
           final briefing = userProfile?.memoryBriefing;
@@ -361,6 +369,10 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       L.i('STT chunk uživatele: "$text"');
       
       final isNewTurn = _currentUserTranscript.isEmpty;
+      // Přidáme mezeru mezi STT chunky, aby se neslily (fix: "I will havesvadba")
+      if (_currentUserTranscript.isNotEmpty && !_currentUserTranscript.endsWith(' ')) {
+        _currentUserTranscript += ' ';
+      }
       _currentUserTranscript += text;
 
       final displayTranscript = _currentUserTranscript.trim();
@@ -466,10 +478,31 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       _resetWatchdog();
       _resetStuckTimer();
       L.i('Model byl přerušen uživatelem.');
-      state = state.copyWith(
-        status: TutorState.listening,
-        currentTranscript: '',
-      );
+      
+      // Uložíme rozpracovaný transkript tutora (i neúplný), aby se neztratil z historie
+      if (state.currentTranscript.isNotEmpty) {
+        final partialText = state.currentTranscript;
+        final newMessages = List<ChatMessage>.from(state.messages)
+          ..add(ChatMessage(partialText, isUser: false));
+        state = state.copyWith(
+          status: TutorState.listening,
+          currentTranscript: '',
+          messages: newMessages,
+        );
+        // Uložení neúplné repliky do DB
+        if (_currentSessionId != null) {
+          repo.addTranscript(
+            sessionId: _currentSessionId!,
+            speaker: 'tutor',
+            content: partialText,
+          );
+        }
+      } else {
+        state = state.copyWith(
+          status: TutorState.listening,
+          currentTranscript: '',
+        );
+      }
     };
 
     // Změna stavu připojení na síťové vrstvě
@@ -501,6 +534,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       // Zrušení časovačů
       _watchdogTimer?.cancel();
       _stuckTimer?.cancel();
+      _thinkingTimer?.cancel();
       
       _wakelock.disable(); // Povolíme opětovné zhasínání displeje
 
@@ -600,6 +634,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     // Zastavíme watchdog a stuck timer, aby nespustily reconnect během pauzy
     _watchdogTimer?.cancel();
     _stuckTimer?.cancel();
+    _thinkingTimer?.cancel();
     
     // Zastavíme mikrofon, ale necháme WebSocket otevřený
     try {
@@ -611,9 +646,6 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     state = state.copyWith(status: TutorState.paused);
   }
 
-  /// Obnoví pozastavenou konverzaci.
-  /// 
-  /// Znovu aktivuje mikrofon a vrátí stav do listening.
   Future<void> resumeSession() async {
     if (state.status != TutorState.paused) return;
     
@@ -621,13 +653,13 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     HapticFeedback.mediumImpact();
     
     final client = ref.read(geminiLiveClientProvider);
-    if (client == null || !client.isConnected) {
-      L.w('WebSocket odpojen během pauzy, nelze obnovit.');
-      state = state.copyWith(status: TutorState.error, errorMessage: 'Spojení bylo přerušeno během pauzy.');
+    if (client == null) {
+      state = state.copyWith(status: TutorState.error, errorMessage: 'Chybí klient pro obnovení.');
       return;
     }
     
-    // Znovu aktivujeme mikrofon
+    // Znovu aktivujeme mikrofon bez ohledu na stav sítě,
+    // aby mohl běžet na pozadí, jakmile se spojení obnoví.
     try {
       await _audio.start(onAudioChunk: (data) {
         if (state.status == TutorState.listening) {
@@ -640,7 +672,12 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       return;
     }
     
-    state = state.copyWith(status: TutorState.listening);
+    if (!client.isConnected) {
+      L.w('WebSocket je aktuálně odpojen, přecházím do stavu reconnecting...');
+      state = state.copyWith(status: TutorState.reconnecting);
+    } else {
+      state = state.copyWith(status: TutorState.listening);
+    }
     _resetWatchdog();
   }
 
@@ -658,6 +695,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       
       // Přepneme stav do 'thinking', dokud AI neodpoví
       state = state.copyWith(messages: newMessages, status: TutorState.thinking);
+      _resetThinkingTimer();
       client.sendText(text);
 
       // Uložení manuálního textu do DB
@@ -738,6 +776,22 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       _stuckTimer = Timer(const Duration(seconds: 10), () {
         if (state.status == TutorState.speaking) {
           L.w('Detekováno zaseknutí ve stavu speaking (10s ticho), vracím do listening.');
+          state = state.copyWith(status: TutorState.listening);
+        }
+      });
+    }
+  }
+
+  /// Resetuje thinking timer.
+  ///
+  /// Pokud tutor zůstane ve stavu `thinking` déle než 15 sekund bez jakékoliv
+  /// odpovědi (ani audio, ani text), přepne se zpět do `listening`.
+  void _resetThinkingTimer() {
+    _thinkingTimer?.cancel();
+    if (state.status == TutorState.thinking) {
+      _thinkingTimer = Timer(const Duration(seconds: 15), () {
+        if (state.status == TutorState.thinking) {
+          L.w('Thinking timeout (15s bez odpovědi), vracím do listening.');
           state = state.copyWith(status: TutorState.listening);
         }
       });

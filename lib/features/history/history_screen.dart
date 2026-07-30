@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../providers/database_provider.dart';
 import '../../data/database/app_database.dart';
+import '../../services/agents/memory_manager_agent.dart';
 
 class HistoryScreen extends ConsumerWidget {
   const HistoryScreen({super.key});
@@ -140,7 +141,7 @@ class _SessionCard extends ConsumerWidget {
   }
 }
 
-class _SessionDetailSheet extends StatelessWidget {
+class _SessionDetailSheet extends ConsumerStatefulWidget {
   final Session session;
   final List<Transcript> transcripts;
   final List<ErrorLog> errors;
@@ -150,6 +151,36 @@ class _SessionDetailSheet extends StatelessWidget {
     required this.transcripts,
     required this.errors,
   });
+
+  @override
+  ConsumerState<_SessionDetailSheet> createState() => _SessionDetailSheetState();
+}
+
+class _SessionDetailSheetState extends ConsumerState<_SessionDetailSheet> {
+  bool _isAnalyzing = false;
+
+  void _analyzeSession() async {
+    setState(() => _isAnalyzing = true);
+    try {
+      final memoryAgent = ref.read(memoryManagerAgentProvider);
+      await memoryAgent.analyzeSession(widget.session.id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Analýza dokončena!'), backgroundColor: Colors.green),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Chyba při analýze: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isAnalyzing = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -169,10 +200,24 @@ class _SessionDetailSheet extends StatelessWidget {
             const SizedBox(height: 16),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Text(
-                session.topicSummary ?? 'Detail lekce',
-                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                textAlign: TextAlign.center,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      widget.session.topicSummary ?? 'Detail lekce',
+                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.left,
+                    ),
+                  ),
+                  if (widget.session.topicSummary == null || widget.session.fluencyScore == null)
+                    _isAnalyzing
+                        ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+                        : IconButton(
+                            icon: const Icon(Icons.analytics, color: Colors.blueAccent),
+                            tooltip: 'Analyzovat lekci manuálně',
+                            onPressed: _analyzeSession,
+                          ),
+                ],
               ),
             ),
             const SizedBox(height: 16),
@@ -180,13 +225,13 @@ class _SessionDetailSheet extends StatelessWidget {
               child: ListView.builder(
                 controller: controller,
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                itemCount: transcripts.length,
+                itemCount: widget.transcripts.length,
                 itemBuilder: (context, index) {
-                  final t = transcripts[index];
+                  final t = widget.transcripts[index];
                   final isUser = t.speaker == 'user';
                   
                   // Najdeme chybu pro tento transcript, pokud existuje
-                  final error = errors.where((e) => t.content.contains(e.userSaid)).firstOrNull;
+                  final error = widget.errors.where((e) => t.content.contains(e.userSaid)).firstOrNull;
 
                   return Align(
                     alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,

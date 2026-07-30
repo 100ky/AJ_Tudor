@@ -56,8 +56,11 @@ class GeminiLiveClient {
   /// Vyvoláno, když model zavolá externí nástroj (Function Calling).
   Function(String name, Map<String, dynamic> args)? onToolCall;
 
-  /// Vyvoláno, když uživatel přeruší mluvení modelu (interruption).
+  /// Vyvolano, když uživatel přeruší mluvení modelu (interruption).
   Function()? onInterrupted;
+
+  /// Vyvoláno při aktualizaci počtu spotřebovaných tokenů (z usageMetadata).
+  Function(int totalTokens)? onTokenCountUpdate;
 
   /// Konstruktor vyžadující API klíč a instanci služby přehrávání zvuku.
   GeminiLiveClient(this._apiKey, this._playbackService);
@@ -91,7 +94,9 @@ class GeminiLiveClient {
     final uri = Uri.parse(
         'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=$_apiKey');
     
-    L.i('Připojování k: $uri');
+    // Maskovat API klíč v logu pro bezpečnost
+    final maskedUri = uri.replace(queryParameters: {'key': '***'});
+    L.i('Připojování k: $maskedUri');
     _channel = WebSocketChannel.connect(uri);
 
     // Naslouchání na příchozím streamu WebSocketu.
@@ -122,10 +127,17 @@ class GeminiLiveClient {
       },
     );
 
-    // Odeslání konfigurační (SETUP) zprávy s krátkou prodlevou po navázání socketu.
-    Future.delayed(const Duration(milliseconds: 300), () {
+    // Odešleme SETUP zprávu až po plném otevření WebSocket kanálu.
+    _channel!.ready.then((_) {
       if (_channel != null) {
         _sendSetupMessage(modelName, systemPrompt, voiceName);
+      }
+    }).catchError((e) {
+      L.e('WebSocket se nepodařilo otevřít: $e');
+      if (!_isManualDisconnect) {
+        _attemptReconnect();
+      } else if (onError != null) {
+        onError!('Nelze navázat spojení: $e');
       }
     });
   }
@@ -158,11 +170,13 @@ class GeminiLiveClient {
     if (errorMsg.contains('429')) {
       if (onError != null) onError!('Překročena kvóta API (Rate limit). Zkuste to za chvíli.');
     } else if (errorMsg.contains('1008')) {
-      L.w('GoAway detekován (kód 1008), zkouším reconnect...');
-      _attemptReconnect();
+      L.w('GoAway detekován (kód 1008). Automatický reconnect se spustí z onDone.');
     } else {
-      L.e('WebSocket CHYBA: $errorMsg');
-      if (onError != null) onError!('Chyba spojení: $errorMsg');
+      // V případě běžné síťové chyby se socket uzavře a spustí onDone,
+      // které zajistí auto-reconnect. Nevyhazujeme hned error do UI,
+      // abychom nezablokovali aplikaci ve stavu TutorState.error, 
+      // ze kterého se po úspěšném reconnectu neumí sama dostat.
+      L.e('WebSocket CHYBA (nevyhazuji do UI, spoléhám na auto-reconnect): $errorMsg');
     }
   }
 
@@ -410,6 +424,26 @@ class GeminiLiveClient {
         if (turnComplete == true) {
           L.i('TurnComplete signál přijat.');
           if (onTurnComplete != null) onTurnComplete!();
+        }
+
+        // Zpracování signálu generationComplete (model dokončil generování)
+        if (serverContent is Map && serverContent.containsKey('generationComplete')) {
+          L.d('GenerationComplete signál přijat.');
+        }
+      }
+
+      // Zpracování usageMetadata (sledování spotřeby tokenů)
+      if (data.containsKey('usageMetadata')) {
+        final usage = data['usageMetadata'];
+        if (usage is Map) {
+          final totalTokens = usage['totalTokenCount'] ?? usage['total_token_count'];
+          if (totalTokens != null) {
+            final count = int.tryParse(totalTokens.toString()) ?? 0;
+            if (count > 0) {
+              L.d('UsageMetadata: $count tokenů spotřebováno.');
+              if (onTokenCountUpdate != null) onTokenCountUpdate!(count);
+            }
+          }
         }
       }
 
