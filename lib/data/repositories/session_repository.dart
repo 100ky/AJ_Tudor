@@ -352,5 +352,23 @@ class SessionRepository {
   Future<UserProfile?> getUserProfile() async {
     return await (_db.select(_db.userProfiles)..where((t) => t.id.equals(1))).getSingleOrNull();
   }
+
+  /// Smaže lekci a všechna související data z databáze.
+  Future<Result<void>> deleteSession(int sessionId) async {
+    try {
+      await _db.transaction(() async {
+        // Smazání transkriptů
+        await (_db.delete(_db.transcripts)..where((t) => t.sessionId.equals(sessionId))).go();
+        // Smazání logů chyb
+        await (_db.delete(_db.errorLogs)..where((t) => t.sessionId.equals(sessionId))).go();
+        // Smazání samotné session
+        await (_db.delete(_db.sessions)..where((t) => t.id.equals(sessionId))).go();
+      });
+      return Result.success(null);
+    } catch (e, stack) {
+      L.e('Chyba při mazání session', e, stack);
+      return Result.failure(DatabaseFailure('Nepodařilo se smazat lekci.'));
+    }
+  }
 }
 

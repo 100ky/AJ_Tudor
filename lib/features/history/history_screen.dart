@@ -158,6 +158,7 @@ class _SessionDetailSheet extends ConsumerStatefulWidget {
 
 class _SessionDetailSheetState extends ConsumerState<_SessionDetailSheet> {
   bool _isAnalyzing = false;
+  bool _isDeleting = false;
 
   void _analyzeSession() async {
     setState(() => _isAnalyzing = true);
@@ -178,6 +179,58 @@ class _SessionDetailSheetState extends ConsumerState<_SessionDetailSheet> {
     } finally {
       if (mounted) {
         setState(() => _isAnalyzing = false);
+      }
+    }
+  }
+
+  void _confirmDelete() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Smazat lekci?'),
+        content: const Text('Opravdu chceš smazat tuto lekci z historie? Tato akce je nevratná.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Zrušit'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _deleteSession();
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
+            child: const Text('Smazat'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _deleteSession() async {
+    setState(() => _isDeleting = true);
+    try {
+      final repo = ref.read(sessionRepositoryProvider);
+      final result = await repo.deleteSession(widget.session.id);
+      
+      if (mounted) {
+        result.fold(
+          (_) {
+            Navigator.pop(context); // Zavřít bottom sheet
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Lekce byla smazána.'), backgroundColor: Colors.orange),
+            );
+          },
+          (failure) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Chyba: ${failure.message}'), backgroundColor: Colors.red),
+            );
+          },
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isDeleting = false);
       }
     }
   }
@@ -217,6 +270,11 @@ class _SessionDetailSheetState extends ConsumerState<_SessionDetailSheet> {
                             tooltip: 'Analyzovat lekci manuálně',
                             onPressed: _analyzeSession,
                           ),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                    tooltip: 'Smazat lekci',
+                    onPressed: _isDeleting ? null : _confirmDelete,
+                  ),
                 ],
               ),
             ),

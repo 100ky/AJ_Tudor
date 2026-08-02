@@ -1,0 +1,4 @@
+- [x] Implementace `deleteSession` v `SessionRepository`
+- [x] Přidání potvrzovacího dialogu do `HistoryScreen`
+- [x] Přidání tlačítka smazat do UI v `HistoryScreen`
+- [x] Verifikace smazání lekce

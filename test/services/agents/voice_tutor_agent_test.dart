@@ -51,7 +51,7 @@ void main() {
     // Async cleanup methods must return completed futures
     when(() => mockAudio.stop()).thenAnswer((_) async {});
     // disconnect might be called
-    when(() => mockClient.disconnect()).thenReturn(null);
+    when(() => mockClient.disconnect()).thenAnswer((_) {});
 
     container = ProviderContainer(
       overrides: [
@@ -96,18 +96,22 @@ void main() {
       sessionId: any(named: 'sessionId'),
       speaker: any(named: 'speaker'),
       content: any(named: 'content'),
-    )).thenAnswer((_) async => Result.success(1));
-    when(() => mockAudio.start(onAudioChunk: any(named: 'onAudioChunk'))).thenAnswer((_) async {});
+    )).thenAnswer((_) async {
+      return Result.success(null);
+    });
+    final startExpectation = when(() => mockAudio.start(onAudioChunk: any(named: 'onAudioChunk')));
+    startExpectation.thenAnswer((_) async {});
     when(() => mockClient.connect(
       modelName: any(named: 'modelName'),
       systemPrompt: any(named: 'systemPrompt'),
       voiceName: any(named: 'voiceName'),
-    )).thenAnswer((_) {});
+    )).thenAnswer((_) {
+      return;
+    });
 
     // Intercept setter for onUserTranscriptReceived
-    when(() => mockClient.onUserTranscriptReceived = any()).thenAnswer((invocation) {
-      userTranscriptCallback = invocation.positionalArguments[0] as Function(String)?;
-    });
+    when(() => mockClient.onUserTranscriptReceived = any()).thenAnswer((invocation) => 
+        userTranscriptCallback = invocation.positionalArguments[0] as Function(String)?);
 
     final agent = container.read(voiceTutorAgentProvider.notifier);
     await agent.startSession();
