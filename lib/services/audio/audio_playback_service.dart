@@ -4,6 +4,12 @@ import 'package:flutter_pcm_sound/flutter_pcm_sound.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 
+class _VolumeQueueItem {
+  final DateTime scheduledTime;
+  final double volume;
+  _VolumeQueueItem(this.scheduledTime, this.volume);
+}
+
 class AudioPlaybackService {
   bool _isInitialized = false;
   bool _isSupported = true;
@@ -17,7 +23,9 @@ class AudioPlaybackService {
 
   final StreamController<double> _volumeController = StreamController<double>.broadcast();
   Stream<double> get volumeStream => _volumeController.stream;
-  DateTime _lastVolumeUpdate = DateTime.now();
+  
+  final List<_VolumeQueueItem> _volumeQueue = [];
+  Timer? _volumeTimer;
 
   Future<void> init() async {
     if (!_isInitialized && _isSupported) {
@@ -25,6 +33,12 @@ class AudioPlaybackService {
         // Gemini Live API posílá zvuk v 24kHz PCM 16-bit Mono
         await FlutterPcmSound.setup(sampleRate: 24000, channelCount: 1);
         _isInitialized = true;
+        
+        // Spuštění timeru pro synchronizované vysílání hlasitosti do UI
+        _volumeTimer?.cancel();
+        _volumeTimer = Timer.periodic(const Duration(milliseconds: 33), (_) {
+          _emitQueuedVolumes();
+        });
       } on MissingPluginException {
         debugPrint('Varování: Audio plugin není na této platformě podporován (např. Windows). Zvuk se nebude přehrávat.');
         _isSupported = false;
@@ -49,15 +63,20 @@ class AudioPlaybackService {
     // Připočteme délku přehrávání: 24000 Hz 16-bit mono = 48 bytů za milisekundu
     final int durationMs = (safeBytes.length / 48.0).ceil();
     final now = DateTime.now();
+    
+    DateTime chunkStartTime;
     if (_playbackEndTime.isBefore(now)) {
+      chunkStartTime = now;
       _playbackEndTime = now.add(Duration(milliseconds: durationMs));
     } else {
+      chunkStartTime = _playbackEndTime;
       _playbackEndTime = _playbackEndTime.add(Duration(milliseconds: durationMs));
     }
     
     try {
-      // Výpočet hlasitosti pro vizualizaci
-      _calculateAndEmitVolume(safeBytes);
+      // Výpočet hlasitosti pro vizualizaci a přidání do časované fronty
+      final volume = _calculateVolume(safeBytes);
+      _volumeQueue.add(_VolumeQueueItem(chunkStartTime, volume));
 
       // Převod surových bytů na PcmArrayInt16
       final uint8List = Uint8List.fromList(safeBytes);
@@ -70,18 +89,11 @@ class AudioPlaybackService {
     }
   }
 
-  void _calculateAndEmitVolume(List<int> buffer) {
-    if (buffer.isEmpty) return;
+  double _calculateVolume(List<int> buffer) {
+    if (buffer.isEmpty) return 0.0;
 
-    // THROTTLING pro UI plynulost
-    final now = DateTime.now();
-    if (now.difference(_lastVolumeUpdate).inMilliseconds < 33) {
-      return;
-    }
-    _lastVolumeUpdate = now;
-    
     final int sampleCount = buffer.length ~/ 2;
-    if (sampleCount == 0) return; // Prevent division by zero
+    if (sampleCount == 0) return 0.0;
     
     double sum = 0;
     final byteData = ByteData.sublistView(Uint8List.fromList(buffer));
@@ -94,12 +106,28 @@ class AudioPlaybackService {
     final double rms = math.sqrt(sum / sampleCount);
     double volume = math.sqrt(rms / 32768.0);
     
-    // Safety check against NaN to avoid crashes on clamp()
     if (volume.isNaN) {
       volume = 0.0;
     }
     
-    _volumeController.add(volume.clamp(0.0, 1.0));
+    return volume.clamp(0.0, 1.0);
+  }
+
+  void _emitQueuedVolumes() {
+    if (_volumeQueue.isEmpty) return;
+    
+    final now = DateTime.now();
+    double? volumeToEmit;
+    
+    // Najdeme poslední hodnotu, jejíž čas už reálně nastal
+    while (_volumeQueue.isNotEmpty && _volumeQueue.first.scheduledTime.isBefore(now)) {
+      volumeToEmit = _volumeQueue.first.volume;
+      _volumeQueue.removeAt(0);
+    }
+    
+    if (volumeToEmit != null) {
+      _volumeController.add(volumeToEmit);
+    }
   }
 
   Future<void> interrupt() async {
@@ -109,6 +137,7 @@ class AudioPlaybackService {
 
   Future<void> stop() async {
     _playbackEndTime = DateTime.now();
+    _volumeQueue.clear();
     if (_isSupported && _isInitialized) {
       try {
         await FlutterPcmSound.release();
@@ -119,6 +148,7 @@ class AudioPlaybackService {
   }
 
   void dispose() {
+    _volumeTimer?.cancel();
     _volumeController.close();
   }
 }

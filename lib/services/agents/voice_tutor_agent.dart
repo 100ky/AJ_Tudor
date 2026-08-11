@@ -100,6 +100,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   // Heuristiky pro detekci frustrace a stagnace
   int _consecutiveShortAnswers = 0;
   String _lastTutorText = '';
+  bool _turnCompleteReceived = false;
 
   late final WakelockService _wakelock;
   late final AudioSessionController _audio;
@@ -285,6 +286,14 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
               }
               client.sendAudioChunk(data);
             }
+          } else if (state.status == TutorState.speaking) {
+            // Pokud model dovygeneroval, čekáme, až dozní reproduktor,
+            // abychom teprve potom vizuálně i logicky přepli na listening.
+            if (_turnCompleteReceived && !_audio.isPlaying) {
+              state = state.copyWith(status: TutorState.listening);
+              _turnCompleteReceived = false;
+              L.i('🎤 Zvuk dozrál, přepínám stav z speaking na listening.');
+            }
           }
         });
       } catch (audioError, stack) {
@@ -412,6 +421,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     client.onAudioReceived = () {
       _flushUserTranscript();
       _resetWatchdog();
+      _turnCompleteReceived = false;
       if (state.status != TutorState.speaking) {
         state = state.copyWith(status: TutorState.speaking);
       }
@@ -457,10 +467,12 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
           ..add(ChatMessage(tutorText, isUser: false));
         
         state = state.copyWith(
-          status: TutorState.listening,
           currentTranscript: '',
           messages: newMessages,
         );
+
+        // Zapamatuje si, že turn skončil, a onAudioChunk posléze přepne na listening
+        _turnCompleteReceived = true;
 
         // Uložení finálního přepisu řeči tutora do DB
         if (_currentSessionId != null) {
@@ -471,7 +483,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
           );
         }
       } else {
-        state = state.copyWith(status: TutorState.listening);
+        _turnCompleteReceived = true;
       }
     };
 

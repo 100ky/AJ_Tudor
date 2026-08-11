@@ -59,6 +59,7 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   mocktail: ^1.0.4
+  flutter_launcher_icons: ^0.13.1
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
@@ -80,6 +81,9 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  assets:
+    - assets/images/AJ_tudor.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:
@@ -111,6 +115,12 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+flutter_launcher_icons:
+  android: "ic_launcher"
+  ios: true
+  image_path: "assets/images/AJ_tudor.png"
+  min_sdk_android: 21
 
 # Následující sekce zajistí kompilaci SQLite včetně podpory šifrování
 hooks:
