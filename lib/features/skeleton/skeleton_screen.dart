@@ -95,7 +95,7 @@ class SkeletonScreen extends ConsumerWidget {
         children: _pages,
       ),
 
-      bottomNavigationBar: Container(
+      bottomNavigationBar: DecoratedBox(
         decoration: BoxDecoration(
           border: Border(
             top: BorderSide(color: AppTheme.outline, width: 1),

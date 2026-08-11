@@ -99,7 +99,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   
   // Heuristiky pro detekci frustrace a stagnace
   int _consecutiveShortAnswers = 0;
-  String _lastTutorText = '';
+  List<String> _tutorTextHistory = [];
   bool _turnCompleteReceived = false;
 
   late final WakelockService _wakelock;
@@ -439,32 +439,47 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         L.i('Tutor řekl: "$tutorText"');
         
         // --- DETEKCE STAGNACE (Opakování slovníku) ---
-        if (_lastTutorText.isNotEmpty) {
-           // Jednoduchý Jaccardův index podobnosti pro slova delší než 3 znaky
-           final currentWords = tutorText.toLowerCase().split(RegExp(r'\W+')).where((w) => w.length > 3).toSet();
-           final lastWords = _lastTutorText.toLowerCase().split(RegExp(r'\W+')).where((w) => w.length > 3).toSet();
+        // 1. Intra-turn repetition (odstranění zacyklení uvnitř stejné promluvy)
+        String finalTutorText = _removeIntraTurnRepetition(tutorText);
+        
+        // 2. Inter-turn repetition (opakování napříč tahy)
+        bool isStagnating = false;
+        if (_tutorTextHistory.isNotEmpty) {
+           final currentWords = finalTutorText.toLowerCase().split(RegExp(r'\W+')).where((w) => w.length > 3).toSet();
            
-           if (currentWords.isNotEmpty && lastWords.isNotEmpty) {
-             final intersection = currentWords.intersection(lastWords).length;
-             final union = currentWords.union(lastWords).length;
-             final similarity = intersection / union;
-             
-             if (similarity > 0.45) {
-               L.w('Detekována stagnace (Tutor se opakuje z ${ (similarity * 100).toInt() }%). Vynucuji změnu tématu.');
-               forceTopicChange();
-               _lastTutorText = ''; // Zabrání okamžitému dalšímu spuštění
-             } else {
-               _lastTutorText = tutorText;
+           if (currentWords.isNotEmpty) {
+             for (final historyText in _tutorTextHistory) {
+               final historyWords = historyText.toLowerCase().split(RegExp(r'\W+')).where((w) => w.length > 3).toSet();
+               if (historyWords.isNotEmpty) {
+                 final intersection = currentWords.intersection(historyWords).length;
+                 final union = currentWords.union(historyWords).length;
+                 final similarity = intersection / union;
+                 
+                 // Zkontrolujeme také, zda nedošlo k přesnému zkopírování delší fráze (např. víc než 20 znaků)
+                 final hasExactMatch = finalTutorText.length > 20 && historyText.toLowerCase().contains(finalTutorText.toLowerCase().substring(0, 20));
+                 
+                 if (similarity > 0.45 || hasExactMatch) {
+                   isStagnating = true;
+                   L.w('Detekována stagnace (Tutor se opakuje s podobností ${ (similarity * 100).toInt() }%). Vynucuji změnu tématu.');
+                   break;
+                 }
+               }
              }
-           } else {
-             _lastTutorText = tutorText;
            }
+        }
+        
+        if (isStagnating) {
+           forceTopicChange();
+           _tutorTextHistory.clear(); // Zabrání okamžitému dalšímu spuštění
         } else {
-           _lastTutorText = tutorText;
+           _tutorTextHistory.add(finalTutorText);
+           if (_tutorTextHistory.length > 3) {
+             _tutorTextHistory.removeAt(0); // Uchováme jen poslední 3 promluvy
+           }
         }
         
         final newMessages = List<ChatMessage>.from(state.messages)
-          ..add(ChatMessage(tutorText, isUser: false));
+          ..add(ChatMessage(finalTutorText, isUser: false));
         
         state = state.copyWith(
           currentTranscript: '',
@@ -757,6 +772,46 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         turnComplete: false, 
       );
     }
+  }
+
+  /// Odstraní zjevné zacyklení modelu uvnitř jedné promluvy (když zopakuje stejnou větu/část).
+  String _removeIntraTurnRepetition(String text) {
+    if (text.isEmpty) return text;
+    
+    // Nejprve zkusíme rozdělit na věty
+    final sentences = text.split(RegExp(r'(?<=[.!?])\s+'));
+    final uniqueSentences = <String>[];
+    
+    for (final s in sentences) {
+      final trimmed = s.trim();
+      if (trimmed.isEmpty) continue;
+      
+      bool isDuplicate = false;
+      for (final existing in uniqueSentences) {
+        final existingLower = existing.toLowerCase();
+        final trimmedLower = trimmed.toLowerCase();
+        
+        // Přesná shoda
+        if (existingLower == trimmedLower) {
+          isDuplicate = true;
+          break;
+        }
+        
+        // Podřetězec (např. uťatá verze téže věty), pokud má alespoň 10 znaků
+        if (trimmedLower.length > 10 && existingLower.contains(trimmedLower)) {
+          isDuplicate = true;
+          break;
+        }
+      }
+      
+      if (!isDuplicate) {
+        uniqueSentences.add(trimmed);
+      } else {
+        L.w('Odstraněno zacyklení uvnitř věty: "$trimmed"');
+      }
+    }
+    
+    return uniqueSentences.join(' ');
   }
 
   /// Vynucená změna tématu konverzace.

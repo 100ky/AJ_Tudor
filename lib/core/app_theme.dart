@@ -170,10 +170,12 @@ abstract final class AppTheme {
       backgroundColor: surface,
       surfaceTintColor: Colors.transparent,
       indicatorColor: primary.withValues(alpha: 0.15),
+      height: 72, // Explicitní výška pro prostor pro labely
+      labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
       labelTextStyle: WidgetStateProperty.resolveWith((states) {
         final isSelected = states.contains(WidgetState.selected);
         return GoogleFonts.plusJakartaSans(
-          fontSize: 11,
+          fontSize: 10, // Menší velikost – 'Nastavení' se vejde
           fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
           color: isSelected ? primary : onSurfaceMuted,
         );

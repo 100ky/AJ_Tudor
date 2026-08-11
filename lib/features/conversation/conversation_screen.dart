@@ -139,12 +139,12 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                 ButtonSegment<bool>(
                   value: false,
                   icon: Icon(Icons.chat_bubble_outline_rounded, size: 16),
-                  label: Text('Volný rozhovor'),
+                  label: Text('Rozhovor'),
                 ),
                 ButtonSegment<bool>(
                   value: true,
                   icon: Icon(Icons.psychology_alt_outlined, size: 16),
-                  label: Text('Gramatický dril'),
+                  label: Text('Gram. dril'),
                 ),
               ],
               selected: {_isGrammarDrill},

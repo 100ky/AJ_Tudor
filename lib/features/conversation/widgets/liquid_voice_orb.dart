@@ -58,8 +58,8 @@ class _LiquidVoiceOrbState extends State<LiquidVoiceOrb>
 
     _waveController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 3),
-    )..repeat();
+      duration: _durationForState(widget.stateLabel),
+    )..repeat(reverse: true); // reverse=true: hladký přechod 0→1→0, žádný skok
 
     _colorController = AnimationController(
       vsync: this,
@@ -72,9 +72,43 @@ class _LiquidVoiceOrbState extends State<LiquidVoiceOrb>
     );
   }
 
+  /// Vrátí délku cyklu vlnění dle stavu.
+  /// Aktivní stavy jsou rychlejší, klidné stavy pomalejší.
+  Duration _durationForState(String state) {
+    switch (state) {
+      case 'listening':
+        return const Duration(milliseconds: 2200);
+      case 'speaking':
+        return const Duration(milliseconds: 1800);
+      case 'thinking':
+        return const Duration(milliseconds: 2800);
+      case 'connecting':
+      case 'reconnecting':
+        return const Duration(milliseconds: 1500);
+      case 'paused':
+        return const Duration(seconds: 5); // velmi pomalé dýchání
+      default: // idle, error
+        return const Duration(seconds: 4);
+    }
+  }
+
   @override
   void didUpdateWidget(LiquidVoiceOrb oldWidget) {
     super.didUpdateWidget(oldWidget);
+
+    // Změna rychlosti animace při změně stavu
+    if (oldWidget.stateLabel != widget.stateLabel) {
+      final newDuration = _durationForState(widget.stateLabel);
+      if (_waveController.duration != newDuration) {
+        // Plynulé zpomalení/zrychlení bez viditelného skoku
+        _waveController.duration = newDuration;
+        if (!_waveController.isAnimating) {
+          _waveController.repeat(reverse: true);
+        }
+      }
+    }
+
+    // Přechod barvy
     if (oldWidget.color != widget.color) {
       _colorTween = ColorTween(
         begin: _colorAnimation.value ?? oldWidget.color,
@@ -108,15 +142,27 @@ class _LiquidVoiceOrbState extends State<LiquidVoiceOrb>
           animation: Listenable.merge([_waveController, _colorAnimation]),
           builder: (context, _) {
             final color = _colorAnimation.value ?? widget.color;
+            // repeat(reverse:true) → _waveController.value jde 0→1→0 bez skoku
+            // Vynásobíme 2π pro sinusoidu
             final phase = _waveController.value * 2 * math.pi;
             final isActive = widget.stateLabel == 'listening' ||
                 widget.stateLabel == 'speaking';
+            final isPaused = widget.stateLabel == 'paused';
 
-            // Dýchací amplituda (idle: malá, active: reaguje na volume)
-            final breathe = math.sin(phase * 0.5) * 0.04;
-            final voiceAmp = isActive
-                ? (_currentVolume * 0.35 + breathe.abs() * 0.5)
-                : (math.sin(phase * 0.4).abs() * 0.08 + 0.01);
+            // Amplituda dle stavu:
+            // - active (listening/speaking): plně reaguje na hlasitost
+            // - thinking/connecting: mírné vlnění ve smyčce
+            // - paused: minimální, едва viditelné dýchání
+            // - idle/error: klidné pomalé dýchání
+            double voiceAmp;
+            if (isActive) {
+              voiceAmp = _currentVolume * 0.35 + 0.02;
+            } else if (isPaused) {
+              voiceAmp = _waveController.value * 0.03 + 0.005; // skoro statický
+            } else {
+              // idle, thinking, connecting – jemné dýchání
+              voiceAmp = _waveController.value * 0.07 + 0.01;
+            }
 
             return SizedBox(
               width: widget.size + 60, // Místo pro glow
