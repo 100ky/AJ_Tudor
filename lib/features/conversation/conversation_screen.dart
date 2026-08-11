@@ -132,19 +132,28 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
       body: Column(
         children: [
           // ── Přepínač režimu ────────────────────────────────────────────────
+          // Padding 4px na stranách → SegmentedButton dostane skoro plnou šířku
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+            padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
             child: SegmentedButton<bool>(
-              segments: const [
+              segments: [
                 ButtonSegment<bool>(
                   value: false,
-                  icon: Icon(Icons.chat_bubble_outline_rounded, size: 16),
-                  label: Text('Rozhovor'),
+                  icon: const Icon(Icons.chat_bubble_outline_rounded, size: 15),
+                  label: Text(
+                    'Volný rozhovor',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
                 ButtonSegment<bool>(
                   value: true,
-                  icon: Icon(Icons.psychology_alt_outlined, size: 16),
-                  label: Text('Gram. dril'),
+                  icon: const Icon(Icons.psychology_alt_outlined, size: 15),
+                  label: Text(
+                    'Gramatický dril',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ],
               selected: {_isGrammarDrill},

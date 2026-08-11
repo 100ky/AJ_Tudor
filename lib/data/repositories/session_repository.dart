@@ -356,8 +356,13 @@ class SessionRepository {
   /// Smaže lekci a všechna související data z databáze a upozorní profil.
   Future<Result<void>> deleteSession(int sessionId) async {
     try {
-      // Zjistíme, jestli mažeme tu úplně nejnovější (poslední) lekci
-      final latestSession = await (_db.select(_db.sessions)..orderBy([(t) => OrderingTerm.desc(t.startedAt)])).getSingleOrNull();
+      // Zjistíme, jestli mažeme tu úplně nejnovější (poslední) lekci.
+      // DŮLEŽITÉ: musíme přidat .limit(1) – getSingleOrNull() háže
+      // 'Bad state: Too many elements' pokud query vrátí více než 1 řádek.
+      final latestSession = await (_db.select(_db.sessions)
+            ..orderBy([(t) => OrderingTerm.desc(t.startedAt)])
+            ..limit(1))
+          .getSingleOrNull();
 
       await _db.transaction(() async {
         // Smazání transkriptů

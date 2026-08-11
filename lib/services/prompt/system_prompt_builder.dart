@@ -119,7 +119,25 @@ Přepisy řeči studenta pocházejí ze systému Speech-to-Text, který může o
 - Zaměř se primárně na chyby, které jsou jasně gramatické nebo lexikální (např. špatný čas, chybná předložka, česká slova), nikoliv na překlepy nebo nesrozumitelné přepisy.
 
 ÚKOLY PRO ZPRACOVÁNÍ STRUKTUROVANÉHO VÝSTUPU:
-1. Zhodnoť plynulost a odhadni úroveň (A1-B2).
+1. Zhodnoť plynulost a odhadni úroveň (A1-B2) podle oficiálního CEFR rámce (Common European Framework of Reference for Languages, Council of Europe). Použij tyto závazné deskriptory:
+
+   **A1 – Breakthrough (Začátečník)**
+   Can-do (Rady of Europe): "Can understand and use familiar everyday expressions and very basic phrases aimed at the satisfaction of needs of a concrete type."
+   Konkrétní znaky v přepisu: Odpovídá izolovanými slovy nebo nejzákladnějšími frázemi ("Yes", "No", "I like", "My name is..."). Nedokáže tvořit věty spontánně. Téměř nulová gramatika. Věty mají typicky 1-3 slova. Průměrná délka odpovědi: do 5 slov.
+
+   **A2 – Waystage (Mírně pokročilý začátečník)**
+   Can-do (Council of Europe): "Can understand sentences and frequently used expressions related to areas of most immediate relevance. Can communicate in simple and routine tasks requiring a simple and direct exchange of information."
+   Konkrétní znaky v přepisu: Tvoří jednoduché věty, ale s četnými chybami v Present Simple a Past Simple. Slovní zásoba omezená na nejběžnější témata (rodina, nakupování, čas). Průměrná délka odpovědi: 5-10 slov. Potřebuje hodně času na formulaci.
+
+   **B1 – Threshold (Samostatný uživatel – dolní)**
+   Can-do (Council of Europe): "Can understand the main points of clear standard input on familiar matters regularly encountered in work, school, leisure, etc. Can deal with most situations likely to arise whilst travelling in an area where the language is spoken. Can produce simple connected text on topics which are familiar or of personal interest."
+   Konkrétní znaky v přepisu: Vede srozumitelnou konverzaci, dokáže vyjádřit názor a popsat zkušenosti. Dělá chyby v Present Perfect, Conditional, předložkách a idiomech, ale komunikace je srozumitelná. Průměrná délka odpovědi: 10-25 slov. Odpovídá relativně plynule.
+
+   **B2 – Vantage (Samostatný uživatel – horní)**
+   Can-do (Council of Europe): "Can understand the main ideas of complex text on both concrete and abstract topics, including technical discussions in his/her field of specialisation. Can interact with a degree of fluency and spontaneity that makes regular interaction with native speakers quite possible without strain for either party."
+   Konkrétní znaky v přepisu: Mluví plynule a spontánně, používá idiomy a frázová slovesa přirozeně. Chyby jsou vzácné a spíše jemné (chybná předložka, člen). Průměrná délka odpovědi: 20+ slov. Interakce s rodilým mluvčím působí přirozeně.
+
+   DŮLEŽITÉ PRAVIDLO KALIBRACE: Pokud má student průměrnou délku odpovědi nad 10 slov a dokáže vyjádřit svůj názor, NESMÍŠ ho ohodnotit jako A1 nebo A2. Chyby jsou normální a očekávané součástí B1 a B2. Hodnoť primárně schopnost komunikovat, ne počet chyb.
 2. Identifikuj aktuální chyby (gramatika, lexikum).
 3. **MEMORY PRUNING (Zapomínání):** Křížově porovnej studentův výkon s polem "PAMĚŤ Z MINULOSTI" a aktuálními chybami. Identifikuj jevy, ve kterých student dříve chyboval, ale nyní je prokázal správně. Vypiš je do pole `resolvedErrors`. Tím zajistíš, že model přestane tyto jevy v budoucnu zbytečně testovat.
 4. **ANALÝZA FRUSTRACE A SENTIMENTU:** Analyzuj délky odpovědí a tón studenta. Pokud zaznamenáš známky únavy nebo krátké odpovědi ("I don't know"), zohledni to doporučením v poli `briefing` (např. "Student byl frustrovaný, buď extra povzbudivý").

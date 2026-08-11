@@ -170,12 +170,12 @@ abstract final class AppTheme {
       backgroundColor: surface,
       surfaceTintColor: Colors.transparent,
       indicatorColor: primary.withValues(alpha: 0.15),
-      height: 72, // Explicitní výška pro prostor pro labely
+      height: 76, // Vyšší = labely jako 'Nastavení' se nevlévají pryč
       labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
       labelTextStyle: WidgetStateProperty.resolveWith((states) {
         final isSelected = states.contains(WidgetState.selected);
         return GoogleFonts.plusJakartaSans(
-          fontSize: 10, // Menší velikost – 'Nastavení' se vejde
+          fontSize: 10,
           fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
           color: isSelected ? primary : onSurfaceMuted,
         );
@@ -289,8 +289,9 @@ abstract final class AppTheme {
         selectedBackgroundColor: primary.withValues(alpha: 0.12),
         side: const BorderSide(color: outline),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        iconSize: 15, // Menší ikona = více místa pro text
         textStyle: GoogleFonts.plusJakartaSans(
-          fontSize: 13,
+          fontSize: 12, // 13 → 12: zabrání zlomu řádky
           fontWeight: FontWeight.w500,
         ),
       ),
