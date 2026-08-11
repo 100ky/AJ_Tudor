@@ -36,6 +36,9 @@ class AudioSessionController {
   Stream<double> get captureVolumeStream => _captureService.volumeStream;
   Stream<double> get playbackVolumeStream => _playbackService.volumeStream;
 
+  /// Indikuje, zda se aktuálně fyzicky přehrává zvuk z reproduktoru
+  bool get isPlaying => _playbackService.isPlaying;
+
   void playPcm(List<int> bytes) {
     _playbackService.playPcmData(bytes);
   }

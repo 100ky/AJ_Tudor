@@ -265,12 +265,26 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       _setupClientCallbacks(client, _repo);
 
       // 2. Aktivace nahrávání mikrofonu
+      bool muteLogged = false; // Pomocná proměnná, abychom nezaspamovali konzoli
+      
       try {
         await _audio.start(onAudioChunk: (data) {
           // ECHO LOOP OCHRANA: Audio odesíláme POUZE ve stavu listening.
-          // Když model mluví (speaking) nebo je pauza, mikrofon data zahazuje.
           if (state.status == TutorState.listening) {
-            client.sendAudioChunk(data);
+            if (_audio.isPlaying) {
+              // Mute Window: Reproduktor ještě doznívá, takže data z mikrofonu zahazujeme
+              if (!muteLogged) {
+                L.w('🔇 MUTE WINDOW: Zahazuji zvuk z mikrofonu (reproduktor ještě hraje)');
+                muteLogged = true;
+              }
+            } else {
+              // Můžeme bezpečně poslouchat
+              if (muteLogged) {
+                L.i('🎤 MUTE WINDOW KONČÍ: Mikrofon je opět aktivní.');
+                muteLogged = false;
+              }
+              client.sendAudioChunk(data);
+            }
           }
         });
       } catch (audioError, stack) {
@@ -398,16 +412,18 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     client.onAudioReceived = () {
       _flushUserTranscript();
       _resetWatchdog();
-      _resetStuckTimer();
       if (state.status != TutorState.speaking) {
         state = state.copyWith(status: TutorState.speaking);
       }
+      _resetStuckTimer();
     };
 
     // Konec promluvy tutora (turn complete)
     client.onTurnComplete = () {
       _resetWatchdog();
       HapticFeedback.selectionClick();
+      L.i('Gemini hlásí TurnComplete. Přepínám na LISTENING. (Hraje reprák? ${_audio.isPlaying})');
+      
       if (state.currentTranscript.isNotEmpty) {
         final tutorText = state.currentTranscript;
         L.i('Tutor řekl: "$tutorText"');
@@ -775,8 +791,13 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     if (state.status == TutorState.speaking) {
       _stuckTimer = Timer(const Duration(seconds: 10), () {
         if (state.status == TutorState.speaking) {
-          L.w('Detekováno zaseknutí ve stavu speaking (10s ticho), vracím do listening.');
-          state = state.copyWith(status: TutorState.listening);
+          if (_audio.isPlaying) {
+             L.i('Stuck timer: Audio ještě hraje, odkládám reset o dalších 10s.');
+             _resetStuckTimer();
+          } else {
+             L.w('Detekováno zaseknutí ve stavu speaking (10s ticho), vracím do listening.');
+             state = state.copyWith(status: TutorState.listening);
+          }
         }
       });
     }

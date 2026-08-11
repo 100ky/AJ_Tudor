@@ -12,7 +12,7 @@ class AudioPlaybackService {
   /// Vrací true, pokud se v reproduktoru ještě přehrává audio (s bezpečnostní rezervou pro doznění).
   bool get isPlaying {
     if (!_isInitialized || !_isSupported) return false;
-    return DateTime.now().isBefore(_playbackEndTime.add(const Duration(milliseconds: 250)));
+    return DateTime.now().isBefore(_playbackEndTime.add(const Duration(milliseconds: 400)));
   }
 
   final StreamController<double> _volumeController = StreamController<double>.broadcast();
