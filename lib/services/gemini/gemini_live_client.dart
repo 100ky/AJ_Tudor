@@ -33,6 +33,12 @@ class GeminiLiveClient {
   /// Vrací [bool] vyjadřující, zda je klient momentálně připojen a nemá aktivní pokusy o reconnect.
   bool get isConnected => _channel != null && _reconnectAttempts == 0;
 
+  /// Vrací [bool], zda se zrovna v reproduktoru fyzicky přehrává zvuk AI.
+  bool get isPlaybackPlaying => _playbackService.isPlaying;
+
+  /// Přístup k audio playback službě.
+  AudioPlaybackService get playbackService => _playbackService;
+
   // Callbacky pro předávání událostí do UI/agenta
   
   /// Vyvoláno při přijetí části textové odpovědi od tutora.

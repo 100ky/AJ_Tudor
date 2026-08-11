@@ -7,6 +7,13 @@ import 'package:flutter/foundation.dart';
 class AudioPlaybackService {
   bool _isInitialized = false;
   bool _isSupported = true;
+  DateTime _playbackEndTime = DateTime.now();
+
+  /// Vrací true, pokud se v reproduktoru ještě přehrává audio (s bezpečnostní rezervou pro doznění).
+  bool get isPlaying {
+    if (!_isInitialized || !_isSupported) return false;
+    return DateTime.now().isBefore(_playbackEndTime.add(const Duration(milliseconds: 250)));
+  }
 
   final StreamController<double> _volumeController = StreamController<double>.broadcast();
   Stream<double> get volumeStream => _volumeController.stream;
@@ -38,6 +45,15 @@ class AudioPlaybackService {
       safeBytes = safeBytes.sublist(0, safeBytes.length - 1);
     }
     if (safeBytes.isEmpty) return;
+
+    // Připočteme délku přehrávání: 24000 Hz 16-bit mono = 48 bytů za milisekundu
+    final int durationMs = (safeBytes.length / 48.0).ceil();
+    final now = DateTime.now();
+    if (_playbackEndTime.isBefore(now)) {
+      _playbackEndTime = now.add(Duration(milliseconds: durationMs));
+    } else {
+      _playbackEndTime = _playbackEndTime.add(Duration(milliseconds: durationMs));
+    }
     
     try {
       // Výpočet hlasitosti pro vizualizaci
@@ -87,10 +103,12 @@ class AudioPlaybackService {
   }
 
   Future<void> interrupt() async {
+    _playbackEndTime = DateTime.now();
     await stop();
   }
 
   Future<void> stop() async {
+    _playbackEndTime = DateTime.now();
     if (_isSupported && _isInitialized) {
       try {
         await FlutterPcmSound.release();

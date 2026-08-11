@@ -353,9 +353,12 @@ class SessionRepository {
     return await (_db.select(_db.userProfiles)..where((t) => t.id.equals(1))).getSingleOrNull();
   }
 
-  /// Smaže lekci a všechna související data z databáze.
+  /// Smaže lekci a všechna související data z databáze a upozorní profil.
   Future<Result<void>> deleteSession(int sessionId) async {
     try {
+      // Zjistíme, jestli mažeme tu úplně nejnovější (poslední) lekci
+      final latestSession = await (_db.select(_db.sessions)..orderBy([(t) => OrderingTerm.desc(t.startedAt)])).getSingleOrNull();
+
       await _db.transaction(() async {
         // Smazání transkriptů
         await (_db.delete(_db.transcripts)..where((t) => t.sessionId.equals(sessionId))).go();
@@ -363,6 +366,30 @@ class SessionRepository {
         await (_db.delete(_db.errorLogs)..where((t) => t.sessionId.equals(sessionId))).go();
         // Smazání samotné session
         await (_db.delete(_db.sessions)..where((t) => t.id.equals(sessionId))).go();
+
+        // Aktualizace uživatelského profilu
+        final user = await (_db.select(_db.userProfiles)..where((t) => t.id.equals(1))).getSingleOrNull();
+        if (user != null) {
+          int newTotal = user.totalSessions > 0 ? user.totalSessions - 1 : 0;
+          
+          if (latestSession != null && latestSession.id == sessionId) {
+            // Pokud mažeme poslední lekci, vymažeme z paměti memoryBriefing,
+            // aby agent už neodkazoval na smazanou lekci v příštím hovoru.
+            await (_db.update(_db.userProfiles)..where((t) => t.id.equals(1))).write(
+              UserProfilesCompanion(
+                memoryBriefing: const Value(null),
+                totalSessions: Value(newTotal),
+              ),
+            );
+          } else {
+            // Jinak jen snížíme počet lekcí
+            await (_db.update(_db.userProfiles)..where((t) => t.id.equals(1))).write(
+              UserProfilesCompanion(
+                totalSessions: Value(newTotal),
+              ),
+            );
+          }
+        }
       });
       return Result.success(null);
     } catch (e, stack) {

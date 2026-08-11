@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../providers/database_provider.dart';
 import '../../data/database/app_database.dart';
 import '../../services/agents/memory_manager_agent.dart';
+import '../../services/agents/scenario_planner_agent.dart';
 
 class HistoryScreen extends ConsumerWidget {
   const HistoryScreen({super.key});
@@ -216,9 +217,12 @@ class _SessionDetailSheetState extends ConsumerState<_SessionDetailSheet> {
       if (mounted) {
         result.fold(
           (_) {
+            // Upozorníme scénáristu, aby přegeneroval scénáře na základě nového stavu
+            ref.read(scenarioPlannerAgentProvider).planScenarios();
+            
             Navigator.pop(context); // Zavřít bottom sheet
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Lekce byla smazána.'), backgroundColor: Colors.orange),
+              const SnackBar(content: Text('Lekce byla smazána. Paměť a scénáře se aktualizují.'), backgroundColor: Colors.orange),
             );
           },
           (failure) {

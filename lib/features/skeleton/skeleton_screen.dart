@@ -7,6 +7,7 @@ import '../agents/agents_screen.dart';
 import '../progress/progress_screen.dart';
 import '../history/history_screen.dart';
 import '../settings/settings_screen.dart';
+import '../../providers/config_provider.dart';
 
 /// Notifier pro správu indexu vybrané záložky v dolní navigaci.
 class _SelectedIndexNotifier extends Notifier<int> {
@@ -40,8 +41,35 @@ class SkeletonScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final currentIndex = ref.watch(_selectedIndexProvider);
+    final apiKey = ref.watch(apiKeyProvider);
+    final isLoaded = ref.watch(isApiKeyLoadedProvider);
+
+    // Pokud je načítání hotovo a klíč chybí, zobrazíme upozornění
+    final isMissingKey = isLoaded && (apiKey == null || apiKey.isEmpty);
 
     return Scaffold(
+      appBar: isMissingKey && currentIndex != 5 // Nezobrazovat, pokud jsme už v nastavení
+          ? AppBar(
+              backgroundColor: Colors.orange.shade100,
+              toolbarHeight: 48,
+              title: const Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20),
+                  SizedBox(width: 8),
+                  Text(
+                    'Chybí Gemini API klíč',
+                    style: TextStyle(fontSize: 14, color: Colors.black87),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => ref.read(_selectedIndexProvider.notifier).setIndex(5),
+                  child: const Text('NASTAVIT'),
+                ),
+              ],
+            )
+          : null,
       body: IndexedStack(
         index: currentIndex,
         children: _pages,

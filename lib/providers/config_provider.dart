@@ -15,14 +15,24 @@ final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
 /// Používá EncryptedSharedPreferences na Androidu a Keychain na iOS.
 final secureStorageProvider = Provider<FlutterSecureStorage>((ref) {
   return const FlutterSecureStorage(
-    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+    aOptions: AndroidOptions(
+      encryptedSharedPreferences: true,
+      resetOnError: true,
+    ),
   );
 });
 
+/// Správce stavu načtení API klíče.
+class ApiKeyLoadedNotifier extends Notifier<bool> {
+  @override
+  bool build() => false;
+  void setLoaded() => state = true;
+}
+
+/// Globální provider pro sledování, zda již proběhl první pokus o načtení API klíče.
+final isApiKeyLoadedProvider = NotifierProvider<ApiKeyLoadedNotifier, bool>(ApiKeyLoadedNotifier.new);
+
 /// Správce API klíče pro Gemini.
-/// 
-/// Zajišťuje bezpečné uložení klíče a automatickou migraci ze starého
-/// nezabezpečeného úložiště (SharedPreferences) do Secure Storage.
 class ApiKeyNotifier extends Notifier<String?> {
   static const _key = 'gemini_api_key';
 
@@ -36,7 +46,15 @@ class ApiKeyNotifier extends Notifier<String?> {
   /// Asynchronně načte klíč a provede případnou migraci.
   Future<void> _loadKey() async {
     final storage = ref.read(secureStorageProvider);
-    final key = await storage.read(key: _key);
+    String? key;
+    
+    try {
+      key = await storage.read(key: _key);
+    } catch (e) {
+      // V případě fatální chyby čtení (např. poškozený Keystore) 
+      // se díky resetOnError: true úložiště vyčistí, ale read může vrátit null/chybu.
+      key = null;
+    }
     
     // Zpětná kompatibilita: Pokud klíč není v secure storage, zkusíme SharedPreferences
     if (key == null) {
@@ -51,6 +69,8 @@ class ApiKeyNotifier extends Notifier<String?> {
     }
     
     state = key;
+    // Označíme, že první načtení je hotovo
+    ref.read(isApiKeyLoadedProvider.notifier).setLoaded();
   }
 
   /// Uloží nový API klíč do šifrovaného úložiště.
@@ -58,6 +78,7 @@ class ApiKeyNotifier extends Notifier<String?> {
     final storage = ref.read(secureStorageProvider);
     await storage.write(key: _key, value: key);
     state = key;
+    ref.read(isApiKeyLoadedProvider.notifier).setLoaded();
   }
   
   /// Odstraní API klíč z úložiště.
