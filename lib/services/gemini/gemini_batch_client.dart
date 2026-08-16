@@ -48,8 +48,11 @@ class GeminiBatchClient {
     // Začínáme primárně vybraným modelem a v případě selhání pokračujeme na záložní.
     final modelsToTry = {
       primaryModelName,
+      GeminiModels.flash3_7,
+      GeminiModels.flash3_6,
       GeminiModels.flashLite3_5,
       GeminiModels.flash3_5,
+      GeminiModels.flashLite3_1,
     }.toList();
 
     String lastError = '';

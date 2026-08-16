@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../core/constants/gemini_models.dart';
 import '../services/gemini/gemini_live_client.dart';
 import '../services/gemini/gemini_batch_client.dart';
 import '../services/prompt/system_prompt_builder.dart';
@@ -38,12 +39,11 @@ final geminiBatchClientProvider = Provider<GeminiBatchClient?>((ref) {
 
 /// Specializovaný provider pro analýzu dokončených lekcí.
 /// 
-/// Využívá fixní model (Gemini 3.5 Flash) pro zajištění konzistentních výsledků analýzy
+/// Využívá primárně Gemini 3.7 Flash pro zajištění nejkvalitnějších výsledků analýzy
 /// a specifický systémový prompt pro vyhodnocování chyb studenta.
 final geminiAnalysisClientProvider = Provider<GeminiBatchClient?>((ref) {
   final apiKey = ref.watch(apiKeyProvider);
-  // Pro analýzu vynutíme 3.5 Flash, který má nejlepší poměr cena/výkon pro strukturovaný výstup
-  const modelName = 'gemini-3.5-flash';
+  const modelName = GeminiModels.flash3_7;
   
   if (apiKey == null || apiKey.isEmpty) return null;
   return GeminiBatchClient(
