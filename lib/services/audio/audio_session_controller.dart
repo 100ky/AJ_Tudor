@@ -17,11 +17,21 @@ class AudioSessionController {
   Future<void> start({required Function(List<int>) onAudioChunk}) async {
     L.i('Startování audio session...');
     try {
+      await _captureSubscription?.cancel();
       await _captureService.startRecording();
       _captureSubscription = _captureService.audioStream.listen(onAudioChunk);
     } catch (e, stack) {
       L.e('Selhalo startování nahrávání', e, stack);
       rethrow;
+    }
+  }
+
+  /// Ověří, zda mikrofon nahrává, a pokud ne (např. po návratu z pozadí), spustí jej.
+  Future<void> ensureRecording({required Function(List<int>) onAudioChunk}) async {
+    final recording = await _captureService.isRecording();
+    if (!recording || _captureSubscription == null) {
+      L.i('Mikrofon nebyl aktivní, restartuji nahrávání...');
+      await start(onAudioChunk: onAudioChunk);
     }
   }
 

@@ -161,12 +161,31 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     // Pokud je socket odpojen, přepneme stav na reconnecting a vynutíme reconnect.
     if (state == AppLifecycleState.resumed) {
       final client = ref.read(geminiLiveClientProvider);
-      if (client != null && this.state.status != TutorState.idle && this.state.status != TutorState.error) {
+      if (client != null && this.state.status != TutorState.idle && this.state.status != TutorState.error && this.state.status != TutorState.paused) {
         if (!client.isConnected) {
-          L.w('Detekováno odpojení po resume, zkouším reconnect...');
+          L.w('Detekováno odpojení po resume, zkouším obnovit spojení...');
           this.state = this.state.copyWith(status: TutorState.reconnecting);
-          client.disconnect();
+          client.forceReconnect();
+        } else {
+          _resetWatchdog();
         }
+
+        // Ověříme, zda mikrofon po návratu z pozadí stále nahrává
+        _audio.ensureRecording(onAudioChunk: (data) {
+          if (this.state.status == TutorState.listening) {
+            if (_audio.isPlaying) {
+              // Mute window: Reproduktor doznívá
+            } else {
+              client.sendAudioChunk(data);
+            }
+          } else if (this.state.status == TutorState.speaking) {
+            if (_turnCompleteReceived && !_audio.isPlaying) {
+              this.state = this.state.copyWith(status: TutorState.listening);
+              _turnCompleteReceived = false;
+              L.i('🎤 Zvuk dozrál, přepínám stav z speaking na listening.');
+            }
+          }
+        });
       }
     }
   }
@@ -547,7 +566,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     // Změna stavu připojení na síťové vrstvě
     client.onConnectionStatusChanged = (isConnected) {
       if (!isConnected && !_isStopping) {
-        if (state.status == TutorState.listening || state.status == TutorState.speaking) {
+        if (state.status == TutorState.listening || state.status == TutorState.speaking || state.status == TutorState.thinking) {
           // Výpadek uprostřed aktivního hovoru → reconnecting
           L.w('Spojení ztraceno během hovoru, přepínám na reconnecting...');
           state = state.copyWith(status: TutorState.reconnecting);
@@ -723,7 +742,17 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     try {
       await _audio.start(onAudioChunk: (data) {
         if (state.status == TutorState.listening) {
-          client.sendAudioChunk(data);
+          if (_audio.isPlaying) {
+            // Mute window
+          } else {
+            client.sendAudioChunk(data);
+          }
+        } else if (state.status == TutorState.speaking) {
+          if (_turnCompleteReceived && !_audio.isPlaying) {
+            state = state.copyWith(status: TutorState.listening);
+            _turnCompleteReceived = false;
+            L.i('🎤 Zvuk dozrál, přepínám stav z speaking na listening.');
+          }
         }
       });
     } catch (e) {
@@ -733,8 +762,9 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     }
     
     if (!client.isConnected) {
-      L.w('WebSocket je aktuálně odpojen, přecházím do stavu reconnecting...');
+      L.w('WebSocket je aktuálně odpojen, přecházím do stavu reconnecting a spouštím reconnect...');
       state = state.copyWith(status: TutorState.reconnecting);
+      client.forceReconnect();
     } else {
       state = state.copyWith(status: TutorState.listening);
     }

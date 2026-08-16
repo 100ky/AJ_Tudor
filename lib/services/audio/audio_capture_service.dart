@@ -13,7 +13,22 @@ class AudioCaptureService {
   Stream<List<int>> get audioStream => _audioDataController.stream;
   Stream<double> get volumeStream => _volumeController.stream;
 
+  /// Ověří, zda je mikrofon aktuálně aktivní a nahrává.
+  Future<bool> isRecording() async {
+    try {
+      return await _record.isRecording();
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> startRecording() async {
+    try {
+      if (await _record.isRecording()) {
+        await stopRecording();
+      }
+    } catch (_) {}
+
     if (await _record.hasPermission()) {
       final stream = await _record.startStream(
         const RecordConfig(

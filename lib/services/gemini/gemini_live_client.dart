@@ -532,17 +532,32 @@ class GeminiLiveClient {
     return cleanText;
   }
 
-  /// Vynutí restartování spojení (zavře socket a spustí reconnect mechanismus).
+  /// Vynutí restartování spojení (zavře socket a okamžitě spustí nové připojení).
   void forceReconnect() {
     L.w('WebSocket: Vynucený reconnect...');
     _isManualDisconnect = false;
-    _channel?.sink.close();
+    _reconnectAttempts = 0;
+    try {
+      _channel?.sink.close();
+    } catch (_) {}
+    _channel = null;
+
+    if (_lastModelName != null && _lastSystemPrompt != null) {
+      connect(
+        modelName: _lastModelName!,
+        systemPrompt: _lastSystemPrompt!,
+        voiceName: _lastVoiceName,
+        isReconnect: true,
+      );
+    }
   }
 
   /// Ručně odpojí klienta a zruší všechny probíhající operace.
   void disconnect() {
     _isManualDisconnect = true;
-    _channel?.sink.close();
+    try {
+      _channel?.sink.close();
+    } catch (_) {}
     _channel = null;
   }
 }
