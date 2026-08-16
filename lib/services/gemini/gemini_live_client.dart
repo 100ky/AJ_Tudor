@@ -25,7 +25,8 @@ class GeminiLiveClient {
   String? _lastModelName;
   String? _lastSystemPrompt;
   String _lastVoiceName = 'Puck';
-  String? _lastResumptionHandle;
+  // Poznámka: sessionResumptionConfig není podporováno gemini-3.1-flash-live-preview.
+  // Pole _lastResumptionHandle bylo odstraněno — způsobovalo 1007 smyčku po GoAway.
 
   // Pocitadlo po sobe jdoucich ridicich tokenu (ochrana pred zaseknutim v loopu)
   int _consecutiveControlTokens = 0;
@@ -88,10 +89,7 @@ class GeminiLiveClient {
     _lastSystemPrompt = systemPrompt;
     _lastVoiceName = voiceName;
     
-    // Pokud se nejedná o reconnect, zahazujeme starý resumption handle (nové sezení).
-    if (!isReconnect) {
-      _lastResumptionHandle = null;
-    }
+    // isReconnect příznak se zachovává pro případné budoucí použití.
     
     // Čištění starého spojení, pokud existuje.
     _channel?.sink.close();
@@ -214,11 +212,8 @@ class GeminiLiveClient {
         // Povolíme transkripci jak pro vstup, tak pro výstup
         'inputAudioTranscription': {},
         'outputAudioTranscription': {},
-        // Pokud máme resumption handle z předchozího odpojení, pokusíme se navázat na kontext
-        if (_lastResumptionHandle != null)
-          'sessionResumptionConfig': {
-            'handle': _lastResumptionHandle,
-          },
+        // POZNÁMKA: sessionResumptionConfig není podporováno gemini-3.1-flash-live-preview.
+        // Posílání tohoto pole způsobovalo 1007 smyčku po GoAway signálu — odstraněno.
         // Deklarace funkcí (Function Calling)
         'tools': [
           {
@@ -477,16 +472,10 @@ class GeminiLiveClient {
         L.w('ToolCall zrušen serverem.');
       }
 
-      // Zpracování aktualizace Session Resumption (ukládání handle pro případný reconnect)
+      // sessionResumptionUpdate: preview model tuto funkci nepodporuje při reconnectu,
+      // proto handle ignorujeme (způsoboval 1007 smyčku).
       if (data.containsKey('sessionResumptionUpdate') || data.containsKey('session_resumption_update')) {
-        final update = data['sessionResumptionUpdate'] ?? data['session_resumption_update'];
-        if (update != null && update is Map) {
-          final newHandle = update['newHandle'] ?? update['new_handle'];
-          if (newHandle != null && newHandle is String) {
-            L.i('SessionResumptionUpdate: Obdržen nový resumption handle: $newHandle');
-            _lastResumptionHandle = newHandle;
-          }
-        }
+        L.d('SessionResumptionUpdate: Přijat (ignorujeme — preview model nepodporuje při reconnectu).');
       }
 
       // Detekce signálu GoAway (server plánuje brzy ukončit socket)

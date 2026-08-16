@@ -9,7 +9,7 @@ class GeminiModels {
   static const String flash3_5 = 'gemini-3.5-flash';
   static const String flashLite3_5 = 'gemini-3.5-flash-lite';
   static const String flashLite3_1 = 'gemini-3.1-flash-lite';
-  static const String flash2_5 = 'gemini-2.5-flash';
+
 
   // --- Model pro Multimodal Live API (WebSocket / Voice Tutor) ---
   /// Model optimalizovaný pro real-time dialog a voice-first AI aplikace.
@@ -20,7 +20,8 @@ class GeminiModels {
   static const String defaultLiveModel = liveVoiceModel;
 
   /// Model pro generování multimodálních embeddingů (text, obraz, audio, video).
-  static const String embedding = 'gemini-embedding-2';
+  /// Endpoint dle dokumentace: gemini-embedding-2-preview
+  static const String embedding = 'gemini-embedding-2-preview';
 
   /// Výchozí model pro standardní textový chat.
   /// gemini-3.7-flash: vydán 13. 8. 2026, optimalizovaný pro kódování a agentní workflows,

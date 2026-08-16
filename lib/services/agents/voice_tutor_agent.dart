@@ -550,10 +550,17 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
 
     // Změna stavu připojení na síťové vrstvě
     client.onConnectionStatusChanged = (isConnected) {
-      if (!isConnected && state.status != TutorState.idle && state.status != TutorState.error && !_isStopping) {
-        L.w('Spojení ztraceno během hovoru, přepínám na reconnecting...');
-        state = state.copyWith(status: TutorState.reconnecting);
-      } else if (isConnected && state.status == TutorState.reconnecting) {
+      if (!isConnected && !_isStopping) {
+        if (state.status == TutorState.listening || state.status == TutorState.speaking) {
+          // Výpadek uprostřed aktivního hovoru → reconnecting
+          L.w('Spojení ztraceno během hovoru, přepínám na reconnecting...');
+          state = state.copyWith(status: TutorState.reconnecting);
+        } else if (state.status == TutorState.connecting) {
+          // Výpadek při inicializaci (např. 1007 od preview API) → zůstáváme v connecting
+          L.w('Spojení uzavřeno při inicializaci (pravděpodobně 1007). Auto-reconnect probíhá, zůstávám v connecting...');
+          // stav neměníme, auto-reconnect v GeminiLiveClient se postará o retry
+        }
+      } else if (isConnected && (state.status == TutorState.reconnecting || state.status == TutorState.connecting)) {
         L.i('Spojení obnoveno, vracím se do stavu listening.');
         state = state.copyWith(status: TutorState.listening);
       }
@@ -588,10 +595,24 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         L.e('Chyba při zastavování audia', e, stack);
       }
       
-      // Odpojení WebSocket klienta
+      // Odpojení WebSocket klienta a odregistrování všech callbacků,
+      // aby žádný zpožděný stream event (onDone, onError) nemohl měnit stav po konci session.
       if (ref.mounted) {
         try {
-          ref.read(geminiLiveClientProvider)?.disconnect();
+          final liveClient = ref.read(geminiLiveClientProvider);
+          if (liveClient != null) {
+            liveClient.disconnect();
+            // Nullujeme callbacky — po disconnect() nás jejich případné zpožděné spuštění nezajímá
+            liveClient.onTextReceived = null;
+            liveClient.onUserTranscriptReceived = null;
+            liveClient.onAudioReceived = null;
+            liveClient.onTurnComplete = null;
+            liveClient.onError = null;
+            liveClient.onConnectionStatusChanged = null;
+            liveClient.onToolCall = null;
+            liveClient.onInterrupted = null;
+            liveClient.onTokenCountUpdate = null;
+          }
         } catch (e, stack) {
           L.e('Chyba při odpojování WebSocketu', e, stack);
         }

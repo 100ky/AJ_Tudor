@@ -457,11 +457,6 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
   Widget _buildLiveTranscript(String transcript) {
     if (transcript.isEmpty) return const SizedBox.shrink();
 
-    final sentences = transcript.split(RegExp(r'(?<=[.!?])\s+'));
-    final displayTranscript = sentences.length > 3
-        ? '... ${sentences.sublist(sentences.length - 3).join(' ')}'
-        : transcript;
-
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(
@@ -484,7 +479,7 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Blikající kurzor místo CircularProgressIndicator
+                // Blikající kurzor
                 AnimatedBuilder(
                   animation: _cursorController,
                   builder: (context, _) => Container(
@@ -510,8 +505,10 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
               ],
             ),
             const SizedBox(height: 8),
+            // Zobrazujeme celý transcript bez ořezávání — auto-scroll
+            // zajistí, že uživatel vždy vidí nejnovější text.
             Text(
-              displayTranscript,
+              transcript,
               style: GoogleFonts.plusJakartaSans(
                 fontSize: 16,
                 fontWeight: FontWeight.w400,
