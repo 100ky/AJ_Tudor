@@ -41,7 +41,6 @@ dependencies:
   record: ^7.1.1
   flutter_pcm_sound: ^3.3.3
   web_socket_channel: ^3.0.3
-  google_generative_ai: ^0.4.7
   dio: ^5.10.0
   json_annotation: ^4.12.0
   shared_preferences: ^2.5.5
