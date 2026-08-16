@@ -99,6 +99,10 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
     final stateLabel = _stateToLabel(tutorState.status);
     final orbColor = AppTheme.orbColorForState(stateLabel);
 
+    final isIdle = tutorState.status == TutorState.idle ||
+        tutorState.status == TutorState.error;
+    final isActive = !isIdle;
+
     // Automatický scroll při změně zpráv nebo transkriptu
     ref.listen(voiceTutorAgentProvider, (previous, next) {
       if (previous?.messages.length != next.messages.length ||
@@ -115,241 +119,512 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
                 ? audioController.playbackVolumeStream
                 : null;
 
+    final visibleMessages = _getVisibleMessages(tutorState);
+    final hasMessages =
+        visibleMessages.isNotEmpty || tutorState.currentTranscript.isNotEmpty;
+
     return Scaffold(
       backgroundColor: AppTheme.background,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
+      body: SafeArea(
+        bottom: false,
+        child: Column(
           children: [
-            Container(
-              width: 8,
-              height: 8,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: tutorState.status == TutorState.idle ||
-                        tutorState.status == TutorState.error
-                    ? AppTheme.onSurfaceMuted
-                    : AppTheme.success,
-                boxShadow: tutorState.status != TutorState.idle &&
-                        tutorState.status != TutorState.error
-                    ? [
-                        BoxShadow(
-                          color: AppTheme.success.withValues(alpha: 0.6),
-                          blurRadius: 6,
-                          spreadRadius: 1,
+            // ── Adaptivní hlavička (přechod mezi Hero a Compact režimem) ───────
+            AnimatedCrossFade(
+              duration: const Duration(milliseconds: 350),
+              firstCurve: Curves.easeInOutCubic,
+              secondCurve: Curves.easeInOutCubic,
+              crossFadeState: isIdle
+                  ? CrossFadeState.showFirst
+                  : CrossFadeState.showSecond,
+              firstChild: _buildHeroHeader(
+                tutorState: tutorState,
+                stateLabel: stateLabel,
+                orbColor: orbColor,
+                activeVolumeStream: activeVolumeStream,
+              ),
+              secondChild: _buildCompactHeader(
+                tutorState: tutorState,
+                stateLabel: stateLabel,
+                orbColor: orbColor,
+                activeVolumeStream: activeVolumeStream,
+              ),
+            ),
+
+            // ── Chybová zpráva ────────────────────────────────────────────────
+            if (tutorState.errorMessage.isNotEmpty)
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: AppTheme.error.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                        color: AppTheme.error.withValues(alpha: 0.35)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.error_outline_rounded,
+                          color: AppTheme.error, size: 18),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          tutorState.errorMessage,
+                          style: GoogleFonts.plusJakartaSans(
+                            color: AppTheme.error,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
-                      ]
-                    : null,
+                      ),
+                    ],
+                  ),
+                ),
               ),
+
+            // ── Hlavní konverzační prostor (bubliny + live přepis) ────────────
+            Expanded(
+              child: !hasMessages && isIdle
+                  ? _buildEmptyState(tutorState)
+                  : ShaderMask(
+                      shaderCallback: (Rect bounds) {
+                        return const LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.transparent,
+                            Colors.white,
+                            Colors.white,
+                          ],
+                          stops: [0.0, 0.08, 1.0],
+                        ).createShader(bounds);
+                      },
+                      blendMode: BlendMode.dstIn,
+                      child: ListView.builder(
+                        controller: _scrollController,
+                        padding: EdgeInsets.fromLTRB(
+                          16,
+                          isActive ? 12 : 24,
+                          16,
+                          isActive ? 100 : 16,
+                        ),
+                        itemCount: _getVisibleItemCount(tutorState),
+                        itemBuilder: (context, index) {
+                          // Live transkript na konci listu
+                          if (index == visibleMessages.length) {
+                            return _buildLiveTranscript(
+                                tutorState.currentTranscript);
+                          }
+
+                          final msg = visibleMessages[index];
+
+                          // Dynamická opacity pro vizuální hloubku
+                          final distanceFromEnd =
+                              visibleMessages.length - index;
+                          final double opacity =
+                              (1.0 - (distanceFromEnd * 0.08))
+                                  .clamp(0.15, 1.0);
+
+                          return AnimatedOpacity(
+                            duration: const Duration(milliseconds: 400),
+                            opacity: opacity,
+                            child: _buildMessageBubble(msg),
+                          );
+                        },
+                      ),
+                    ),
             ),
-            const SizedBox(width: 8),
-            Text(
-              'Hlasový Tutor',
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 17,
-                fontWeight: FontWeight.w600,
-                color: AppTheme.onBackground,
-              ),
-            ),
+
+            // ── Spodní ovládací panel ──────────────────────────────────────────
+            _buildControls(tutorState, isIdle, isActive),
           ],
         ),
       ),
+    );
+  }
 
-      body: Column(
+  // ── Hero Header (Klidový stav / Idle) ──────────────────────────────────────
+  Widget _buildHeroHeader({
+    required VoiceTutorState tutorState,
+    required String stateLabel,
+    required Color orbColor,
+    required Stream<double>? activeVolumeStream,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+      child: Column(
         children: [
-          // ── Orb sekce ──────────────────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Column(
-              children: [
-                Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    // Liquidní orb
-                    LiquidVoiceOrb(
-                      color: orbColor,
-                      stateLabel: stateLabel,
-                      volumeStream: activeVolumeStream,
-                      size: 160,
-                    ),
-                    // Ikona stavu (přes orb)
-                    OrbStateIcon(stateLabel: stateLabel, color: orbColor),
-                  ],
+          // Titulek Hlasový Tutor
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: tutorState.status == TutorState.idle ||
+                          tutorState.status == TutorState.error
+                      ? AppTheme.onSurfaceMuted
+                      : AppTheme.success,
+                  boxShadow: tutorState.status != TutorState.idle &&
+                          tutorState.status != TutorState.error
+                      ? [
+                          BoxShadow(
+                            color: AppTheme.success.withValues(alpha: 0.6),
+                            blurRadius: 6,
+                            spreadRadius: 1,
+                          ),
+                        ]
+                      : null,
                 ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Hlasový Tutor',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.onBackground,
+                  letterSpacing: 0.2,
+                ),
+              ),
+            ],
+          ),
 
-                const SizedBox(height: 4),
+          const SizedBox(height: 14),
 
-                // Stavový text
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 300),
-                  child: Text(
-                    _getStatusText(tutorState.status),
-                    key: ValueKey(tutorState.status),
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                      color: AppTheme.onSurfaceMuted,
-                      letterSpacing: 0.2,
+          // Velký Liquid Orb
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              LiquidVoiceOrb(
+                color: orbColor,
+                stateLabel: stateLabel,
+                volumeStream: activeVolumeStream,
+                size: 150,
+              ),
+              OrbStateIcon(
+                stateLabel: stateLabel,
+                color: orbColor,
+                size: 34,
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 10),
+
+          // Stavový text
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 300),
+            child: Text(
+              _getStatusText(tutorState.status),
+              key: ValueKey(tutorState.status),
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+                color: AppTheme.onSurfaceMuted,
+                letterSpacing: 0.2,
+              ),
+            ),
+          ),
+
+          // Aktivní scénář chip
+          if (tutorState.selectedScenarioId != null) ...[
+            const SizedBox(height: 8),
+            Chip(
+              avatar: Icon(
+                Icons.theater_comedy_rounded,
+                size: 14,
+                color: AppTheme.accent,
+              ),
+              label: Text(
+                'Role-Play scénář aktivní',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 12,
+                  color: AppTheme.accent,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              backgroundColor: AppTheme.accent.withValues(alpha: 0.1),
+              side: BorderSide(color: AppTheme.accent.withValues(alpha: 0.3)),
+              deleteIcon: Icon(Icons.close_rounded,
+                  size: 14, color: AppTheme.onSurfaceMuted),
+              onDeleted: () {
+                ref
+                    .read(voiceTutorAgentProvider.notifier)
+                    .selectScenario(0, '');
+              },
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ── Kompaktní Header (Aktivní hovor) ───────────────────────────────────────
+  Widget _buildCompactHeader({
+    required VoiceTutorState tutorState,
+    required String stateLabel,
+    required Color orbColor,
+    required Stream<double>? activeVolumeStream,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppTheme.surface.withValues(alpha: 0.85),
+        border: Border(
+          bottom: BorderSide(
+            color: AppTheme.outline.withValues(alpha: 0.6),
+            width: 1,
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          // Mini Liquid Orb
+          SizedBox(
+            width: 44,
+            height: 44,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                LiquidVoiceOrb(
+                  color: orbColor,
+                  stateLabel: stateLabel,
+                  volumeStream: activeVolumeStream,
+                  size: 42,
+                ),
+                OrbStateIcon(
+                  stateLabel: stateLabel,
+                  color: orbColor,
+                  size: 18,
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(width: 12),
+
+          // Stavová pilulka
+          Expanded(
+            child: Row(
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: orbColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: orbColor.withValues(alpha: 0.35),
+                      width: 1,
                     ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: orbColor,
+                          boxShadow: [
+                            BoxShadow(
+                              color: orbColor.withValues(alpha: 0.6),
+                              blurRadius: 4,
+                              spreadRadius: 1,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 250),
+                        child: Text(
+                          _getStatusText(tutorState.status),
+                          key: ValueKey(tutorState.status),
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: orbColor,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
 
-                // Aktivní scénář chip
+                // Kompaktní Scenario badge
                 if (tutorState.selectedScenarioId != null) ...[
-                  const SizedBox(height: 10),
-                  Chip(
-                    avatar: Icon(
-                      Icons.theater_comedy_rounded,
-                      size: 14,
-                      color: AppTheme.accent,
-                    ),
-                    label: Text(
-                      'Role-Play scénář aktivní',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 12,
-                        color: AppTheme.accent,
-                        fontWeight: FontWeight.w500,
+                  const SizedBox(width: 8),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: AppTheme.accent.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: AppTheme.accent.withValues(alpha: 0.3),
                       ),
                     ),
-                    backgroundColor:
-                        AppTheme.accent.withValues(alpha: 0.1),
-                    side: BorderSide(
-                        color: AppTheme.accent.withValues(alpha: 0.3)),
-                    deleteIcon: Icon(Icons.close_rounded,
-                        size: 14, color: AppTheme.onSurfaceMuted),
-                    onDeleted: () {
-                      ref
-                          .read(voiceTutorAgentProvider.notifier)
-                          .selectScenario(0, '');
-                    },
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.theater_comedy_rounded,
+                          size: 13,
+                          color: AppTheme.accent,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Roleplay',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.accent,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ],
             ),
           ),
 
-          // ── Chybová zpráva ────────────────────────────────────────────────
-          if (tutorState.errorMessage.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                decoration: BoxDecoration(
-                  color: AppTheme.error.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                      color: AppTheme.error.withValues(alpha: 0.3)),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.error_outline_rounded,
-                        color: AppTheme.error, size: 16),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        tutorState.errorMessage,
-                        style: GoogleFonts.plusJakartaSans(
-                          color: AppTheme.error,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-          // ── Historie konverzace s efektem mizení (ShaderMask) ─────────────
-          Expanded(
-            child: ShaderMask(
-              shaderCallback: (Rect bounds) {
-                return const LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Colors.transparent, Colors.white, Colors.white],
-                  stops: [0.0, 0.15, 1.0],
-                ).createShader(bounds);
+          // Tlačítko pro rychlé přepnutí/odstranění scénáře nebo info
+          if (tutorState.selectedScenarioId != null)
+            GestureDetector(
+              onTap: () {
+                ref
+                    .read(voiceTutorAgentProvider.notifier)
+                    .selectScenario(0, '');
               },
-              blendMode: BlendMode.dstIn,
-              child: ListView.builder(
-                controller: _scrollController,
-                padding:
-                    const EdgeInsets.fromLTRB(16, 32, 16, 8),
-                itemCount: _getVisibleItemCount(tutorState),
-                itemBuilder: (context, index) {
-                  final visibleMessages = _getVisibleMessages(tutorState);
-
-                  // Live transkript na konci listu
-                  if (index == visibleMessages.length) {
-                    return _buildLiveTranscript(tutorState.currentTranscript);
-                  }
-
-                  final msg = visibleMessages[index];
-
-                  // Dynamická opacity dle vzdálenosti od konce
-                  final distanceFromEnd = visibleMessages.length - index;
-                  final double opacity =
-                      (1.0 - (distanceFromEnd * 0.12)).clamp(0.06, 1.0);
-
-                  return AnimatedOpacity(
-                    duration: const Duration(milliseconds: 500),
-                    opacity: opacity,
-                    child: _buildMessageBubble(msg),
-                  );
-                },
+              child: Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppTheme.surfaceVariant,
+                ),
+                child: Icon(Icons.close_rounded,
+                    size: 14, color: AppTheme.onSurfaceMuted),
               ),
             ),
-          ),
-
-          // ── Spodní ovládání ────────────────────────────────────────────────
-          _buildControls(tutorState),
         ],
       ),
     );
   }
 
-  Widget _buildControls(VoiceTutorState tutorState) {
-    final isIdle = tutorState.status == TutorState.idle ||
-        tutorState.status == TutorState.error;
+  // ── Prázdný stav před zahájením konverzace ─────────────────────────────────
+  Widget _buildEmptyState(VoiceTutorState tutorState) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: AppTheme.primary.withValues(alpha: 0.08),
+                border: Border.all(
+                  color: AppTheme.primary.withValues(alpha: 0.2),
+                ),
+              ),
+              child: Icon(
+                Icons.record_voice_over_rounded,
+                size: 32,
+                color: AppTheme.primaryLight,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Připraven k hlasové lekci',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.onBackground,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Stiskněte tlačítko mikrofonu a začněte mluvit anglicky. Tutor vás okamžitě uslyší.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 13,
+                color: AppTheme.onSurfaceMuted,
+                height: 1.4,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Spodní ovládací prvky (Mic / Pause / Stop / Topic) ─────────────────────
+  Widget _buildControls(
+      VoiceTutorState tutorState, bool isIdle, bool isActive) {
     final isPaused = tutorState.status == TutorState.paused;
-    final isActive = !isIdle;
     final isLiveSession = tutorState.status == TutorState.listening ||
         tutorState.status == TutorState.speaking ||
         tutorState.status == TutorState.thinking;
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 40),
+      width: double.infinity,
+      padding: EdgeInsets.fromLTRB(
+        24,
+        isActive ? 8 : 12,
+        24,
+        isActive ? 24 : 32,
+      ),
+      decoration: isActive
+          ? BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.bottomCenter,
+                end: Alignment.topCenter,
+                colors: [
+                  AppTheme.background,
+                  AppTheme.background.withValues(alpha: 0.85),
+                  Colors.transparent,
+                ],
+              ),
+            )
+          : null,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // PAUSE / RESUME (zobrazí se jen během aktivního hovoru)
+          // PAUSE / RESUME (během aktivního hovoru)
           if (isActive)
-            AnimatedOpacity(
-              duration: const Duration(milliseconds: 200),
-              opacity: isActive ? 1.0 : 0.0,
-              child: _buildSecondaryButton(
-                heroTag: 'pause_btn',
-                icon: isPaused
-                    ? Icons.play_arrow_rounded
-                    : Icons.pause_rounded,
-                color: AppTheme.warning,
-                onPressed: () {
-                  final notifier =
-                      ref.read(voiceTutorAgentProvider.notifier);
-                  if (isPaused) {
-                    notifier.resumeSession();
-                  } else {
-                    notifier.pauseSession();
-                  }
-                },
-              ),
+            _buildSecondaryButton(
+              heroTag: 'pause_btn',
+              icon: isPaused
+                  ? Icons.play_arrow_rounded
+                  : Icons.pause_rounded,
+              color: AppTheme.warning,
+              tooltip: isPaused ? 'Pokračovat' : 'Pozastavit',
+              onPressed: () {
+                final notifier =
+                    ref.read(voiceTutorAgentProvider.notifier);
+                if (isPaused) {
+                  notifier.resumeSession();
+                } else {
+                  notifier.pauseSession();
+                }
+              },
             ),
 
-          if (isActive) const SizedBox(width: 20),
+          if (isActive) const SizedBox(width: 24),
 
-          // HLAVNÍ MIC / STOP tlačítko
+          // HLAVNÍ TLAČÍTKO (MIC / STOP)
           _buildMainButton(
             isIdle: isIdle,
             onPressed: () {
@@ -363,22 +638,34 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
           ),
 
           // ZMĚNIT TÉMA (jen při aktivní session)
-          if (isLiveSession) ...[
-            const SizedBox(width: 20),
+          if (isActive) ...[
+            const SizedBox(width: 24),
             _buildSecondaryButton(
               heroTag: 'topic_btn',
               icon: Icons.shuffle_rounded,
-              color: AppTheme.primary,
-              onPressed: () {
-                ref.read(voiceTutorAgentProvider.notifier).forceTopicChange();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Změna tématu odeslána...'),
-                    duration: Duration(seconds: 2),
-                  ),
-                );
-              },
+              color: isLiveSession
+                  ? AppTheme.primaryLight
+                  : AppTheme.onSurfaceMuted,
               tooltip: 'Změnit téma',
+              onPressed: isLiveSession
+                  ? () {
+                      ref
+                          .read(voiceTutorAgentProvider.notifier)
+                          .forceTopicChange();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          backgroundColor: AppTheme.surfaceVariant,
+                          content: Text(
+                            'Změna tématu odeslána...',
+                            style: GoogleFonts.plusJakartaSans(
+                              color: AppTheme.onBackground,
+                            ),
+                          ),
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
+                    }
+                  : () {},
             ),
           ],
         ],
@@ -398,22 +685,28 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
-        width: 80,
-        height: 80,
+        width: isIdle ? 76 : 68,
+        height: isIdle ? 76 : 68,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: buttonColor,
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: isIdle
+                ? [AppTheme.primaryLight, AppTheme.primaryDark]
+                : [AppTheme.error, const Color(0xFFB71C1C)],
+          ),
           boxShadow: [
             BoxShadow(
-              color: buttonColor.withValues(alpha: 0.4),
-              blurRadius: 24,
-              spreadRadius: 4,
+              color: buttonColor.withValues(alpha: 0.45),
+              blurRadius: isIdle ? 22 : 18,
+              spreadRadius: isIdle ? 3 : 2,
             ),
           ],
         ),
         child: Icon(
           isIdle ? Icons.mic_rounded : Icons.stop_rounded,
-          size: 36,
+          size: isIdle ? 36 : 32,
           color: Colors.white,
         ),
       ),
@@ -433,20 +726,20 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
       child: GestureDetector(
         onTap: onPressed,
         child: Container(
-          width: 52,
-          height: 52,
+          width: 50,
+          height: 50,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: color.withValues(alpha: 0.12),
             border: Border.all(color: color.withValues(alpha: 0.4), width: 1.5),
           ),
-          child: Icon(icon, size: 24, color: color),
+          child: Icon(icon, size: 22, color: color),
         ),
       ),
     );
   }
 
-  // ── Pomocné metody ──────────────────────────────────────────────────────────
+  // ── Pomocné metody pro zprávy a bubliny ─────────────────────────────────────
 
   List<ChatMessage> _getVisibleMessages(VoiceTutorState state) =>
       state.messages;
@@ -471,7 +764,14 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
             bottomRight: Radius.circular(20),
           ),
           border: Border.all(
-              color: AppTheme.speaking.withValues(alpha: 0.25)),
+              color: AppTheme.speaking.withValues(alpha: 0.35)),
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.speaking.withValues(alpha: 0.06),
+              blurRadius: 12,
+              spreadRadius: 2,
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -499,14 +799,12 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 1.5,
-                    color: AppTheme.speaking.withValues(alpha: 0.7),
+                    color: AppTheme.speaking.withValues(alpha: 0.8),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 8),
-            // Zobrazujeme celý transcript bez ořezávání — auto-scroll
-            // zajistí, že uživatel vždy vidí nejnovější text.
             Text(
               transcript,
               style: GoogleFonts.plusJakartaSans(
@@ -529,12 +827,12 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         margin: const EdgeInsets.only(bottom: 10.0),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         constraints: BoxConstraints(
-            maxWidth: MediaQuery.of(context).size.width * 0.76),
+            maxWidth: MediaQuery.of(context).size.width * 0.78),
         decoration: BoxDecoration(
           color: isUser
-              ? AppTheme.primary.withValues(alpha: 0.15)
+              ? AppTheme.primary.withValues(alpha: 0.18)
               : AppTheme.surfaceVariant,
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(20),
@@ -544,10 +842,19 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
           ),
           border: Border.all(
             color: isUser
-                ? AppTheme.primary.withValues(alpha: 0.25)
+                ? AppTheme.primary.withValues(alpha: 0.35)
                 : AppTheme.outline,
             width: 1,
           ),
+          boxShadow: isUser
+              ? [
+                  BoxShadow(
+                    color: AppTheme.primary.withValues(alpha: 0.08),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
         ),
         child: Text(
           msg.text,

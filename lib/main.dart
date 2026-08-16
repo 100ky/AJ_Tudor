@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:flutter/services.dart';
 import 'app.dart';
 import 'providers/config_provider.dart';
 import 'services/notifications/notification_service.dart';
@@ -10,6 +11,18 @@ import 'services/notifications/notification_service.dart';
 void main() async {
   // Zajištění inicializace vazeb Flutteru před spuštěním asynchronních operací
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Nastavení zobrazení na celou obrazovku (Edge-to-Edge) s transparentními systémovými lištami
+  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarIconBrightness: Brightness.light,
+      systemNavigationBarDividerColor: Colors.transparent,
+    ),
+  );
   
   // Inicializace české lokalizace pro formátování dat a času
   await initializeDateFormatting('cs', null);

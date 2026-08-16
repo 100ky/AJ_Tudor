@@ -50,6 +50,8 @@ void main() {
     
     // Async cleanup methods must return completed futures
     when(() => mockAudio.stop()).thenAnswer((_) async {});
+    when(() => mockRepo.closeSession(any())).thenAnswer((_) async => Result.success(null));
+    when(() => mockMemory.analyzeSession(any())).thenAnswer((_) async {});
     // disconnect might be called
     when(() => mockClient.disconnect()).thenAnswer((_) {});
 

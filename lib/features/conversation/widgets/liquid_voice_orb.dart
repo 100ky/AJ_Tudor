@@ -321,11 +321,13 @@ class _LiquidBlobPainter extends CustomPainter {
 class OrbStateIcon extends StatelessWidget {
   final String stateLabel;
   final Color color;
+  final double size;
 
   const OrbStateIcon({
     super.key,
     required this.stateLabel,
     required this.color,
+    this.size = 36,
   });
 
   @override
@@ -355,6 +357,6 @@ class OrbStateIcon extends StatelessWidget {
         icon = Icons.mic_none_rounded;
     }
 
-    return Icon(icon, size: 36, color: AppTheme.onPrimary);
+    return Icon(icon, size: size, color: AppTheme.onPrimary);
   }
 }

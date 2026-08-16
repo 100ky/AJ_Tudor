@@ -99,7 +99,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   
   // Heuristiky pro detekci frustrace a stagnace
   int _consecutiveShortAnswers = 0;
-  List<String> _tutorTextHistory = [];
+  final List<String> _tutorTextHistory = [];
   bool _turnCompleteReceived = false;
 
   late final WakelockService _wakelock;
@@ -392,10 +392,6 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       L.i('STT chunk uživatele: "$text"');
       
       final isNewTurn = _currentUserTranscript.isEmpty;
-      // Přidáme mezeru mezi STT chunky, aby se neslily (fix: "I will havesvadba")
-      if (_currentUserTranscript.isNotEmpty && !_currentUserTranscript.endsWith(' ')) {
-        _currentUserTranscript += ' ';
-      }
       _currentUserTranscript += text;
 
       final displayTranscript = _currentUserTranscript.trim();
@@ -639,7 +635,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         }
 
         // Pokud model zrovna mluvil a nestihl odeslat turnComplete, flushneme rozpracovaný text
-        if (state.currentTranscript.isNotEmpty) {
+        if (ref.mounted && state.currentTranscript.isNotEmpty) {
           final tutorText = state.currentTranscript;
           L.i('Flush: Ukládám zbývající transkript tutora: "$tutorText"');
           try {

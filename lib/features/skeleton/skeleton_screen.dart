@@ -9,6 +9,7 @@ import '../progress/progress_screen.dart';
 import '../history/history_screen.dart';
 import '../settings/settings_screen.dart';
 import '../../providers/config_provider.dart';
+import '../../services/agents/voice_tutor_agent.dart';
 import '../../core/app_theme.dart';
 
 /// Notifier pro správu indexu vybrané záložky v dolní navigaci.
@@ -46,8 +47,12 @@ class SkeletonScreen extends ConsumerWidget {
     final currentIndex = ref.watch(_selectedIndexProvider);
     final apiKey = ref.watch(apiKeyProvider);
     final isLoaded = ref.watch(isApiKeyLoadedProvider);
+    final tutorState = ref.watch(voiceTutorAgentProvider);
 
     final isMissingKey = isLoaded && (apiKey == null || apiKey.isEmpty);
+    final isVoiceActive = currentIndex == 1 &&
+        (tutorState.status != TutorState.idle &&
+            tutorState.status != TutorState.error);
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -95,47 +100,64 @@ class SkeletonScreen extends ConsumerWidget {
         children: _pages,
       ),
 
-      bottomNavigationBar: DecoratedBox(
-        decoration: BoxDecoration(
-          border: Border(
-            top: BorderSide(color: AppTheme.outline, width: 1),
+      bottomNavigationBar: AnimatedContainer(
+        duration: const Duration(milliseconds: 320),
+        curve: Curves.easeInOutCubic,
+        height: isVoiceActive ? 0.0 : 80.0,
+        child: ClipRect(
+          child: OverflowBox(
+            minHeight: 80,
+            maxHeight: 80,
+            alignment: Alignment.topCenter,
+            child: AnimatedSlide(
+              duration: const Duration(milliseconds: 320),
+              curve: Curves.easeInOutCubic,
+              offset: isVoiceActive ? const Offset(0, 1) : Offset.zero,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  border: Border(
+                    top: BorderSide(color: AppTheme.outline, width: 1),
+                  ),
+                ),
+                child: NavigationBar(
+                  selectedIndex: currentIndex,
+                  onDestinationSelected: (index) {
+                    ref.read(_selectedIndexProvider.notifier).setIndex(index);
+                  },
+                  destinations: const [
+                    NavigationDestination(
+                      icon: Icon(Icons.chat_bubble_outline_rounded),
+                      selectedIcon: Icon(Icons.chat_bubble_rounded),
+                      label: 'Chat',
+                    ),
+                    NavigationDestination(
+                      icon: Icon(Icons.mic_none_rounded),
+                      selectedIcon: Icon(Icons.mic_rounded),
+                      label: 'Voice',
+                    ),
+                    NavigationDestination(
+                      icon: Icon(Icons.smart_toy_outlined),
+                      selectedIcon: Icon(Icons.smart_toy_rounded),
+                      label: 'Agenti',
+                    ),
+                    NavigationDestination(
+                      icon: Icon(Icons.show_chart_rounded),
+                      label: 'Pokrok',
+                    ),
+                    NavigationDestination(
+                      icon: Icon(Icons.history_rounded),
+                      label: 'Historie',
+                    ),
+                    NavigationDestination(
+                      icon: Icon(Icons.settings_outlined),
+                      selectedIcon: Icon(Icons.settings_rounded),
+                      label: 'Nastavení',
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
-        ),
-        child: NavigationBar(
-          selectedIndex: currentIndex,
-          onDestinationSelected: (index) {
-            ref.read(_selectedIndexProvider.notifier).setIndex(index);
-          },
-          destinations: const [
-            NavigationDestination(
-              icon: Icon(Icons.chat_bubble_outline_rounded),
-              selectedIcon: Icon(Icons.chat_bubble_rounded),
-              label: 'Chat',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.mic_none_rounded),
-              selectedIcon: Icon(Icons.mic_rounded),
-              label: 'Voice',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.smart_toy_outlined),
-              selectedIcon: Icon(Icons.smart_toy_rounded),
-              label: 'Agenti',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.show_chart_rounded),
-              label: 'Pokrok',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.history_rounded),
-              label: 'Historie',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.settings_outlined),
-              selectedIcon: Icon(Icons.settings_rounded),
-              label: 'Nastavení',
-            ),
-          ],
         ),
       ),
     );
