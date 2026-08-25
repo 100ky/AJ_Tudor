@@ -20,7 +20,7 @@ subprojects {
 subprojects {
     afterEvaluate {
         project.extensions.findByType<BaseExtension>()?.apply {
-            compileSdkVersion(35)
+            compileSdkVersion(36)
             
             compileOptions {
                 sourceCompatibility = JavaVersion.VERSION_17

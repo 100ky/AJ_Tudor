@@ -65,18 +65,17 @@ class BackupService {
   /// Uzavře aktuální spojení, přepíše soubor databáze a obnoví stav providerů.
   Future<bool> importBackup() async {
     try {
-      // 1. Výběr souboru od uživatele (v11 API)
-      final pickerResult = await FilePicker.pickFiles(
+      // 1. Výběr souboru od uživatele (v12 API)
+      final pickedFile = await FilePicker.pickFile(
         type: FileType.any,
-        allowMultiple: false,
       );
 
-      if (pickerResult == null || pickerResult.files.single.path == null) {
+      if (pickedFile == null || pickedFile.path == null) {
         L.i('Uživatel stornoval výběr souboru pro obnovu.');
         return false;
       }
 
-      final backupFilePath = pickerResult.files.single.path!;
+      final backupFilePath = pickedFile.path!;
       final backupFile = File(backupFilePath);
 
       if (!await backupFile.exists()) {
