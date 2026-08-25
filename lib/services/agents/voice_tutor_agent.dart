@@ -447,7 +447,8 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     client.onTurnComplete = () {
       _resetWatchdog();
       HapticFeedback.selectionClick();
-      L.i('Gemini hlásí TurnComplete. Přepínám na LISTENING. (Hraje reprák? ${_audio.isPlaying})');
+      final isStillPlaying = _audio.isPlaying;
+      L.i('Gemini hlásí TurnComplete. (Hraje reprák? $isStillPlaying)');
       
       if (state.currentTranscript.isNotEmpty) {
         final tutorText = state.currentTranscript;
@@ -499,10 +500,11 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         state = state.copyWith(
           currentTranscript: '',
           messages: newMessages,
+          status: isStillPlaying ? TutorState.speaking : TutorState.listening,
         );
 
-        // Zapamatuje si, že turn skončil, a onAudioChunk posléze přepne na listening
-        _turnCompleteReceived = true;
+        // Pokud reprák ještě hraje, počkáme, až dozní v audio handleru; jinak jsme rovnou listening
+        _turnCompleteReceived = isStillPlaying;
 
         // Uložení finálního přepisu řeči tutora do DB
         if (_currentSessionId != null) {
@@ -513,7 +515,10 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
           );
         }
       } else {
-        _turnCompleteReceived = true;
+        state = state.copyWith(
+          status: isStillPlaying ? TutorState.speaking : TutorState.listening,
+        );
+        _turnCompleteReceived = isStillPlaying;
       }
     };
 
@@ -572,12 +577,18 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
           state = state.copyWith(status: TutorState.reconnecting);
         } else if (state.status == TutorState.connecting) {
           // Výpadek při inicializaci (např. 1007 od preview API) → zůstáváme v connecting
-          L.w('Spojení uzavřeno při inicializaci (pravděpodobně 1007). Auto-reconnect probíhá, zůstávám v connecting...');
-          // stav neměníme, auto-reconnect v GeminiLiveClient se postará o retry
+          L.w('Spojení uzavřeno při inicializaci. Auto-reconnect probíhá, zůstávám v connecting...');
         }
       } else if (isConnected && (state.status == TutorState.reconnecting || state.status == TutorState.connecting)) {
+        final wasReconnecting = state.status == TutorState.reconnecting;
         L.i('Spojení obnoveno, vracím se do stavu listening.');
         state = state.copyWith(status: TutorState.listening);
+        _resetWatchdog();
+
+        // Pokud došlo k reconnectu během běžícího hovoru, obnovíme kontext do nové WebSocket relace
+        if (wasReconnecting && state.messages.isNotEmpty) {
+          _restoreConversationContext(client);
+        }
       }
     };
 
@@ -585,6 +596,29 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     client.onError = (error) {
       state = state.copyWith(status: TutorState.error, errorMessage: error);
     };
+  }
+
+  /// Po výpadku a znovupřipojení WebSocketu injektuje do nové relace Gemini
+  /// stručný souhrn dosavadní konverzace, aby model neztratil nit a plynule navázal.
+  void _restoreConversationContext(GeminiLiveClient client) {
+    try {
+      final recentMessages = state.messages.length > 4 
+          ? state.messages.sublist(state.messages.length - 4) 
+          : state.messages;
+      
+      final historySummary = recentMessages.map((m) => '${m.isUser ? "Student" : "Tutor"}: ${m.text}').join('\n');
+      
+      L.i('Obnovuji kontext konverzace po reconnectu (${recentMessages.length} zpráv)...');
+      client.sendClientContent(
+        role: 'user',
+        text: '[SYSTEM CONTEXT RECOVERY - RECONNECTED] '
+              'We just reconnected. Here is the recent conversation context:\n$historySummary\n'
+              'Continue seamlessly as AJ Tudor from where we left off. Listen to the student.',
+        turnComplete: false,
+      );
+    } catch (e) {
+      L.w('Chyba při obnově kontextu po reconnectu: $e');
+    }
   }
 
   /// Bezpečně ukončí aktuální hlasové sezení a spustí asynchronní vyhodnocení.
@@ -877,13 +911,17 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
 
   /// Resetuje watchdog časovač aktivity.
   /// 
-  /// Pokud 45 sekund nedojde k žádné komunikaci (uživatel ani AI neposílají zprávy/audio),
-  /// watchdog automaticky usoudí, že došlo k tichému rozpadu socketu a vyvolá reconnect.
+  /// Pokud 90 sekund nedojde k žádné komunikaci (uživatel ani AI neposílají zprávy/audio),
+  /// watchdog usoudí, že došlo k tichému rozpadu socketu a vyvolá bezpečný reconnect.
   void _resetWatchdog() {
     _watchdogTimer?.cancel();
-    _watchdogTimer = Timer(const Duration(seconds: 45), () {
-      if (state.status != TutorState.idle && state.status != TutorState.error && state.status != TutorState.paused) {
-        L.w('Watchdog: Žádná aktivita 45s, zkouším reconnect...');
+    _watchdogTimer = Timer(const Duration(seconds: 90), () {
+      if (state.status != TutorState.idle && 
+          state.status != TutorState.error && 
+          state.status != TutorState.paused &&
+          state.status != TutorState.reconnecting &&
+          state.status != TutorState.connecting) {
+        L.w('Watchdog: Žádná aktivita 90s, zkouším reconnect...');
         if (ref.mounted) {
           final client = ref.read(geminiLiveClientProvider);
           if (client != null) {

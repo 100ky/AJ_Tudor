@@ -130,4 +130,38 @@ void main() {
     expect(state.messages.length, 1);
     expect(state.messages.first.text, 'His favorite');
   });
+
+  test('reconnection restores context and returns to listening state', () async {
+    Function(bool)? connectionStatusCallback;
+
+    when(() => mockRepo.startNewSession()).thenAnswer((_) async => Result.success(123));
+    when(() => mockRepo.getUserProfile()).thenAnswer((_) async => null);
+    when(() => mockAudio.start(onAudioChunk: any(named: 'onAudioChunk'))).thenAnswer((_) async {});
+    when(() => mockClient.connect(
+      modelName: any(named: 'modelName'),
+      systemPrompt: any(named: 'systemPrompt'),
+      voiceName: any(named: 'voiceName'),
+    )).thenAnswer((_) {});
+    when(() => mockClient.sendClientContent(
+      role: any(named: 'role'),
+      text: any(named: 'text'),
+      turnComplete: any(named: 'turnComplete'),
+    )).thenAnswer((_) {});
+
+    when(() => mockClient.onConnectionStatusChanged = any()).thenAnswer((invocation) => 
+        connectionStatusCallback = invocation.positionalArguments[0] as Function(bool)?);
+
+    final agent = container.read(voiceTutorAgentProvider.notifier);
+    await agent.startSession();
+
+    expect(connectionStatusCallback, isNotNull);
+
+    // Simulate disconnect during active session
+    connectionStatusCallback!(false);
+    expect(container.read(voiceTutorAgentProvider).status, TutorState.reconnecting);
+
+    // Simulate successful reconnect
+    connectionStatusCallback!(true);
+    expect(container.read(voiceTutorAgentProvider).status, TutorState.listening);
+  });
 }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../../core/utils/logger.dart';
@@ -7,10 +8,16 @@ import '../audio/audio_playback_service.dart';
 /// 
 /// Zajišťuje odesílání hlasových (PCM 16-bit) a textových dat do Gemini a asynchronní
 /// zpracování odpovědí (audio streamování zpět, transkripce řeči studenta i AI, tool calling atd.).
-/// Obsahuje automatickou logiku znovupřipojení s exponenciálním backoffem.
+/// Obsahuje robustní automatickou logiku znovupřipojení s exponenciálním backoffem.
 class GeminiLiveClient {
   /// Aktivní WebSocket kanál pro bidi-streamování.
   WebSocketChannel? _channel;
+
+  /// Subscription pro stream WebSocketu (nutné pro explicitní odhlášení před zavřením).
+  StreamSubscription? _channelSubscription;
+
+  /// Časovač pro plánovaný pokus o znovupřipojení.
+  Timer? _reconnectTimer;
 
   /// API klíč pro autentizaci vůči Gemini.
   final String _apiKey;
@@ -22,17 +29,16 @@ class GeminiLiveClient {
   int _reconnectAttempts = 0;
   final int _maxReconnectAttempts = 5;
   bool _isManualDisconnect = false;
+  bool _isReconnecting = false;
   String? _lastModelName;
   String? _lastSystemPrompt;
   String _lastVoiceName = 'Puck';
-  // Poznámka: sessionResumptionConfig není podporováno gemini-3.1-flash-live-preview.
-  // Pole _lastResumptionHandle bylo odstraněno — způsobovalo 1007 smyčku po GoAway.
 
   // Pocitadlo po sobe jdoucich ridicich tokenu (ochrana pred zaseknutim v loopu)
   int _consecutiveControlTokens = 0;
 
   /// Vrací [bool] vyjadřující, zda je klient momentálně připojen a nemá aktivní pokusy o reconnect.
-  bool get isConnected => _channel != null && _reconnectAttempts == 0;
+  bool get isConnected => _channel != null && _reconnectAttempts == 0 && !_isReconnecting;
 
   /// Vrací [bool], zda se zrovna v reproduktoru fyzicky přehrává zvuk AI.
   bool get isPlaybackPlaying => _playbackService.isPlaying;
@@ -72,6 +78,16 @@ class GeminiLiveClient {
   /// Konstruktor vyžadující API klíč a instanci služby přehrávání zvuku.
   GeminiLiveClient(this._apiKey, this._playbackService);
 
+  /// Bezpečně uzavře stávající kanál a zruší listener, aby nespouštěl onDone při úmyslném zavření.
+  void _closeCurrentChannel() {
+    _channelSubscription?.cancel();
+    _channelSubscription = null;
+    try {
+      _channel?.sink.close();
+    } catch (_) {}
+    _channel = null;
+  }
+
   /// Naváže WebSocket spojení s Gemini Live API.
   /// 
   /// [modelName] definuje použitý model (např. gemini-2.0-flash-exp).
@@ -89,10 +105,12 @@ class GeminiLiveClient {
     _lastSystemPrompt = systemPrompt;
     _lastVoiceName = voiceName;
     
-    // isReconnect příznak se zachovává pro případné budoucí použití.
+    // Zrušíme jakýkoliv čekající reconnect timer
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
     
-    // Čištění starého spojení, pokud existuje.
-    _channel?.sink.close();
+    // Čištění starého spojení a jeho stream subscription, aby se nespustil falešný onDone
+    _closeCurrentChannel();
     
     // Sestavení URI pro bidi-generate WebSocket.
     final uri = Uri.parse(
@@ -101,12 +119,17 @@ class GeminiLiveClient {
     // Maskovat API klíč v logu pro bezpečnost
     final maskedUri = uri.replace(queryParameters: {'key': '***'});
     L.i('Připojování k: $maskedUri');
-    _channel = WebSocketChannel.connect(uri);
+    
+    final channel = WebSocketChannel.connect(uri);
+    _channel = channel;
 
     // Naslouchání na příchozím streamu WebSocketu.
-    _channel!.stream.listen(
+    _channelSubscription = channel.stream.listen(
       (message) {
         _reconnectAttempts = 0; // Resetujeme pokusy při úspěšném příjmu jakýchkoliv dat.
+        _isReconnecting = false;
+        _reconnectTimer?.cancel();
+        _reconnectTimer = null;
         if (onConnectionStatusChanged != null) onConnectionStatusChanged!(true);
 
         // Diagnostické logování zpráv (pokud neobsahují obrovská binární data audia).
@@ -121,7 +144,9 @@ class GeminiLiveClient {
         _handleError(error.toString());
       },
       onDone: () {
-        L.w('WebSocket spojení UZAVŘENO. Code: ${_channel?.closeCode}, Reason: ${_channel?.closeReason}');
+        final code = channel.closeCode;
+        final reason = channel.closeReason;
+        L.w('WebSocket spojení UZAVŘENO. Code: $code, Reason: $reason');
         if (onConnectionStatusChanged != null) onConnectionStatusChanged!(false);
         
         // Pokud nebylo spojení zavřeno ručně uživatelem, pokusíme se o reconnect.
@@ -132,8 +157,8 @@ class GeminiLiveClient {
     );
 
     // Odešleme SETUP zprávu až po plném otevření WebSocket kanálu.
-    _channel!.ready.then((_) {
-      if (_channel != null) {
+    channel.ready.then((_) {
+      if (_channel == channel) {
         _sendSetupMessage(modelName, systemPrompt, voiceName);
       }
     }).catchError((e) {
@@ -146,15 +171,22 @@ class GeminiLiveClient {
     });
   }
 
-  /// Pokusí se o automatické znovupřipojení s exponenciálním backoffem.
+  /// Pokusí se o automatické znovupřipojení s exponenciálním backoffem (zabraňuje souběžným pokusům).
   void _attemptReconnect() {
+    if (_isManualDisconnect) return;
+    if (_reconnectTimer != null && _reconnectTimer!.isActive) {
+      L.d('Reconnect timer již běží, přeskakuji duplicitní plánování.');
+      return;
+    }
+    
     if (_reconnectAttempts < _maxReconnectAttempts && _lastModelName != null && _lastSystemPrompt != null) {
       _reconnectAttempts++;
+      _isReconnecting = true;
       // Exponenciální prodleva mezi pokusy (2s, 4s, 6s, 8s, 10s).
       final delay = Duration(seconds: _reconnectAttempts * 2);
       L.i('Pokus o znovupřipojení č. $_reconnectAttempts za ${delay.inSeconds}s...');
       
-      Future.delayed(delay, () {
+      _reconnectTimer = Timer(delay, () {
         if (!_isManualDisconnect) {
           connect(
             modelName: _lastModelName!,
@@ -165,6 +197,8 @@ class GeminiLiveClient {
         }
       });
     } else if (_reconnectAttempts >= _maxReconnectAttempts) {
+      _isReconnecting = false;
+      L.e('Nepodařilo se obnovit spojení po $_maxReconnectAttempts pokusech.');
       if (onError != null) onError!('Nepodařilo se obnovit spojení po $_maxReconnectAttempts pokusech.');
     }
   }
@@ -176,10 +210,6 @@ class GeminiLiveClient {
     } else if (errorMsg.contains('1008')) {
       L.w('GoAway detekován (kód 1008). Automatický reconnect se spustí z onDone.');
     } else {
-      // V případě běžné síťové chyby se socket uzavře a spustí onDone,
-      // které zajistí auto-reconnect. Nevyhazujeme hned error do UI,
-      // abychom nezablokovali aplikaci ve stavu TutorState.error, 
-      // ze kterého se po úspěšném reconnectu neumí sama dostat.
       L.e('WebSocket CHYBA (nevyhazuji do UI, spoléhám na auto-reconnect): $errorMsg');
     }
   }
@@ -251,12 +281,22 @@ class GeminiLiveClient {
       }
     };
     L.d('Odesílám SETUP s nástroji: ${jsonEncode(setupMessage)}');
-    _channel?.sink.add(jsonEncode(setupMessage));
+    _safeSend(jsonEncode(setupMessage));
+  }
+
+  /// Bezpečně odešle textová data do WebSocketu s ošetřením výjimek při rozpadlém spojení.
+  void _safeSend(String data) {
+    if (_channel == null) return;
+    try {
+      _channel?.sink.add(data);
+    } catch (e) {
+      L.w('Chyba při odesílání do WebSocketu: $e');
+    }
   }
 
   /// Odešle raw audio data (PCM 16-bit, 16kHz) zakódovaná do Base64.
   void sendAudioChunk(List<int> pcm16Data) {
-    if (_channel == null) return;
+    if (_channel == null || _isReconnecting) return;
     
     final base64Audio = base64Encode(pcm16Data);
     final clientContent = {
@@ -267,7 +307,7 @@ class GeminiLiveClient {
         }
       }
     };
-    _channel?.sink.add(jsonEncode(clientContent));
+    _safeSend(jsonEncode(clientContent));
   }
 
   /// Odešle textový vstup od uživatele (např. při psaní na klávesnici v UI).
@@ -284,13 +324,13 @@ class GeminiLiveClient {
         'turnComplete': true
       }
     };
-    _channel?.sink.add(jsonEncode(clientContent));
+    _safeSend(jsonEncode(clientContent));
   }
 
   /// Odešle textový obsah do kontextu relace bez vyvolání odpovědi modelu.
   ///
   /// Slouží pro mid-session updates – tiché injektování instrukcí (např. změna tématu,
-  /// korekce chování tutora) do aktivního WebSocket spojení.
+  /// obnova kontextu po reconnectu) do aktivního WebSocket spojení.
   /// S [turnComplete] nastaveným na `false` model instrukci absorbuje a čeká na další
   /// audio vstup od uživatele, místo aby okamžitě generoval odpověď.
   void sendClientContent({
@@ -311,7 +351,7 @@ class GeminiLiveClient {
       }
     };
     L.i('Odesílám mid-session ClientContent (role: $role, turnComplete: $turnComplete)');
-    _channel?.sink.add(jsonEncode(clientContent));
+    _safeSend(jsonEncode(clientContent));
   }
 
   /// Zpracovává a analyzuje všechny příchozí WebSocket zprávy z Gemini serveru.
@@ -479,11 +519,10 @@ class GeminiLiveClient {
       }
 
       // Detekce signálu GoAway (server plánuje brzy ukončit socket)
-      // Proaktivní reconnect – nečekáme na uzavření, ale ihned se pokusíme
-      // o reconnect s resumption handle, aby nedošlo k výpadku uprostřed věty.
+      // Proaktivní reconnect – okamžitě bezpečně restartujeme spojení bez souběhu
       if (data.containsKey('goAway') || data.containsKey('go_away')) {
-        L.w('GoAway signál přijat od serveru. Proaktivně spouštím reconnect před uzavřením...');
-        _attemptReconnect();
+        L.w('GoAway signál přijat od serveru. Proaktivně spouštím čistý reconnect...');
+        forceReconnect();
       }
     } catch (e, stack) {
       L.e('Chyba zpracování zprávy', e, stack);
@@ -505,7 +544,7 @@ class GeminiLiveClient {
         ]
       }
     };
-    _channel?.sink.add(jsonEncode(responseMsg));
+    _safeSend(jsonEncode(responseMsg));
   }
 
   /// Filtruje ridici tokeny a detekuje pripadne zacykleni modelu.
@@ -532,15 +571,15 @@ class GeminiLiveClient {
     return cleanText;
   }
 
-  /// Vynutí restartování spojení (zavře socket a okamžitě spustí nové připojení).
+  /// Vynutí restartování spojení (zavře socket a okamžitě spustí nové připojení bez souběhu).
   void forceReconnect() {
     L.w('WebSocket: Vynucený reconnect...');
     _isManualDisconnect = false;
     _reconnectAttempts = 0;
-    try {
-      _channel?.sink.close();
-    } catch (_) {}
-    _channel = null;
+    _isReconnecting = false;
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+    _closeCurrentChannel();
 
     if (_lastModelName != null && _lastSystemPrompt != null) {
       connect(
@@ -555,9 +594,9 @@ class GeminiLiveClient {
   /// Ručně odpojí klienta a zruší všechny probíhající operace.
   void disconnect() {
     _isManualDisconnect = true;
-    try {
-      _channel?.sink.close();
-    } catch (_) {}
-    _channel = null;
+    _isReconnecting = false;
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+    _closeCurrentChannel();
   }
 }
