@@ -91,6 +91,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   Timer? _watchdogTimer;
   Timer? _stuckTimer;
   Timer? _thinkingTimer;
+  Timer? _responseSilenceTimer;
   int? _currentSessionId;
   bool _isStopping = false;
 
@@ -390,6 +391,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   void _setupClientCallbacks(GeminiLiveClient client, SessionRepository repo) {
     // Příjem textové části odpovědi AI
     client.onTextReceived = (text) {
+      _responseSilenceTimer?.cancel();
       _flushUserTranscript();
       _resetWatchdog();
       _resetStuckTimer();
@@ -404,6 +406,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     // Příjem dokončeného přepisu řeči uživatele (Speech-to-Text)
     client.onUserTranscriptReceived = (text) {
       _resetWatchdog();
+      _resetResponseSilenceTimer();
       HapticFeedback.lightImpact();
       
       if (text.isEmpty) return;
@@ -434,6 +437,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
 
     // Detekce, že začala téct audio data z AI
     client.onAudioReceived = () {
+      _responseSilenceTimer?.cancel();
       _flushUserTranscript();
       _resetWatchdog();
       _turnCompleteReceived = false;
@@ -446,6 +450,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     // Konec promluvy tutora (turn complete)
     client.onTurnComplete = () {
       _resetWatchdog();
+      _responseSilenceTimer?.cancel();
       HapticFeedback.selectionClick();
       final isStillPlaying = _audio.isPlaying;
       L.i('Gemini hlásí TurnComplete. (Hraje reprák? $isStillPlaying)');
@@ -519,6 +524,12 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
           status: isStillPlaying ? TutorState.speaking : TutorState.listening,
         );
         _turnCompleteReceived = isStillPlaying;
+      }
+
+      // Proaktivní obnova WebSocket relace při příliš vysoké spotřebě tokenů
+      if (client.currentTokenCount > 25000) {
+        L.w('Spotřeba tokenů (${client.currentTokenCount}) dosáhla limitu. Proaktivně provádím plynulý reconnect pro zamezení lagů...');
+        client.forceReconnect();
       }
     };
 
@@ -634,6 +645,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       _watchdogTimer?.cancel();
       _stuckTimer?.cancel();
       _thinkingTimer?.cancel();
+      _responseSilenceTimer?.cancel();
       
       _wakelock.disable(); // Povolíme opětovné zhasínání displeje
 
@@ -748,6 +760,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     _watchdogTimer?.cancel();
     _stuckTimer?.cancel();
     _thinkingTimer?.cancel();
+    _responseSilenceTimer?.cancel();
     
     // Zastavíme mikrofon, ale necháme WebSocket otevřený
     try {
@@ -911,23 +924,50 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
 
   /// Resetuje watchdog časovač aktivity.
   /// 
-  /// Pokud 90 sekund nedojde k žádné komunikaci (uživatel ani AI neposílají zprávy/audio),
+  /// Pokud 35 sekund nedojde k žádné komunikaci (uživatel ani AI neposílají zprávy/audio),
   /// watchdog usoudí, že došlo k tichému rozpadu socketu a vyvolá bezpečný reconnect.
   void _resetWatchdog() {
     _watchdogTimer?.cancel();
-    _watchdogTimer = Timer(const Duration(seconds: 90), () {
+    _watchdogTimer = Timer(const Duration(seconds: 35), () {
       if (state.status != TutorState.idle && 
           state.status != TutorState.error && 
           state.status != TutorState.paused &&
           state.status != TutorState.reconnecting &&
           state.status != TutorState.connecting) {
-        L.w('Watchdog: Žádná aktivita 90s, zkouším reconnect...');
+        L.w('Watchdog: Žádná aktivita 35s, zkouším reconnect...');
         if (ref.mounted) {
           final client = ref.read(geminiLiveClientProvider);
           if (client != null) {
             state = state.copyWith(status: TutorState.reconnecting);
             client.forceReconnect();
           }
+        }
+      }
+    });
+  }
+
+  /// Spustí hlídání reakce modelu po domluvě studenta.
+  /// 
+  /// Pokud uživatel domluví a Gemini do 6s neodpoví (např. VAD na serveru nezaznamenal konec řeči),
+  /// model nejprve popostrčíme přes nudgeModel(). Pokud ani po dalších 6s (celkem 12s) neodpoví,
+  /// vyvoláme čistý reconnect s obnovením kontextu.
+  void _resetResponseSilenceTimer() {
+    _responseSilenceTimer?.cancel();
+    _responseSilenceTimer = Timer(const Duration(seconds: 6), () {
+      if (state.status == TutorState.listening) {
+        L.w('Detekováno ticho po řeči studenta (6s bez odpovědi AI). Popostrkuji model...');
+        final client = ref.read(geminiLiveClientProvider);
+        if (client != null && client.isConnected) {
+          client.nudgeModel();
+          
+          // Druhý záchranný krok po dalších 6 sekundách:
+          _responseSilenceTimer = Timer(const Duration(seconds: 6), () {
+            if (state.status == TutorState.listening) {
+              L.w('Model nereaguje ani po popostrčení (12s bez odpovědi). Vyvolávám forceReconnect...');
+              state = state.copyWith(status: TutorState.reconnecting);
+              client.forceReconnect();
+            }
+          });
         }
       }
     });

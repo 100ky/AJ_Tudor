@@ -294,6 +294,11 @@ class GeminiLiveClient {
     }
   }
 
+  int _currentTokenCount = 0;
+
+  /// Vrací aktuální počet spotřebovaných tokenů v relaci.
+  int get currentTokenCount => _currentTokenCount;
+
   /// Odešle raw audio data (PCM 16-bit, 16kHz) zakódovaná do Base64.
   void sendAudioChunk(List<int> pcm16Data) {
     if (_channel == null || _isReconnecting) return;
@@ -301,10 +306,24 @@ class GeminiLiveClient {
     final base64Audio = base64Encode(pcm16Data);
     final clientContent = {
       'realtimeInput': {
-        'audio': {
-          'mimeType': 'audio/pcm;rate=16000',
-          'data': base64Audio,
-        }
+        'mediaChunks': [
+          {
+            'mimeType': 'audio/pcm;rate=16000',
+            'data': base64Audio,
+          }
+        ]
+      }
+    };
+    _safeSend(jsonEncode(clientContent));
+  }
+
+  /// Popostrčí model k vygenerování odpovědi (pokud VAD na serveru nezareagovalo na konec řeči).
+  void nudgeModel() {
+    if (_channel == null || _isReconnecting) return;
+    L.i('Popostrkuji Gemini Live k odpovědi (nudge / turnComplete)...');
+    final clientContent = {
+      'clientContent': {
+        'turnComplete': true
       }
     };
     _safeSend(jsonEncode(clientContent));
@@ -481,6 +500,7 @@ class GeminiLiveClient {
           if (totalTokens != null) {
             final count = int.tryParse(totalTokens.toString()) ?? 0;
             if (count > 0) {
+              _currentTokenCount = count;
               L.d('UsageMetadata: $count tokenů spotřebováno.');
               if (onTokenCountUpdate != null) onTokenCountUpdate!(count);
             }
