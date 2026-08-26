@@ -30,6 +30,7 @@ class GeminiLiveClient {
   final int _maxReconnectAttempts = 5;
   bool _isManualDisconnect = false;
   bool _isReconnecting = false;
+  bool _isSetupComplete = false;
   String? _lastModelName;
   String? _lastSystemPrompt;
   String _lastVoiceName = 'Puck';
@@ -38,7 +39,7 @@ class GeminiLiveClient {
   int _consecutiveControlTokens = 0;
 
   /// Vrací [bool] vyjadřující, zda je klient momentálně připojen a nemá aktivní pokusy o reconnect.
-  bool get isConnected => _channel != null && _reconnectAttempts == 0 && !_isReconnecting;
+  bool get isConnected => _channel != null && _isSetupComplete && _reconnectAttempts == 0 && !_isReconnecting;
 
   /// Vrací [bool], zda se zrovna v reproduktoru fyzicky přehrává zvuk AI.
   bool get isPlaybackPlaying => _playbackService.isPlaying;
@@ -80,6 +81,7 @@ class GeminiLiveClient {
 
   /// Bezpečně uzavře stávající kanál a zruší listener, aby nespouštěl onDone při úmyslném zavření.
   void _closeCurrentChannel() {
+    _isSetupComplete = false;
     _channelSubscription?.cancel();
     _channelSubscription = null;
     try {
@@ -101,6 +103,10 @@ class GeminiLiveClient {
     bool isReconnect = false,
   }) {
     _isManualDisconnect = false;
+    if (!isReconnect) {
+      _reconnectAttempts = 0;
+    }
+    _isSetupComplete = false;
     _lastModelName = modelName;
     _lastSystemPrompt = systemPrompt;
     _lastVoiceName = voiceName;
@@ -301,17 +307,15 @@ class GeminiLiveClient {
 
   /// Odešle raw audio data (PCM 16-bit, 16kHz) zakódovaná do Base64.
   void sendAudioChunk(List<int> pcm16Data) {
-    if (_channel == null || _isReconnecting) return;
+    if (_channel == null || _isReconnecting || !_isSetupComplete) return;
     
     final base64Audio = base64Encode(pcm16Data);
     final clientContent = {
       'realtimeInput': {
-        'mediaChunks': [
-          {
-            'mimeType': 'audio/pcm;rate=16000',
-            'data': base64Audio,
-          }
-        ]
+        'audio': {
+          'mimeType': 'audio/pcm;rate=16000',
+          'data': base64Audio,
+        }
       }
     };
     _safeSend(jsonEncode(clientContent));
@@ -393,6 +397,12 @@ class GeminiLiveClient {
         if (!keys.contains('inlineData') && !keys.contains('inline_data')) {
            L.d('WebSocket KEYS: $keys');
         }
+      }
+
+      // Detekce dokončení úvodního SETUPu
+      if (data.containsKey('setupComplete') || data.containsKey('setup_complete')) {
+        L.i('✅ Gemini Live Setup úspěšně dokončen (setupComplete).');
+        _isSetupComplete = true;
       }
 
       // Detekce systémové chyby ze strany API
