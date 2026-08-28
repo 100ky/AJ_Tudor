@@ -10,8 +10,10 @@ import '../../services/agents/scenario_planner_agent.dart';
 import '../../services/prompt/system_prompt_builder.dart';
 import '../../data/database/app_database.dart';
 import '../../data/models/chat_message.dart';
+import 'package:flutter/services.dart';
 import '../../core/app_theme.dart';
 import '../../core/widgets/glass_container.dart';
+import '../../core/widgets/chat_bubble.dart';
 
 /// Obrazovka pro textovou konverzaci s AI a výběr scénářů.
 ///
@@ -30,6 +32,8 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
   final List<ChatMessage> _messages = [];
   bool _isLoading = false;
   bool _isGrammarDrill = false;
+  bool _showScenarios = true;
+  Scenario? _selectedScenario;
 
   @override
   void dispose() {
@@ -50,8 +54,70 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     });
   }
 
+  /// Vybere scénář, sbalí výběr animací a případně zahájí konverzaci.
+  void _selectScenario(Scenario s) {
+    HapticFeedback.mediumImpact();
+    setState(() {
+      _selectedScenario = s;
+      _showScenarios = false;
+    });
+
+    ref.read(voiceTutorAgentProvider.notifier).selectScenario(s.id, s.tutorInstruction);
+
+    // Pokud je chat prázdný, tutor automaticky zahájí konverzaci k tomuto tématu
+    if (_messages.isEmpty) {
+      _startScenarioConversation(s);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Téma „${s.title}" vybráno! 💬'),
+          duration: const Duration(seconds: 2),
+          action: SnackBarAction(
+            label: 'Změnit',
+            onPressed: () {
+              setState(() {
+                _showScenarios = true;
+              });
+            },
+          ),
+        ),
+      );
+    }
+  }
+
+  /// Automatické zahájení konverzace na zvolené téma s tutorem.
+  Future<void> _startScenarioConversation(Scenario s) async {
+    final client = ref.read(geminiBatchClientProvider);
+    if (client == null) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    final profile = ref.read(userProfileProvider).value;
+    final prompt =
+        'Let\'s start the conversation for the scenario "${s.title}". Scenario description: ${s.description}. Tutor instruction: ${s.tutorInstruction}. Please start by greeting me warmly and opening the conversation in English at level ${profile?.targetLevel ?? "B1"}.';
+
+    final response = await client.sendMessage(
+      prompt,
+      systemPrompt: SystemPromptBuilder.buildTutorPrompt(
+        targetLevel: profile?.targetLevel ?? 'B1',
+        scenarioContext: s.tutorInstruction,
+      ),
+    );
+
+    if (mounted) {
+      setState(() {
+        _messages.add(ChatMessage(response, isUser: false));
+        _isLoading = false;
+      });
+      _scrollToBottom();
+    }
+  }
+
   /// Přepne režim chatu na gramatický drill nebo běžný rozhovor.
   void _toggleGrammarDrill(bool value) {
+    HapticFeedback.selectionClick();
     setState(() {
       _isGrammarDrill = value;
       _messages.clear();
@@ -77,6 +143,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
       return;
     }
 
+    HapticFeedback.lightImpact();
     setState(() {
       _messages.add(ChatMessage(text, isUser: true));
       _isLoading = true;
@@ -124,7 +191,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
           style: GoogleFonts.plusJakartaSans(
             fontSize: 17,
             fontWeight: FontWeight.w700,
-            color: AppTheme.onBackground,
+            color: AppTheme.textColor(context),
             letterSpacing: -0.3,
           ),
         ),
@@ -161,114 +228,230 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
             ),
           ),
 
-          // ── Doporučené scénáře ─────────────────────────────────────────────
-          if (!_isGrammarDrill)
-            StreamBuilder<List<Scenario>>(
-              stream: repo.watchAvailableScenarios(),
-              builder: (context, snapshot) {
-                final scenarios = snapshot.data ?? [];
+          // ── Scrollable obsah (Scénáře + Zprávy + Loader) ──────────────────
+          Expanded(
+            child: ListView(
+              controller: _scrollController,
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+              children: [
+                // ── Doporučené scénáře ─────────────────────────────────────
+                if (!_isGrammarDrill)
+                  StreamBuilder<List<Scenario>>(
+                    stream: repo.watchAvailableScenarios(),
+                    builder: (context, snapshot) {
+                      final scenarios = snapshot.data ?? [];
 
-                if (scenarios.isEmpty) {
-                  return Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-                    child: OutlinedButton.icon(
-                      onPressed: () =>
-                          ref.read(scenarioPlannerAgentProvider).planScenarios(),
-                      icon: const Icon(Icons.auto_awesome_rounded, size: 16),
-                      label: const Text('Vygenerovat scénáře na míru'),
-                    ),
-                  );
-                }
+                      if (scenarios.isEmpty) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: OutlinedButton.icon(
+                            onPressed: () => ref
+                                .read(scenarioPlannerAgentProvider)
+                                .planScenarios(),
+                            icon: const Icon(Icons.auto_awesome_rounded,
+                                size: 16),
+                            label:
+                                const Text('Vygenerovat scénáře na míru'),
+                          ),
+                        );
+                      }
 
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-                      child: Text(
-                        'DOPORUČENÉ SCÉNÁŘE',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.onSurfaceMuted,
-                          letterSpacing: 1.0,
+                      return AnimatedSize(
+                        duration: const Duration(milliseconds: 380),
+                        curve: Curves.easeInOutCubic,
+                        child: _showScenarios
+                            ? Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 8),
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.auto_awesome_rounded,
+                                            size: 15,
+                                            color: AppTheme.accent),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          'DOPORUČENÁ TÉMATA K PROCVIČENÍ',
+                                          style:
+                                              GoogleFonts.plusJakartaSans(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700,
+                                            color: AppTheme.mutedTextColor(
+                                                context),
+                                            letterSpacing: 0.8,
+                                          ),
+                                        ),
+                                        const Spacer(),
+                                        if (_selectedScenario != null ||
+                                            _messages.isNotEmpty)
+                                          GestureDetector(
+                                            onTap: () {
+                                              HapticFeedback
+                                                  .selectionClick();
+                                              setState(() =>
+                                                  _showScenarios = false);
+                                            },
+                                            child: Padding(
+                                              padding:
+                                                  const EdgeInsets.all(4.0),
+                                              child: Row(
+                                                children: [
+                                                  Text(
+                                                    'Skrýt',
+                                                    style: GoogleFonts
+                                                        .plusJakartaSans(
+                                                      fontSize: 11,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      color:
+                                                          AppTheme.primary,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 2),
+                                                  const Icon(
+                                                      Icons
+                                                          .keyboard_arrow_up_rounded,
+                                                      size: 16,
+                                                      color:
+                                                          AppTheme.primary),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                  ...scenarios
+                                      .map((s) => _buildScenarioCard(s)),
+                                  const SizedBox(height: 8),
+                                  Divider(
+                                      color: AppTheme.outlineLightColor(
+                                          context)),
+                                  const SizedBox(height: 8),
+                                ],
+                              )
+                            : Container(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                child: GlassContainer(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 14, vertical: 8),
+                                  borderRadius: BorderRadius.circular(16),
+                                  shadows: AppTheme.glassShadowLight,
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(6),
+                                        decoration: BoxDecoration(
+                                          color: AppTheme.accent
+                                              .withValues(alpha: 0.12),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: Icon(
+                                            Icons.theater_comedy_rounded,
+                                            size: 16,
+                                            color: AppTheme.accent),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          _selectedScenario != null
+                                              ? 'Téma: ${_selectedScenario!.title}'
+                                              : 'Scénář na míru vybrán',
+                                          style: GoogleFonts
+                                              .plusJakartaSans(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
+                                            color: AppTheme.textColor(
+                                                context),
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      TextButton.icon(
+                                        onPressed: () {
+                                          HapticFeedback.selectionClick();
+                                          setState(
+                                              () => _showScenarios = true);
+                                        },
+                                        style: TextButton.styleFrom(
+                                          padding:
+                                              const EdgeInsets.symmetric(
+                                                  horizontal: 10,
+                                                  vertical: 4),
+                                          visualDensity:
+                                              VisualDensity.compact,
+                                        ),
+                                        icon: const Icon(
+                                            Icons.tune_rounded,
+                                            size: 14),
+                                        label: Text(
+                                          'Změnit',
+                                          style: GoogleFonts
+                                              .plusJakartaSans(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                      );
+                    },
+                  ),
+
+                // ── Seznam zpráv ───────────────────────────────────────────
+                ..._messages.map((msg) => _buildChatBubble(msg)),
+
+                // ── Indikátor načítání ─────────────────────────────────────
+                if (_isLoading)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: GlassContainer(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 10),
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(4),
+                          topRight: Radius.circular(20),
+                          bottomLeft: Radius.circular(20),
+                          bottomRight: Radius.circular(20),
+                        ),
+                        shadows: AppTheme.glassShadowLight,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppTheme.primary,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Text(
+                              'Tutor přemýšlí...',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 13,
+                                color: AppTheme.mutedTextColor(context),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
-                    SizedBox(
-                      height: 130,
-                      child: ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
-                        itemCount: scenarios.length,
-                        itemBuilder: (context, index) =>
-                            _buildScenarioCard(scenarios[index]),
-                      ),
-                    ),
-                    Divider(
-                      color: AppTheme.outline.withValues(alpha: 0.6),
-                      height: 8,
-                    ),
-                  ],
-                );
-              },
-            ),
-
-          // ── Seznam zpráv ───────────────────────────────────────────────────
-          Expanded(
-            child: ListView.builder(
-              controller: _scrollController,
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-              itemCount: _messages.length,
-              itemBuilder: (context, index) {
-                final msg = _messages[index];
-                return _buildChatBubble(msg);
-              },
+                  ),
+              ],
             ),
           ),
 
-          // Indikátor načítání
-          if (_isLoading)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: GlassContainer(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 10),
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(4),
-                    topRight: Radius.circular(20),
-                    bottomLeft: Radius.circular(20),
-                    bottomRight: Radius.circular(20),
-                  ),
-                  shadows: AppTheme.glassShadowLight,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: AppTheme.primary,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Text(
-                        'Tutor přemýšlí...',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 13,
-                          color: AppTheme.onSurfaceMuted,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
-          // ── Vstupní pole ───────────────────────────────────────────────────
+          // ── Vstupní pole ─────────────────────────────────────────────────
           _buildInputBar(),
         ],
       ),
@@ -276,13 +459,17 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
   }
 
   Widget _buildInputBar() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
       decoration: BoxDecoration(
-        color: AppTheme.background.withValues(alpha: 0.9),
+        color: (isDark ? AppTheme.backgroundDark : AppTheme.background)
+            .withValues(alpha: 0.9),
         border: Border(
           top: BorderSide(
-            color: AppTheme.outline.withValues(alpha: 0.5),
+            color: (isDark ? AppTheme.outlineDark : AppTheme.outline)
+                .withValues(alpha: 0.5),
             width: 0.5,
           ),
         ),
@@ -293,13 +480,15 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
             child: TextField(
               controller: _textController,
               style: GoogleFonts.plusJakartaSans(
-                color: AppTheme.onBackground,
+                color: isDark ? AppTheme.onBackgroundDark : AppTheme.onBackground,
                 fontSize: 15,
               ),
               decoration: InputDecoration(
                 hintText: 'Napiš anglicky (nebo česky)...',
                 hintStyle: GoogleFonts.plusJakartaSans(
-                  color: AppTheme.onSurfaceMuted,
+                  color: isDark
+                      ? AppTheme.onSurfaceMutedDark
+                      : AppTheme.onSurfaceMuted,
                   fontSize: 15,
                 ),
               ),
@@ -346,117 +535,111 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
   }
 
   Widget _buildChatBubble(ChatMessage msg) {
-    final isUser = msg.isUser;
-    return Align(
-      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        constraints:
-            BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.78),
-        decoration: BoxDecoration(
-          gradient: isUser
-              ? LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    AppTheme.primary.withValues(alpha: 0.12),
-                    AppTheme.primaryLight.withValues(alpha: 0.08),
-                  ],
-                )
-              : null,
-          color: isUser ? null : AppTheme.glass,
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(20),
-            topRight: const Radius.circular(20),
-            bottomLeft: Radius.circular(isUser ? 20 : 4),
-            bottomRight: Radius.circular(isUser ? 4 : 20),
-          ),
-          border: Border.all(
-            color: isUser
-                ? AppTheme.primary.withValues(alpha: 0.25)
-                : AppTheme.outline,
-          ),
-          boxShadow: AppTheme.glassShadowLight,
-        ),
-        child: Text(
-          msg.text,
-          style: GoogleFonts.plusJakartaSans(
-            fontSize: 15,
-            color: AppTheme.onBackground,
-            height: 1.45,
-          ),
-        ),
-      ),
+    return ChatBubble(
+      text: msg.text,
+      isUser: msg.isUser,
     );
   }
 
   Widget _buildScenarioCard(Scenario s) {
-    return GestureDetector(
-      onTap: () {
-        ref.read(voiceTutorAgentProvider.notifier).selectScenario(s.id, s.tutorInstruction);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Scénář „${s.title}" vybrán. Přepni na Voice tab.'),
-            duration: const Duration(seconds: 2),
+    final isSelected = _selectedScenario?.id == s.id;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10.0),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () => _selectScenario(s),
+        child: GlassContainer(
+          padding: const EdgeInsets.all(16),
+          borderRadius: BorderRadius.circular(18),
+          color: isSelected
+              ? AppTheme.accent.withValues(alpha: isDark ? 0.20 : 0.08)
+              : null,
+          border: Border.all(
+            color: isSelected
+                ? AppTheme.accent.withValues(alpha: 0.45)
+                : (isDark ? AppTheme.outlineDark : AppTheme.outline),
+            width: isSelected ? 1.5 : 1.0,
           ),
-        );
-      },
-      child: GlassContainer(
-        padding: const EdgeInsets.all(12),
-        margin: const EdgeInsets.fromLTRB(4, 0, 4, 4),
-        borderRadius: BorderRadius.circular(16),
-        shadows: AppTheme.glassShadowLight,
-        child: SizedBox(
-          width: 166,
+          shadows: isSelected ? AppTheme.glassShadow : AppTheme.glassShadowLight,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: isSelected
+                            ? [AppTheme.accent, AppTheme.accentLight]
+                            : [
+                                AppTheme.primary.withValues(alpha: 0.2),
+                                AppTheme.primaryLight.withValues(alpha: 0.1),
+                              ],
+                      ),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.theater_comedy_rounded,
+                      size: 18,
+                      color: isSelected ? Colors.white : AppTheme.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Text(
                       s.title,
                       style: GoogleFonts.plusJakartaSans(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                        color: AppTheme.onBackground,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                        color: AppTheme.textColor(context),
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const SizedBox(width: 4),
+                  const SizedBox(width: 8),
                   _buildDifficultyBadge(s.difficulty),
                 ],
               ),
-              const SizedBox(height: 6),
-              Expanded(
-                child: Text(
-                  s.description,
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 11,
-                    color: AppTheme.onSurfaceMuted,
-                    height: 1.4,
-                  ),
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
+              const SizedBox(height: 10),
+              Text(
+                s.description,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 13,
+                  color: AppTheme.surfaceTextColor(context),
+                  height: 1.45,
                 ),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 12),
               Row(
                 children: [
-                  Icon(Icons.mic_rounded,
-                      size: 12, color: AppTheme.primary.withValues(alpha: 0.7)),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Spustit ve Voice',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.primary.withValues(alpha: 0.8),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primary.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.chat_bubble_outline_rounded,
+                            size: 13, color: AppTheme.primary),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Vybrat téma a zahájit konverzaci',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.primary,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
+                  const Spacer(),
+                  Icon(Icons.arrow_forward_rounded,
+                      size: 16, color: AppTheme.primary),
                 ],
               ),
             ],

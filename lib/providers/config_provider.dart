@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -225,3 +226,45 @@ class ImmersiveModeNotifier extends Notifier<bool> {
 
 /// Globální stav pohlcujícího režimu.
 final immersiveModeProvider = NotifierProvider<ImmersiveModeNotifier, bool>(ImmersiveModeNotifier.new);
+
+/// Správce režimu vzhledu (Světlý / Tmavý / Podle systému).
+class ThemeModeNotifier extends Notifier<ThemeMode> {
+  static const _key = 'app_theme_mode';
+
+  @override
+  ThemeMode build() {
+    final prefs = ref.watch(sharedPreferencesProvider);
+    final saved = prefs.getString(_key);
+    switch (saved) {
+      case 'light':
+        return ThemeMode.light;
+      case 'dark':
+        return ThemeMode.dark;
+      default:
+        return ThemeMode.system;
+    }
+  }
+
+  /// Uloží vybraný ThemeMode.
+  Future<void> saveThemeMode(ThemeMode mode) async {
+    final prefs = ref.read(sharedPreferencesProvider);
+    String val;
+    switch (mode) {
+      case ThemeMode.light:
+        val = 'light';
+        break;
+      case ThemeMode.dark:
+        val = 'dark';
+        break;
+      case ThemeMode.system:
+        val = 'system';
+        break;
+    }
+    await prefs.setString(_key, val);
+    state = mode;
+  }
+}
+
+/// Globální provider pro ThemeMode.
+final themeModeProvider =
+    NotifierProvider<ThemeModeNotifier, ThemeMode>(ThemeModeNotifier.new);

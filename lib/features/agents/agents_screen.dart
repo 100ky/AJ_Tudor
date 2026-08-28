@@ -93,7 +93,7 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
           style: GoogleFonts.plusJakartaSans(
             fontSize: 18,
             fontWeight: FontWeight.w600,
-            color: AppTheme.onBackground,
+            color: AppTheme.textColor(context),
           ),
         ),
         centerTitle: true,
@@ -113,15 +113,15 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
               return ListView(
                 padding: const EdgeInsets.all(16.0),
                 children: [
-                  _buildHeaderCard(),
+                  _buildHeaderCard(context),
                   const SizedBox(height: 20),
-                  _buildTutorAgentCard(tutorState),
+                  _buildTutorAgentCard(context, tutorState),
                   const SizedBox(height: 16),
                   _buildAnalyzerAgentCard(
-                      profile, lastSession, tutorState.status),
+                      context, profile, lastSession, tutorState.status),
                   const SizedBox(height: 16),
                   _buildPlannerAgentCard(
-                      repo, tutorState.selectedScenarioId),
+                      context, repo, tutorState.selectedScenarioId),
                 ],
               );
             },
@@ -131,7 +131,7 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
     );
   }
 
-  Widget _buildHeaderCard() {
+  Widget _buildHeaderCard(BuildContext context) {
     return GlassContainer(
       child: Row(
         children: [
@@ -158,7 +158,7 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
-                    color: AppTheme.onBackground,
+                    color: AppTheme.textColor(context),
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -166,7 +166,7 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
                   'Tři specializovaní AI agenti spolupracují na tvé výuce angličtiny.',
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 12,
-                    color: AppTheme.onSurfaceMuted,
+                    color: AppTheme.mutedTextColor(context),
                   ),
                 ),
               ],
@@ -177,7 +177,7 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
     );
   }
 
-  Widget _buildTutorAgentCard(VoiceTutorState tutorState) {
+  Widget _buildTutorAgentCard(BuildContext context, VoiceTutorState tutorState) {
     final status = tutorState.status;
     final isActive =
         status != TutorState.idle && status != TutorState.error;
@@ -202,17 +202,17 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
         statusColor = AppTheme.warning;
         statusText = 'Připojuje se...';
         break;
+      case TutorState.paused:
+        statusColor = AppTheme.warning;
+        statusText = 'Pozastaven';
+        break;
       case TutorState.error:
         statusColor = AppTheme.error;
         statusText = 'Chyba spojení';
         break;
-      case TutorState.paused:
-        statusColor = AppTheme.warning;
-        statusText = 'Pozastaveno';
-        break;
       case TutorState.idle:
-        statusColor = AppTheme.onSurfaceMuted;
-        statusText = 'Připraven / Neaktivní';
+        statusColor = AppTheme.mutedTextColor(context);
+        statusText = 'V POHOTOVOSTI';
     }
 
     return GlassContainer(
@@ -239,12 +239,12 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
                       '1. Konverzační Tutor',
                       style: GoogleFonts.plusJakartaSans(
                           fontSize: 15, fontWeight: FontWeight.w600,
-                          color: AppTheme.onBackground),
+                          color: AppTheme.textColor(context)),
                     ),
                     Text(
                       'Agent zodpovědný za přátelskou diskuzi',
                       style: GoogleFonts.plusJakartaSans(
-                          fontSize: 11, color: AppTheme.onSurfaceMuted),
+                          fontSize: 11, color: AppTheme.mutedTextColor(context)),
                     ),
                   ],
                 ),
@@ -252,13 +252,13 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
               _buildStatusBadge(statusText, statusColor, isActive),
             ],
           ),
-          Divider(color: AppTheme.outlineLight, height: 24),
+          Divider(color: AppTheme.outlineLightColor(context), height: 24),
           Text(
             'Osobnost a styl:',
             style: GoogleFonts.plusJakartaSans(
                 fontWeight: FontWeight.w600,
                 fontSize: 13,
-                color: AppTheme.onBackground),
+                color: AppTheme.textColor(context)),
           ),
           const SizedBox(height: 6),
           Text(
@@ -268,14 +268,14 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
             style: GoogleFonts.plusJakartaSans(
                 fontSize: 12,
                 height: 1.5,
-                color: AppTheme.onSurfaceMuted),
+                color: AppTheme.mutedTextColor(context)),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildAnalyzerAgentCard(
+  Widget _buildAnalyzerAgentCard(BuildContext context,
       UserProfile? profile, Session? lastSession, TutorState tutorStatus) {
     final isAnalyzing = tutorStatus == TutorState.connecting ||
         tutorStatus == TutorState.thinking;
@@ -307,12 +307,12 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
                       '2. Analytik skóre',
                       style: GoogleFonts.plusJakartaSans(
                           fontSize: 15, fontWeight: FontWeight.w600,
-                          color: AppTheme.onBackground),
+                          color: AppTheme.textColor(context)),
                     ),
                     Text(
                       'Agent pro sémantickou analýzu pokroku',
                       style: GoogleFonts.plusJakartaSans(
-                          fontSize: 11, color: AppTheme.onSurfaceMuted),
+                          fontSize: 11, color: AppTheme.mutedTextColor(context)),
                     ),
                   ],
                 ),
@@ -324,19 +324,20 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
               ),
             ],
           ),
-          Divider(color: AppTheme.outlineLight, height: 24),
+          Divider(color: AppTheme.outlineLightColor(context), height: 24),
           Text(
             'Poslední sémantická analýza:',
             style: GoogleFonts.plusJakartaSans(
                 fontWeight: FontWeight.w600,
                 fontSize: 13,
-                color: AppTheme.onBackground),
+                color: AppTheme.textColor(context)),
           ),
           const SizedBox(height: 10),
           Row(
             children: [
               Expanded(
                   child: _buildMetricItem(
+                      context: context,
                       label: 'Plynulost',
                       value:
                           fluencyPercent != null ? '$fluencyPercent%' : 'N/A',
@@ -344,12 +345,14 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
               const SizedBox(width: 8),
               Expanded(
                   child: _buildMetricItem(
+                      context: context,
                       label: 'Zjištěná Úroveň',
                       value: profile?.targetLevel ?? 'B1',
                       color: AppTheme.success)),
               const SizedBox(width: 8),
               Expanded(
                   child: _buildMetricItem(
+                      context: context,
                       label: 'Celkem chyb',
                       value: lastSession?.totalErrors != null
                           ? '${lastSession!.totalErrors}'
@@ -365,7 +368,7 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
               style: GoogleFonts.plusJakartaSans(
                   fontWeight: FontWeight.w600,
                   fontSize: 12,
-                  color: AppTheme.onSurfaceMuted),
+                  color: AppTheme.mutedTextColor(context)),
             ),
             const SizedBox(height: 6),
             Container(
@@ -382,7 +385,7 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
                   fontSize: 12,
                   fontStyle: FontStyle.italic,
                   height: 1.5,
-                  color: AppTheme.onSurface,
+                  color: AppTheme.surfaceTextColor(context),
                 ),
               ),
             ),
@@ -392,7 +395,7 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
     );
   }
 
-  Widget _buildPlannerAgentCard(
+  Widget _buildPlannerAgentCard(BuildContext context,
       SessionRepository repo, int? selectedScenarioId) {
     return GlassContainer(
       child: Column(
@@ -418,12 +421,12 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
                       '3. Plánovač témat',
                       style: GoogleFonts.plusJakartaSans(
                           fontSize: 15, fontWeight: FontWeight.w600,
-                          color: AppTheme.onBackground),
+                          color: AppTheme.textColor(context)),
                     ),
                     Text(
                       'Agent vytvářející scénáře na základě chyb',
                       style: GoogleFonts.plusJakartaSans(
-                          fontSize: 11, color: AppTheme.onSurfaceMuted),
+                          fontSize: 11, color: AppTheme.mutedTextColor(context)),
                     ),
                   ],
                 ),
@@ -437,13 +440,13 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
               ),
             ],
           ),
-          Divider(color: AppTheme.outlineLight, height: 24),
+          Divider(color: AppTheme.outlineLightColor(context), height: 24),
           Text(
             'Aktuální scénáře na míru:',
             style: GoogleFonts.plusJakartaSans(
                 fontWeight: FontWeight.w600,
                 fontSize: 13,
-                color: AppTheme.onBackground),
+                color: AppTheme.textColor(context)),
           ),
           const SizedBox(height: 10),
           StreamBuilder<List<Scenario>>(
@@ -459,7 +462,7 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
                     style: GoogleFonts.plusJakartaSans(
                         fontSize: 13,
                         fontStyle: FontStyle.italic,
-                        color: AppTheme.onSurfaceMuted),
+                        color: AppTheme.mutedTextColor(context)),
                   ),
                 );
               }
@@ -467,7 +470,7 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
               return Column(
                 children: scenarios
                     .map((s) =>
-                        _buildMiniScenarioTile(s, selectedScenarioId))
+                        _buildMiniScenarioTile(context, s, selectedScenarioId))
                     .toList(),
               );
             },
@@ -498,14 +501,14 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          Divider(color: AppTheme.outlineLight),
+          Divider(color: AppTheme.outlineLightColor(context)),
           const SizedBox(height: 12),
           Text(
             'Nebo napiš své vlastní téma:',
             style: GoogleFonts.plusJakartaSans(
                 fontWeight: FontWeight.w600,
                 fontSize: 13,
-                color: AppTheme.onBackground),
+                color: AppTheme.textColor(context)),
           ),
           const SizedBox(height: 8),
           Row(
@@ -514,11 +517,11 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
                 child: TextField(
                   controller: _customTopicController,
                   style: GoogleFonts.plusJakartaSans(
-                      color: AppTheme.onBackground, fontSize: 14),
+                      color: AppTheme.textColor(context), fontSize: 14),
                   decoration: InputDecoration(
                     hintText: 'Napiš téma (např. „objednávka v restauraci")...',
                     hintStyle: GoogleFonts.plusJakartaSans(
-                        color: AppTheme.onSurfaceMuted, fontSize: 13),
+                        color: AppTheme.mutedTextColor(context), fontSize: 13),
                     contentPadding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 12),
                     suffixIcon: _isCreatingCustom
@@ -610,6 +613,7 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
   }
 
   Widget _buildMetricItem({
+    required BuildContext context,
     required String label,
     required String value,
     required Color color,
@@ -626,7 +630,7 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
           Text(
             label,
             style: GoogleFonts.plusJakartaSans(
-                fontSize: 10, color: AppTheme.onSurfaceMuted),
+                fontSize: 10, color: AppTheme.mutedTextColor(context)),
           ),
           const SizedBox(height: 4),
           Text(
@@ -639,19 +643,22 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
     );
   }
 
-  Widget _buildMiniScenarioTile(Scenario scenario, int? selectedId) {
+  Widget _buildMiniScenarioTile(
+      BuildContext context, Scenario scenario, int? selectedId) {
     final isSelected = selectedId == scenario.id;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
         color: isSelected
             ? AppTheme.accent.withValues(alpha: 0.08)
-            : AppTheme.glassLight,
+            : (isDark ? AppTheme.glassLightDark : AppTheme.glassLight),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: isSelected
               ? AppTheme.accent.withValues(alpha: 0.4)
-              : AppTheme.outline,
+              : (isDark ? AppTheme.outlineDark : AppTheme.outline),
           width: isSelected ? 1.5 : 1.0,
         ),
       ),
@@ -689,13 +696,13 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
                       style: GoogleFonts.plusJakartaSans(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
-                          color: AppTheme.onBackground),
+                          color: AppTheme.textColor(context)),
                     ),
                     Text(
                       scenario.description,
                       style: GoogleFonts.plusJakartaSans(
                           fontSize: 11,
-                          color: AppTheme.onSurfaceMuted),
+                          color: AppTheme.mutedTextColor(context)),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -709,7 +716,9 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
                 decoration: BoxDecoration(
                   color: isSelected
                       ? AppTheme.accent.withValues(alpha: 0.15)
-                      : AppTheme.backgroundSecondary,
+                      : (isDark
+                          ? AppTheme.backgroundSecondaryDark
+                          : AppTheme.backgroundSecondary),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
@@ -721,7 +730,7 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
                     fontWeight: FontWeight.w700,
                     color: isSelected
                         ? AppTheme.accent
-                        : AppTheme.onSurfaceMuted,
+                        : AppTheme.mutedTextColor(context),
                     letterSpacing: 0.5,
                   ),
                 ),

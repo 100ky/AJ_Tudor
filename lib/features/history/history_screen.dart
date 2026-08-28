@@ -27,7 +27,7 @@ class HistoryScreen extends ConsumerWidget {
           style: GoogleFonts.plusJakartaSans(
             fontSize: 18,
             fontWeight: FontWeight.w600,
-            color: AppTheme.onBackground,
+            color: AppTheme.textColor(context),
           ),
         ),
         centerTitle: true,
@@ -60,7 +60,7 @@ class HistoryScreen extends ConsumerWidget {
                   Text(
                     'Zatím nemáš žádné lekce.',
                     style: GoogleFonts.plusJakartaSans(
-                        color: AppTheme.onSurfaceMuted, fontSize: 15),
+                        color: AppTheme.mutedTextColor(context), fontSize: 15),
                   ),
                 ],
               ),
@@ -72,7 +72,7 @@ class HistoryScreen extends ConsumerWidget {
             itemCount: sessions.length,
             itemBuilder: (context, index) {
               final session = sessions[index];
-              return _SessionCard(session: session);
+              return SessionCard(session: session);
             },
           );
         },
@@ -81,10 +81,10 @@ class HistoryScreen extends ConsumerWidget {
   }
 }
 
-class _SessionCard extends ConsumerWidget {
+class SessionCard extends ConsumerWidget {
   final Session session;
 
-  const _SessionCard({required this.session});
+  const SessionCard({super.key, required this.session});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -142,7 +142,7 @@ class _SessionCard extends ConsumerWidget {
               style: GoogleFonts.plusJakartaSans(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
-                color: AppTheme.onBackground,
+                color: AppTheme.textColor(context),
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -154,7 +154,7 @@ class _SessionCard extends ConsumerWidget {
                 const SizedBox(width: 4),
                 Text('${session.totalErrors} chyb',
                     style: GoogleFonts.plusJakartaSans(
-                        color: AppTheme.onSurfaceMuted, fontSize: 13)),
+                        color: AppTheme.mutedTextColor(context), fontSize: 13)),
                 const Spacer(),
                 Text(
                   'Zobrazit přepis',
@@ -339,7 +339,7 @@ class _SessionDetailSheetState extends ConsumerState<_SessionDetailSheet> {
                           style: GoogleFonts.plusJakartaSans(
                             fontSize: 20,
                             fontWeight: FontWeight.w700,
-                            color: AppTheme.onBackground,
+                            color: AppTheme.textColor(context),
                           ),
                           textAlign: TextAlign.left,
                         ),
@@ -415,7 +415,12 @@ class _SessionDetailSheetState extends ConsumerState<_SessionDetailSheet> {
                                         ],
                                       )
                                     : null,
-                                color: isUser ? null : AppTheme.glass,
+                                color: isUser
+                                    ? null
+                                    : (Theme.of(context).brightness ==
+                                            Brightness.dark
+                                        ? AppTheme.glassDark
+                                        : AppTheme.glass),
                                 borderRadius: BorderRadius.only(
                                   topLeft: const Radius.circular(20),
                                   topRight: const Radius.circular(20),
@@ -428,13 +433,16 @@ class _SessionDetailSheetState extends ConsumerState<_SessionDetailSheet> {
                                     color: isUser
                                         ? AppTheme.primary
                                             .withValues(alpha: 0.25)
-                                        : AppTheme.outline),
+                                        : (Theme.of(context).brightness ==
+                                                Brightness.dark
+                                            ? AppTheme.outlineDark
+                                            : AppTheme.outline)),
                                 boxShadow: AppTheme.glassShadowLight,
                               ),
                               child: Text(
                                 t.content,
                                 style: GoogleFonts.plusJakartaSans(
-                                  color: AppTheme.onBackground,
+                                  color: AppTheme.textColor(context),
                                   fontSize: 14,
                                   height: 1.45,
                                 ),

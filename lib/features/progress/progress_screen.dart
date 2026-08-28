@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -7,12 +8,20 @@ import '../../providers/database_provider.dart';
 import '../../data/database/app_database.dart';
 import '../../core/app_theme.dart';
 import '../../core/widgets/glass_container.dart';
+import '../history/history_screen.dart';
 
-class ProgressScreen extends ConsumerWidget {
+class ProgressScreen extends ConsumerStatefulWidget {
   const ProgressScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProgressScreen> createState() => _ProgressScreenState();
+}
+
+class _ProgressScreenState extends ConsumerState<ProgressScreen> {
+  int _selectedTabIndex = 0;
+
+  @override
+  Widget build(BuildContext context) {
     final repo = ref.watch(sessionRepositoryProvider);
     final userProfileStream = repo.watchUserProfile();
     final errorLogsStream = repo.watchAllErrorLogs();
@@ -26,7 +35,7 @@ class ProgressScreen extends ConsumerWidget {
           style: GoogleFonts.plusJakartaSans(
             fontSize: 18,
             fontWeight: FontWeight.w600,
-            color: AppTheme.onBackground,
+            color: AppTheme.textColor(context),
           ),
         ),
         centerTitle: true,
@@ -48,42 +57,41 @@ class ProgressScreen extends ConsumerWidget {
                 builder: (context, sessionsSnapshot) {
                   final sessions = sessionsSnapshot.data ?? [];
 
-                  return SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _buildSummaryGrid(context, profile, sessions),
-                        const SizedBox(height: 24),
-                        if (sessions.isNotEmpty) ...[
-                          _buildFluencyChart(context, sessions),
-                          const SizedBox(height: 24),
-                        ],
-                        if (errors.isNotEmpty) ...[
-                          _buildErrorDistributionChart(context, errors),
-                          const SizedBox(height: 24),
-                        ],
-                        if (profile?.memoryBriefing != null &&
-                            profile!.memoryBriefing!.isNotEmpty) ...[
-                          _buildMemoryCard(context, profile.memoryBriefing!),
-                          const SizedBox(height: 24),
-                        ],
-                        _buildSectionTitle('Slovní zásoba'),
-                        const SizedBox(height: 12),
-                        _buildVocabularyChipCloud(
-                            context, profile?.vocabulary ?? '[]'),
-                        const SizedBox(height: 24),
-                        _buildSectionTitle('Nedávné chyby (${errors.length})'),
-                        const SizedBox(height: 12),
-                        if (errors.isEmpty)
-                          _buildEmptyStateCard(context,
-                              'Zatím nemáš žádné zaznamenané chyby. Skvělá práce!')
-                        else
-                          ...errors
-                              .take(5)
-                              .map((error) => _buildErrorTile(context, error)),
-                      ],
-                    ),
+                  return Column(
+                    children: [
+                      // ── Přepínač: Přehled vs Historie ──────────────────────
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                        child: SegmentedButton<int>(
+                          segments: const [
+                            ButtonSegment<int>(
+                              value: 0,
+                              icon: Icon(Icons.analytics_outlined, size: 16),
+                              label: Text('Přehled & Slovíčka'),
+                            ),
+                            ButtonSegment<int>(
+                              value: 1,
+                              icon: Icon(Icons.history_rounded, size: 16),
+                              label: Text('Historie lekcí'),
+                            ),
+                          ],
+                          selected: {_selectedTabIndex},
+                          onSelectionChanged: (set) {
+                            HapticFeedback.selectionClick();
+                            setState(() {
+                              _selectedTabIndex = set.first;
+                            });
+                          },
+                        ),
+                      ),
+
+                      // ── Obsah podle vybrané záložky ────────────────────────
+                      Expanded(
+                        child: _selectedTabIndex == 0
+                            ? _buildOverviewTab(context, profile, sessions, errors)
+                            : _buildHistoryTab(context, sessions),
+                      ),
+                    ],
                   );
                 },
               );
@@ -94,7 +102,99 @@ class ProgressScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildSectionTitle(String title) {
+  Widget _buildOverviewTab(BuildContext context, UserProfile? profile,
+      List<Session> sessions, List<ErrorLog> errors) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildSummaryGrid(context, profile, sessions),
+          const SizedBox(height: 24),
+          if (sessions.isNotEmpty) ...[
+            _buildFluencyChart(context, sessions),
+            const SizedBox(height: 24),
+          ],
+          if (errors.isNotEmpty) ...[
+            _buildErrorDistributionChart(context, errors),
+            const SizedBox(height: 24),
+          ],
+          if (profile?.memoryBriefing != null &&
+              profile!.memoryBriefing!.isNotEmpty) ...[
+            _buildMemoryCard(context, profile.memoryBriefing!),
+            const SizedBox(height: 24),
+          ],
+          _buildSectionTitle('Slovní zásoba', context),
+          const SizedBox(height: 12),
+          _buildVocabularyChipCloud(
+              context, profile?.vocabulary ?? '[]'),
+          const SizedBox(height: 24),
+          _buildSectionTitle('Nedávné chyby (${errors.length})', context),
+          const SizedBox(height: 12),
+          if (errors.isEmpty)
+            _buildEmptyStateCard(context,
+                'Zatím nemáš žádné zaznamenané chyby. Skvělá práce!')
+          else
+            ...errors
+                .take(5)
+                .map((error) => _buildErrorTile(context, error)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHistoryTab(BuildContext context, List<Session> sessions) {
+    if (sessions.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppTheme.primary.withValues(alpha: 0.08),
+                ),
+                child: Icon(Icons.history_rounded,
+                    size: 38, color: AppTheme.primary),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Zatím nemáš žádné lekce',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.textColor(context),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Spusť svou první hlasovou lekci v záložce Hlas.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.plusJakartaSans(
+                  color: AppTheme.mutedTextColor(context),
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+      itemCount: sessions.length,
+      itemBuilder: (context, index) {
+        final session = sessions[index];
+        return SessionCard(session: session);
+      },
+    );
+  }
+
+  Widget _buildSectionTitle(String title, BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(left: 4),
       child: Text(
@@ -102,7 +202,7 @@ class ProgressScreen extends ConsumerWidget {
         style: GoogleFonts.plusJakartaSans(
           fontSize: 11,
           fontWeight: FontWeight.w700,
-          color: AppTheme.onSurfaceMuted,
+          color: AppTheme.mutedTextColor(context),
           letterSpacing: 1.0,
         ),
       ),
@@ -158,18 +258,18 @@ class ProgressScreen extends ConsumerWidget {
       physics: const NeverScrollableScrollPhysics(),
       childAspectRatio: 1.5,
       children: [
-        _buildGridCard('Lekce', '${profile?.totalSessions ?? 0}',
+        _buildGridCard(context, 'Lekce', '${profile?.totalSessions ?? 0}',
             Icons.play_lesson_rounded, AppTheme.primary),
-        _buildGridCard('Čas', timeString, Icons.timer_rounded, AppTheme.accent),
-        _buildGridCard('Slovíčka', '$vocabCount', Icons.abc_rounded,
+        _buildGridCard(context, 'Čas', timeString, Icons.timer_rounded, AppTheme.accent),
+        _buildGridCard(context, 'Slovíčka', '$vocabCount', Icons.abc_rounded,
             AppTheme.success),
-        _buildGridCard('Aktivní dny', '$activeDays',
+        _buildGridCard(context, 'Aktivní dny', '$activeDays',
             Icons.local_fire_department_rounded, AppTheme.error),
       ],
     );
   }
 
-  Widget _buildGridCard(
+  Widget _buildGridCard(BuildContext context,
       String title, String value, IconData icon, Color color) {
     return GlassContainer(
       padding: const EdgeInsets.all(14.0),
@@ -191,7 +291,7 @@ class ProgressScreen extends ConsumerWidget {
               Text(
                 title,
                 style: GoogleFonts.plusJakartaSans(
-                  color: AppTheme.onSurfaceMuted,
+                  color: AppTheme.mutedTextColor(context),
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                 ),
@@ -204,7 +304,7 @@ class ProgressScreen extends ConsumerWidget {
             style: GoogleFonts.plusJakartaSans(
               fontSize: 24,
               fontWeight: FontWeight.w700,
-              color: AppTheme.onBackground,
+              color: AppTheme.textColor(context),
             ),
           ),
         ],
@@ -238,7 +338,7 @@ class ProgressScreen extends ConsumerWidget {
             style: GoogleFonts.plusJakartaSans(
               fontWeight: FontWeight.w600,
               fontSize: 16,
-              color: AppTheme.onBackground,
+              color: AppTheme.textColor(context),
             ),
           ),
           const SizedBox(height: 24),
@@ -275,6 +375,24 @@ class ProgressScreen extends ConsumerWidget {
                         );
                       },
                     ),
+                  ),
+                ),
+                lineTouchData: LineTouchData(
+                  handleBuiltInTouches: true,
+                  touchTooltipData: LineTouchTooltipData(
+                    getTooltipColor: (_) => AppTheme.onBackground,
+                    getTooltipItems: (touchedSpots) {
+                      return touchedSpots.map((spot) {
+                        return LineTooltipItem(
+                          '${spot.y.toInt()}% plynulost',
+                          GoogleFonts.plusJakartaSans(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12,
+                          ),
+                        );
+                      }).toList();
+                    },
                   ),
                 ),
                 borderData: FlBorderData(show: false),
@@ -349,7 +467,7 @@ class ProgressScreen extends ConsumerWidget {
             style: GoogleFonts.plusJakartaSans(
               fontWeight: FontWeight.w600,
               fontSize: 16,
-              color: AppTheme.onBackground,
+              color: AppTheme.textColor(context),
             ),
           ),
           const SizedBox(height: 24),
@@ -410,14 +528,14 @@ class ProgressScreen extends ConsumerWidget {
                         style: GoogleFonts.plusJakartaSans(
                           fontSize: 28,
                           fontWeight: FontWeight.w700,
-                          color: AppTheme.onBackground,
+                          color: AppTheme.textColor(context),
                         ),
                       ),
                       Text(
                         'Chyb',
                         style: GoogleFonts.plusJakartaSans(
                           fontSize: 12,
-                          color: AppTheme.onSurfaceMuted,
+                          color: AppTheme.mutedTextColor(context),
                         ),
                       ),
                     ],
@@ -430,11 +548,11 @@ class ProgressScreen extends ConsumerWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _buildLegendItem('Gramatika', AppTheme.grammar),
+              _buildLegendItem(context, 'Gramatika', AppTheme.grammar),
               const SizedBox(width: 16),
-              _buildLegendItem('Slovíčka', AppTheme.vocabulary),
+              _buildLegendItem(context, 'Slovíčka', AppTheme.vocabulary),
               const SizedBox(width: 16),
-              _buildLegendItem('Výslovnost', AppTheme.pronunciation),
+              _buildLegendItem(context, 'Výslovnost', AppTheme.pronunciation),
             ],
           ),
         ],
@@ -442,7 +560,7 @@ class ProgressScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildLegendItem(String title, Color color) {
+  Widget _buildLegendItem(BuildContext context, String title, Color color) {
     return Row(
       children: [
         Container(
@@ -454,7 +572,9 @@ class ProgressScreen extends ConsumerWidget {
         Text(
           title,
           style: GoogleFonts.plusJakartaSans(
-              fontSize: 12, color: AppTheme.onSurface, fontWeight: FontWeight.w500),
+              fontSize: 12,
+              color: AppTheme.surfaceTextColor(context),
+              fontWeight: FontWeight.w500),
         ),
       ],
     );
@@ -494,7 +614,7 @@ class ProgressScreen extends ConsumerWidget {
             style: GoogleFonts.plusJakartaSans(
               fontStyle: FontStyle.italic,
               fontSize: 13,
-              color: AppTheme.onSurface,
+              color: AppTheme.surfaceTextColor(context),
               height: 1.5,
             ),
           ),
@@ -504,6 +624,8 @@ class ProgressScreen extends ConsumerWidget {
   }
 
   Widget _buildVocabularyChipCloud(BuildContext context, String vocabJson) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     try {
       final List<dynamic> words = jsonDecode(vocabJson);
       if (words.isEmpty) {
@@ -519,16 +641,18 @@ class ProgressScreen extends ConsumerWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
-                    color: AppTheme.glassLight,
+                    color: isDark ? AppTheme.glassLightDark : AppTheme.glassLight,
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AppTheme.outline),
+                    border: Border.all(
+                      color: isDark ? AppTheme.outlineDark : AppTheme.outline,
+                    ),
                   ),
                   child: Text(
                     word.toString(),
                     style: GoogleFonts.plusJakartaSans(
                       fontWeight: FontWeight.w500,
                       fontSize: 13,
-                      color: AppTheme.onBackground,
+                      color: AppTheme.textColor(context),
                     ),
                   ),
                 ))
@@ -543,19 +667,22 @@ class ProgressScreen extends ConsumerWidget {
   Widget _buildErrorTile(BuildContext context, ErrorLog error) {
     final color = AppTheme.errorTypeColor(error.errorType);
     final icon = AppTheme.errorTypeIcon(error.errorType);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: AppTheme.glass,
+        color: isDark ? AppTheme.glassDark : AppTheme.glass,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.outline),
+        border: Border.all(
+          color: isDark ? AppTheme.outlineDark : AppTheme.outline,
+        ),
       ),
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
           iconColor: color,
-          collapsedIconColor: AppTheme.onSurfaceMuted,
+          collapsedIconColor: AppTheme.mutedTextColor(context),
           leading: Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
@@ -586,7 +713,9 @@ class ProgressScreen extends ConsumerWidget {
               child: Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AppTheme.backgroundSecondary,
+                  color: isDark
+                      ? AppTheme.backgroundSecondaryDark
+                      : AppTheme.backgroundSecondary,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
@@ -599,7 +728,7 @@ class ProgressScreen extends ConsumerWidget {
                         error.explanation,
                         style: GoogleFonts.plusJakartaSans(
                           fontSize: 13,
-                          color: AppTheme.onSurface,
+                          color: AppTheme.surfaceTextColor(context),
                           height: 1.4,
                         ),
                       ),

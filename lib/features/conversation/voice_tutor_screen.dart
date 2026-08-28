@@ -5,8 +5,10 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../services/agents/voice_tutor_agent.dart';
 import '../../services/audio/audio_session_controller.dart';
 import '../../data/models/chat_message.dart';
+import 'package:flutter/services.dart';
 import '../../core/app_theme.dart';
 import '../../core/widgets/glass_container.dart';
+import '../../core/widgets/chat_bubble.dart';
 import 'widgets/liquid_voice_orb.dart';
 
 class VoiceTutorScreen extends ConsumerStatefulWidget {
@@ -290,7 +292,7 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
-                  color: AppTheme.onBackground,
+                  color: AppTheme.textColor(context),
                   letterSpacing: 0.2,
                 ),
               ),
@@ -557,7 +559,7 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
               style: GoogleFonts.plusJakartaSans(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
-                color: AppTheme.onBackground,
+                color: AppTheme.textColor(context),
               ),
             ),
             const SizedBox(height: 6),
@@ -566,7 +568,7 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
               textAlign: TextAlign.center,
               style: GoogleFonts.plusJakartaSans(
                 fontSize: 13,
-                color: AppTheme.onSurfaceMuted,
+                color: AppTheme.mutedTextColor(context),
                 height: 1.4,
               ),
             ),
@@ -598,8 +600,13 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
                 begin: Alignment.bottomCenter,
                 end: Alignment.topCenter,
                 colors: [
-                  AppTheme.background,
-                  AppTheme.background.withValues(alpha: 0.85),
+                  Theme.of(context).brightness == Brightness.dark
+                      ? AppTheme.backgroundDark
+                      : AppTheme.background,
+                  (Theme.of(context).brightness == Brightness.dark
+                          ? AppTheme.backgroundDark
+                          : AppTheme.background)
+                      .withValues(alpha: 0.85),
                   Colors.transparent,
                 ],
               ),
@@ -618,6 +625,7 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
               color: AppTheme.warning,
               tooltip: isPaused ? 'Pokračovat' : 'Pozastavit',
               onPressed: () {
+                HapticFeedback.lightImpact();
                 final notifier =
                     ref.read(voiceTutorAgentProvider.notifier);
                 if (isPaused) {
@@ -634,6 +642,7 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
           _buildMainButton(
             isIdle: isIdle,
             onPressed: () {
+              HapticFeedback.mediumImpact();
               final notifier = ref.read(voiceTutorAgentProvider.notifier);
               if (isIdle) {
                 notifier.startSession();
@@ -655,6 +664,7 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
               tooltip: 'Změnit téma',
               onPressed: isLiveSession
                   ? () {
+                      HapticFeedback.selectionClick();
                       ref
                           .read(voiceTutorAgentProvider.notifier)
                           .forceTopicChange();
@@ -807,7 +817,7 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
               style: GoogleFonts.plusJakartaSans(
                 fontSize: 16,
                 fontWeight: FontWeight.w400,
-                color: AppTheme.onBackground,
+                color: AppTheme.textColor(context),
                 height: 1.5,
               ),
             ),
@@ -818,50 +828,9 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
   }
 
   Widget _buildMessageBubble(ChatMessage msg) {
-    final isUser = msg.isUser;
-
-    return Align(
-      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 10.0),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        constraints: BoxConstraints(
-            maxWidth: MediaQuery.of(context).size.width * 0.78),
-        decoration: BoxDecoration(
-          gradient: isUser
-              ? LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    AppTheme.primary.withValues(alpha: 0.12),
-                    AppTheme.primaryLight.withValues(alpha: 0.08),
-                  ],
-                )
-              : null,
-          color: isUser ? null : AppTheme.glass,
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(20),
-            topRight: const Radius.circular(20),
-            bottomLeft: Radius.circular(isUser ? 20 : 4),
-            bottomRight: Radius.circular(isUser ? 4 : 20),
-          ),
-          border: Border.all(
-            color: isUser
-                ? AppTheme.primary.withValues(alpha: 0.25)
-                : AppTheme.outline,
-            width: 1,
-          ),
-          boxShadow: AppTheme.glassShadowLight,
-        ),
-        child: Text(
-          msg.text,
-          style: GoogleFonts.plusJakartaSans(
-            fontSize: 15,
-            color: AppTheme.onBackground,
-            height: 1.45,
-          ),
-        ),
-      ),
+    return ChatBubble(
+      text: msg.text,
+      isUser: msg.isUser,
     );
   }
 }

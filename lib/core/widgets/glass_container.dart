@@ -2,21 +2,13 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../app_theme.dart';
 
-/// Znovupoužitelný glassmorphism kontejner.
+/// Znovupoužitelný glassmorphism kontejner s adaptivní podporou světlého a tmavého režimu.
 ///
 /// Vytváří efekt matného skla s:
 /// - BackdropFilter (blur pozadí za kartou)
-/// - Poloprůhlednou bílou výplní
-/// - Jemným odleskem (světlý border nahoře/vlevo)
-/// - Měkkým stínem pro dojem "vznášení"
-///
-/// Příklad:
-/// ```dart
-/// GlassContainer(
-///   padding: EdgeInsets.all(16),
-///   child: Text('Obsah na skle'),
-/// )
-/// ```
+/// - Poloprůhlednou výplní (světlou / tmavou dle tématu)
+/// - Jemným odleskem na hranách
+/// - Měkkým stínem pro dojem vznášení
 class GlassContainer extends StatelessWidget {
   /// Obsah uvnitř glass kontejneru.
   final Widget child;
@@ -30,13 +22,13 @@ class GlassContainer extends StatelessWidget {
   /// Intenzita rozmazání pozadí. Výchozí: 12.0.
   final double blur;
 
-  /// Barva výplně glass kontejneru. Výchozí: `AppTheme.glass`.
+  /// Barva výplně glass kontejneru. Pokud není specifikována, adaptuje se dle tématu.
   final Color? color;
 
   /// Volitelný vlastní border.
   final BoxBorder? border;
 
-  /// Volitelné vlastní stíny. Výchozí: `AppTheme.glassShadow`.
+  /// Volitelné vlastní stíny.
   final List<BoxShadow>? shadows;
 
   /// Volitelný margin kolem kontejneru.
@@ -56,8 +48,16 @@ class GlassContainer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final effectiveColor = color ?? AppTheme.glass;
-    final effectiveShadows = shadows ?? AppTheme.glassShadow;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final effectiveColor =
+        color ?? (isDark ? AppTheme.glassDark : AppTheme.glass);
+    final effectiveShadows =
+        shadows ?? (isDark ? AppTheme.glassShadowDark : AppTheme.glassShadow);
+    final effectiveBorder = border ??
+        Border.all(
+          color: isDark ? AppTheme.glassBorderDark : AppTheme.glassBorder,
+          width: 1.0,
+        );
 
     return Container(
       margin: margin,
@@ -74,11 +74,7 @@ class GlassContainer extends StatelessWidget {
             decoration: BoxDecoration(
               color: effectiveColor,
               borderRadius: borderRadius,
-              border: border ??
-                  Border.all(
-                    color: AppTheme.glassBorder,
-                    width: 1.0,
-                  ),
+              border: effectiveBorder,
             ),
             child: child,
           ),
