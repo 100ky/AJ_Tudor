@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../providers/config_provider.dart';
 import '../../providers/database_provider.dart';
 import '../../providers/profile_provider.dart';
 import '../../core/constants/gemini_models.dart';
 import '../../services/system/backup_service.dart';
+import '../../core/app_theme.dart';
+import '../../core/widgets/glass_container.dart';
 
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -54,128 +57,187 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     });
   }
 
+  Widget _buildSectionLabel(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 10),
+      child: Text(
+        text.toUpperCase(),
+        style: GoogleFonts.plusJakartaSans(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: AppTheme.onSurfaceMuted,
+          letterSpacing: 1.0,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentKey = ref.watch(apiKeyProvider);
     final hasKey = currentKey != null && currentKey.isNotEmpty;
 
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: const Text('Nastavení'),
+        backgroundColor: Colors.transparent,
+        title: Text(
+          'Nastavení',
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: AppTheme.onBackground,
+          ),
+        ),
         centerTitle: true,
       ),
       body: ListView(
         padding: const EdgeInsets.all(16.0),
         children: [
-          const Text(
-            'Konfigurace umělé inteligence',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 16),
-          Card(
-            elevation: 2,
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.vpn_key_outlined, size: 28),
-                      const SizedBox(width: 12),
-                      const Expanded(
-                        child: Text(
-                          'Google Gemini API Klíč',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          // ── API Klíč ──────────────────────────────────────────────────────
+          _buildSectionLabel('Konfigurace umělé inteligence'),
+          GlassContainer(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primary.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(Icons.vpn_key_outlined,
+                          size: 20, color: AppTheme.primary),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Google Gemini API Klíč',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.onBackground,
                         ),
                       ),
-                      if (hasKey && !_isEditing)
-                        const Icon(Icons.check_circle, color: Colors.green),
-                    ],
+                    ),
+                    if (hasKey && !_isEditing)
+                      Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: AppTheme.success.withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(Icons.check_rounded,
+                            color: AppTheme.success, size: 16),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                if (!_isEditing) ...[
+                  Text(
+                    hasKey
+                        ? 'Klíč je uložen a připraven k použití.'
+                        : 'Není nastaven žádný klíč. Aplikace nebude fungovat.',
+                    style: GoogleFonts.plusJakartaSans(
+                      color: hasKey
+                          ? AppTheme.onSurfaceMuted
+                          : AppTheme.error,
+                      fontSize: 13,
+                    ),
                   ),
                   const SizedBox(height: 16),
-                  if (!_isEditing) ...[
-                    Text(
-                      hasKey ? 'Klíč je uložen a připraven k použití.' : 'Není nastaven žádný klíč. Aplikace nebude fungovat.',
-                      style: TextStyle(color: hasKey ? Colors.grey[400] : Colors.red[300]),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: () {
+                        setState(() {
+                          _isEditing = true;
+                        });
+                      },
+                      icon: const Icon(Icons.edit, size: 16),
+                      label: Text(hasKey ? 'Změnit API klíč' : 'Vložit API klíč'),
                     ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton.icon(
+                  ),
+                ] else ...[
+                  TextField(
+                    controller: _apiKeyController,
+                    decoration: InputDecoration(
+                      labelText: 'API Klíč',
+                      labelStyle: GoogleFonts.plusJakartaSans(
+                        color: AppTheme.onSurfaceMuted,
+                      ),
+                      hintText: 'AIzaSy...',
+                      suffixIcon: IconButton(
+                        icon: Icon(Icons.clear, color: AppTheme.onSurfaceMuted),
+                        onPressed: () => _apiKeyController.clear(),
+                      ),
+                    ),
+                    obscureText: true, // Skrýt klíč kvůli bezpečnosti
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
                         onPressed: () {
                           setState(() {
-                            _isEditing = true;
+                            _apiKeyController.text = currentKey ?? '';
+                            _isEditing = false;
                           });
                         },
-                        icon: const Icon(Icons.edit),
-                        label: Text(hasKey ? 'Změnit API klíč' : 'Vložit API klíč'),
+                        child: Text('Zrušit',
+                            style: GoogleFonts.plusJakartaSans(
+                                color: AppTheme.onSurfaceMuted)),
                       ),
-                    ),
-                  ] else ...[
-                    TextField(
-                      controller: _apiKeyController,
-                      decoration: InputDecoration(
-                        labelText: 'API Klíč',
-                        hintText: 'AIzaSy...',
-                        border: const OutlineInputBorder(),
-                        suffixIcon: IconButton(
-                          icon: const Icon(Icons.clear),
-                          onPressed: () => _apiKeyController.clear(),
-                        ),
+                      const SizedBox(width: 8),
+                      FilledButton(
+                        onPressed: _saveKey,
+                        child: const Text('Uložit'),
                       ),
-                      obscureText: true, // Skrýt klíč kvůli bezpečnosti
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        TextButton(
-                          onPressed: () {
-                            setState(() {
-                              _apiKeyController.text = currentKey ?? '';
-                              _isEditing = false;
-                            });
-                          },
-                          child: const Text('Zrušit'),
-                        ),
-                        const SizedBox(width: 8),
-                        FilledButton(
-                          onPressed: _saveKey,
-                          child: const Text('Uložit'),
-                        ),
-                      ],
-                    ),
-                  ],
+                    ],
+                  ),
                 ],
-              ),
+              ],
             ),
           ),
+
           const SizedBox(height: 24),
-          const Text(
-            'Upozornění a připomínky',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          Card(
-            elevation: 2,
+
+          // ── Upozornění ────────────────────────────────────────────────────
+          _buildSectionLabel('Upozornění a připomínky'),
+          GlassContainer(
             child: Column(
               children: [
                 SwitchListTile(
-                  title: const Text('Denní připomínky'),
-                  subtitle: const Text('AI se připomene, když zapomenete trénovat.'),
+                  contentPadding: EdgeInsets.zero,
+                  title: Text('Denní připomínky',
+                      style: GoogleFonts.plusJakartaSans(
+                          fontWeight: FontWeight.w500,
+                          color: AppTheme.onBackground)),
+                  subtitle: Text(
+                      'AI se připomene, když zapomenete trénovat.',
+                      style: GoogleFonts.plusJakartaSans(
+                          fontSize: 13, color: AppTheme.onSurfaceMuted)),
                   value: ref.watch(remindersEnabledProvider),
                   onChanged: (value) {
                     ref.read(remindersEnabledProvider.notifier).toggle(value);
                   },
                 ),
                 if (ref.watch(remindersEnabledProvider)) ...[
-                  const Divider(),
+                  Divider(color: AppTheme.outlineLight),
                   ListTile(
-                    title: const Text('Čas upozornění'),
+                    contentPadding: EdgeInsets.zero,
+                    title: Text('Čas upozornění',
+                        style: GoogleFonts.plusJakartaSans(
+                            color: AppTheme.onBackground)),
                     trailing: Text(
                       ref.watch(reminderTimeProvider),
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      style: GoogleFonts.plusJakartaSans(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 16,
+                          color: AppTheme.primary),
                     ),
                     onTap: () async {
                       final timeStr = ref.read(reminderTimeProvider);
@@ -191,16 +253,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       );
 
                       if (picked != null) {
-                        final formattedTime = 
+                        final formattedTime =
                             '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
-                        ref.read(reminderTimeProvider.notifier).saveTime(formattedTime);
+                        ref
+                            .read(reminderTimeProvider.notifier)
+                            .saveTime(formattedTime);
                       }
                     },
                   ),
-                  const Divider(),
+                  Divider(color: AppTheme.outlineLight),
                   SwitchListTile(
-                    title: const Text('Otravný režim 😈'),
-                    subtitle: const Text('Více upozornění během dne. Nenechá vás v klidu.'),
+                    contentPadding: EdgeInsets.zero,
+                    title: Text('Otravný režim 😈',
+                        style: GoogleFonts.plusJakartaSans(
+                            fontWeight: FontWeight.w500,
+                            color: AppTheme.onBackground)),
+                    subtitle: Text(
+                        'Více upozornění během dne. Nenechá vás v klidu.',
+                        style: GoogleFonts.plusJakartaSans(
+                            fontSize: 13, color: AppTheme.onSurfaceMuted)),
                     value: ref.watch(annoyingModeProvider),
                     onChanged: (value) {
                       ref.read(annoyingModeProvider.notifier).toggle(value);
@@ -210,137 +281,200 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ],
             ),
           ),
+
           const SizedBox(height: 24),
-          const Text(
-            'Hlasové a výukové nastavení',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          Card(
-            elevation: 2,
+
+          // ── Hlasové nastavení ──────────────────────────────────────────────
+          _buildSectionLabel('Hlasové a výukové nastavení'),
+          GlassContainer(
             child: Column(
               children: [
                 SwitchListTile(
-                  title: const Text('Pohlcující režim (Immersive Mode)'),
-                  subtitle: const Text('Učitel bude mluvit 100% anglicky a nebude opravovat chyby nahlas.'),
+                  contentPadding: EdgeInsets.zero,
+                  title: Text('Pohlcující režim (Immersive Mode)',
+                      style: GoogleFonts.plusJakartaSans(
+                          fontWeight: FontWeight.w500,
+                          color: AppTheme.onBackground)),
+                  subtitle: Text(
+                      'Učitel bude mluvit 100% anglicky a nebude opravovat chyby nahlas.',
+                      style: GoogleFonts.plusJakartaSans(
+                          fontSize: 13, color: AppTheme.onSurfaceMuted)),
                   value: ref.watch(immersiveModeProvider),
                   onChanged: (value) {
                     ref.read(immersiveModeProvider.notifier).toggle(value);
                   },
                 ),
-                const Divider(),
+                Divider(color: AppTheme.outlineLight),
                 ListTile(
-                  leading: const Icon(Icons.record_voice_over),
-                  title: const Text('Hlas učitele (Gemini Voice)'),
-                  subtitle: const Text('Vyberte přednastavený hlas Gemini Live.'),
+                  contentPadding: EdgeInsets.zero,
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppTheme.speaking.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(Icons.record_voice_over,
+                        color: AppTheme.speaking, size: 20),
+                  ),
+                  title: Text('Hlas učitele',
+                      style: GoogleFonts.plusJakartaSans(
+                          color: AppTheme.onBackground)),
+                  subtitle: Text('Gemini Live Voice',
+                      style: GoogleFonts.plusJakartaSans(
+                          fontSize: 12, color: AppTheme.onSurfaceMuted)),
                   trailing: DropdownButton<String>(
                     value: ref.watch(voiceProvider),
                     underline: const SizedBox(),
-                    style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueAccent, fontSize: 16),
+                    style: GoogleFonts.plusJakartaSans(
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.primary,
+                        fontSize: 14),
                     onChanged: (String? newVoice) {
                       if (newVoice != null) {
                         ref.read(voiceProvider.notifier).saveVoice(newVoice);
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Hlas učitele změněn na: $newVoice 🗣️')),
+                          SnackBar(
+                              content: Text(
+                                  'Hlas učitele změněn na: $newVoice 🗣️')),
                         );
                       }
                     },
                     items: const [
                       DropdownMenuItem(value: 'Puck', child: Text('Puck (Male)')),
-                      DropdownMenuItem(value: 'Charon', child: Text('Charon (Male)')),
-                      DropdownMenuItem(value: 'Kore', child: Text('Kore (Female)')),
-                      DropdownMenuItem(value: 'Fenrir', child: Text('Fenrir (Male)')),
-                      DropdownMenuItem(value: 'Aoede', child: Text('Aoede (Female)')),
+                      DropdownMenuItem(
+                          value: 'Charon', child: Text('Charon (Male)')),
+                      DropdownMenuItem(
+                          value: 'Kore', child: Text('Kore (Female)')),
+                      DropdownMenuItem(
+                          value: 'Fenrir', child: Text('Fenrir (Male)')),
+                      DropdownMenuItem(
+                          value: 'Aoede', child: Text('Aoede (Female)')),
                     ],
                   ),
                 ),
               ],
             ),
           ),
+
           const SizedBox(height: 24),
-          const Text(
-            'AI Model (Textový chat)',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const Padding(
-            padding: EdgeInsets.only(top: 4.0, bottom: 8.0),
+
+          // ── AI Model ──────────────────────────────────────────────────────
+          _buildSectionLabel('AI Model (Textový chat)'),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
             child: Text(
-              'Hlasový mód používá automaticky model optimalizovaný pro zvuk (Gemini 3.1 Flash Live).',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Card(
-            elevation: 2,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  isExpanded: true,
-                  value: ref.watch(modelProvider),
-                  items: GeminiModels.allowedChatModels.map((model) {
-                    return DropdownMenuItem(
-                      value: model,
-                      child: Text(GeminiModels.getLabel(model)),
-                    );
-                  }).toList(),
-                  onChanged: (value) {
-                    if (value != null) {
-                      ref.read(modelProvider.notifier).saveModel(value);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Změněn model na: $value')),
-                      );
-                    }
-                  },
-                ),
+              'Hlasový mód používá automaticky model optimalizovaný pro zvuk.',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 12,
+                color: AppTheme.onSurfaceMuted,
               ),
             ),
           ),
-          const SizedBox(height: 24),
-          const Text(
-            'Můj pokrok a paměť',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          GlassContainer(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                isExpanded: true,
+                value: ref.watch(modelProvider),
+                style: GoogleFonts.plusJakartaSans(
+                    color: AppTheme.onBackground, fontSize: 14),
+                items: GeminiModels.allowedChatModels.map((model) {
+                  return DropdownMenuItem(
+                    value: model,
+                    child: Text(GeminiModels.getLabel(model)),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  if (value != null) {
+                    ref.read(modelProvider.notifier).saveModel(value);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Změněn model na: $value')),
+                    );
+                  }
+                },
+              ),
+            ),
           ),
-          const SizedBox(height: 8),
+
+          const SizedBox(height: 24),
+
+          // ── Profil a paměť ────────────────────────────────────────────────
+          _buildSectionLabel('Můj pokrok a paměť'),
           Consumer(
             builder: (context, ref, child) {
               final profileAsync = ref.watch(userProfileProvider);
               return profileAsync.when(
                 data: (profile) {
                   if (profile == null) {
-                    return const Card(
-                      child: Padding(
-                        padding: EdgeInsets.all(16.0),
-                        child: Text('Zatím neproběhla žádná lekce.'),
-                      ),
+                    return GlassContainer(
+                      child: Text('Zatím neproběhla žádná lekce.',
+                          style: GoogleFonts.plusJakartaSans(
+                              color: AppTheme.onSurfaceMuted)),
                     );
                   }
-                  return Card(
+                  return GlassContainer(
                     child: Column(
                       children: [
                         ListTile(
-                          leading: const Icon(Icons.psychology),
-                          title: const Text('Co si AI pamatuje (Briefing)'),
+                          contentPadding: EdgeInsets.zero,
+                          leading: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: AppTheme.primary.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Icon(Icons.psychology,
+                                color: AppTheme.primary, size: 20),
+                          ),
+                          title: Text('Co si AI pamatuje',
+                              style: GoogleFonts.plusJakartaSans(
+                                  fontWeight: FontWeight.w500,
+                                  color: AppTheme.onBackground)),
                           subtitle: Text(
-                            profile.memoryBriefing ?? 'Žádný briefing zatím není k dispozici.',
-                            style: const TextStyle(fontStyle: FontStyle.italic),
+                            profile.memoryBriefing ??
+                                'Žádný briefing zatím není k dispozici.',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontStyle: FontStyle.italic,
+                              fontSize: 13,
+                              color: AppTheme.onSurfaceMuted,
+                            ),
                           ),
                         ),
-                        const Divider(),
-                         ListTile(
-                          leading: const Icon(Icons.school),
-                          title: const Text('Úroveň angličtiny'),
-                          subtitle: const Text('Změnit obtížnost konverzace s učitelem'),
+                        Divider(color: AppTheme.outlineLight),
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: AppTheme.success.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Icon(Icons.school,
+                                color: AppTheme.success, size: 20),
+                          ),
+                          title: Text('Úroveň angličtiny',
+                              style: GoogleFonts.plusJakartaSans(
+                                  color: AppTheme.onBackground)),
                           trailing: DropdownButton<String>(
-                            value: ['A1', 'A2', 'B1', 'B2'].contains(profile.targetLevel) ? profile.targetLevel : 'B1',
+                            value: ['A1', 'A2', 'B1', 'B2']
+                                    .contains(profile.targetLevel)
+                                ? profile.targetLevel
+                                : 'B1',
                             underline: const SizedBox(),
-                            style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueAccent, fontSize: 16),
+                            style: GoogleFonts.plusJakartaSans(
+                                fontWeight: FontWeight.w600,
+                                color: AppTheme.primary,
+                                fontSize: 16),
                             onChanged: (String? newLevel) async {
                               if (newLevel != null) {
-                                await ref.read(sessionRepositoryProvider).updateTargetLevel(newLevel);
+                                await ref
+                                    .read(sessionRepositoryProvider)
+                                    .updateTargetLevel(newLevel);
                                 if (context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('Úroveň angličtiny byla změněna na $newLevel! 🎯')),
+                                    SnackBar(
+                                        content: Text(
+                                            'Úroveň angličtiny byla změněna na $newLevel! 🎯')),
                                   );
                                 }
                               }
@@ -354,75 +488,127 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           ),
                         ),
                         ListTile(
-                          leading: const Icon(Icons.history),
-                          title: const Text('Počet absolvovaných lekcí'),
-                          trailing: Text(profile.totalSessions.toString()),
+                          contentPadding: EdgeInsets.zero,
+                          leading: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: AppTheme.accent.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Icon(Icons.history,
+                                color: AppTheme.accent, size: 20),
+                          ),
+                          title: Text('Počet absolvovaných lekcí',
+                              style: GoogleFonts.plusJakartaSans(
+                                  color: AppTheme.onBackground)),
+                          trailing: Text(
+                            profile.totalSessions.toString(),
+                            style: GoogleFonts.plusJakartaSans(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 16,
+                                color: AppTheme.primary),
+                          ),
                         ),
-                        const Divider(),
+                        Divider(color: AppTheme.outlineLight),
                         TextButton.icon(
                           onPressed: () => _showResetDialog(context),
-                          icon: const Icon(Icons.delete_forever, color: Colors.red),
-                          label: const Text('Resetovat paměť a pokrok', style: TextStyle(color: Colors.red)),
+                          icon: Icon(Icons.delete_forever,
+                              color: AppTheme.error, size: 18),
+                          label: Text('Resetovat paměť a pokrok',
+                              style: GoogleFonts.plusJakartaSans(
+                                  color: AppTheme.error, fontSize: 13)),
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 4),
                       ],
                     ),
                   );
                 },
-                loading: () => const Center(child: CircularProgressIndicator()),
+                loading: () =>
+                    const Center(child: CircularProgressIndicator()),
                 error: (e, _) => Text('Chyba načítání profilu: $e'),
               );
             },
           ),
+
           const SizedBox(height: 24),
-          const Text(
-            'Zálohování a obnova dat',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          Card(
-            elevation: 2,
+
+          // ── Záloha ────────────────────────────────────────────────────────
+          _buildSectionLabel('Zálohování a obnova dat'),
+          GlassContainer(
             child: Column(
               children: [
                 ListTile(
-                  leading: const Icon(Icons.backup_outlined),
-                  title: const Text('Vytvořit zálohu pokroku'),
-                  subtitle: const Text('Exportuje váš pokrok do souboru, který můžete uložit nebo sdílet.'),
+                  contentPadding: EdgeInsets.zero,
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primary.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(Icons.backup_outlined,
+                        color: AppTheme.primary, size: 20),
+                  ),
+                  title: Text('Vytvořit zálohu pokroku',
+                      style: GoogleFonts.plusJakartaSans(
+                          color: AppTheme.onBackground)),
+                  subtitle: Text(
+                      'Exportuje váš pokrok do souboru.',
+                      style: GoogleFonts.plusJakartaSans(
+                          fontSize: 12, color: AppTheme.onSurfaceMuted)),
                   onTap: () async {
-                    final success = await ref.read(backupServiceProvider).exportBackup();
+                    final success =
+                        await ref.read(backupServiceProvider).exportBackup();
                     if (context.mounted) {
-                      if (success) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Záloha byla úspěšně exportována! 📤')),
-                        );
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Export zálohy se nezdařil nebo byl stornován. ❌')),
-                        );
-                      }
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                            content: Text(success
+                                ? 'Záloha byla úspěšně exportována! 📤'
+                                : 'Export zálohy se nezdařil. ❌')),
+                      );
                     }
                   },
                 ),
-                const Divider(),
+                Divider(color: AppTheme.outlineLight),
                 ListTile(
-                  leading: const Icon(Icons.settings_backup_restore_outlined),
-                  title: const Text('Obnovit pokrok ze zálohy'),
-                  subtitle: const Text('Načte data ze záložního souboru SQLite a přepíše aktuální stav.'),
+                  contentPadding: EdgeInsets.zero,
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppTheme.warning.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(Icons.settings_backup_restore_outlined,
+                        color: AppTheme.warning, size: 20),
+                  ),
+                  title: Text('Obnovit pokrok ze zálohy',
+                      style: GoogleFonts.plusJakartaSans(
+                          color: AppTheme.onBackground)),
+                  subtitle: Text(
+                      'Načte data ze záložního souboru.',
+                      style: GoogleFonts.plusJakartaSans(
+                          fontSize: 12, color: AppTheme.onSurfaceMuted)),
                   onTap: () async {
-                    // Zobrazit potvrzovací dialog
                     final confirm = await showDialog<bool>(
                       context: context,
                       builder: (context) => AlertDialog(
-                        title: const Text('Obnovit data?'),
-                        content: const Text('Tato akce nahradí všechna stávající data v aplikaci vybranou zálohou. Nelze vrátit zpět.'),
+                        title: Text('Obnovit data?',
+                            style: GoogleFonts.plusJakartaSans(
+                                fontWeight: FontWeight.w600)),
+                        content: Text(
+                            'Tato akce nahradí všechna stávající data vybranou zálohou. Nelze vrátit zpět.',
+                            style: GoogleFonts.plusJakartaSans()),
                         actions: [
                           TextButton(
                             onPressed: () => Navigator.pop(context, false),
-                            child: const Text('Zrušit'),
+                            child: Text('Zrušit',
+                                style: GoogleFonts.plusJakartaSans(
+                                    color: AppTheme.onSurfaceMuted)),
                           ),
                           TextButton(
                             onPressed: () => Navigator.pop(context, true),
-                            child: const Text('Obnovit', style: TextStyle(color: Colors.red)),
+                            child: Text('Obnovit',
+                                style: GoogleFonts.plusJakartaSans(
+                                    color: AppTheme.error)),
                           ),
                         ],
                       ),
@@ -430,41 +616,38 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
                     if (confirm == true) {
                       if (context.mounted) {
-                        // Zobrazit indikátor průběhu
                         showDialog(
                           context: context,
                           barrierDismissible: false,
-                          builder: (context) => const Center(
-                            child: Card(
-                              child: Padding(
-                                padding: EdgeInsets.all(24.0),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    CircularProgressIndicator(),
-                                    SizedBox(height: 16),
-                                    Text('Probíhá obnova dat...'),
-                                  ],
-                                ),
+                          builder: (context) => Center(
+                            child: GlassContainer(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  CircularProgressIndicator(
+                                      color: AppTheme.primary),
+                                  const SizedBox(height: 16),
+                                  Text('Probíhá obnova dat...',
+                                      style: GoogleFonts.plusJakartaSans(
+                                          color: AppTheme.onBackground)),
+                                ],
                               ),
                             ),
                           ),
                         );
                       }
 
-                      final success = await ref.read(backupServiceProvider).importBackup();
+                      final success =
+                          await ref.read(backupServiceProvider).importBackup();
 
                       if (context.mounted) {
-                        Navigator.pop(context); // Zavřít progress dialog
-                        if (success) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Data byla úspěšně obnovena! 🎉')),
-                          );
-                        } else {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Obnova dat se nezdařila. Vyberte platný soubor zálohy. ❌')),
-                          );
-                        }
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                              content: Text(success
+                                  ? 'Data byla úspěšně obnovena! 🎉'
+                                  : 'Obnova dat se nezdařila. ❌')),
+                        );
                       }
                     }
                   },
@@ -472,19 +655,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ],
             ),
           ),
+
           const SizedBox(height: 24),
-          const Divider(),
-          const SizedBox(height: 24),
-          const Text(
-            'Informace o aplikaci',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+
+          // ── Info ──────────────────────────────────────────────────────────
+          _buildSectionLabel('Informace o aplikaci'),
+          GlassContainer(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, color: AppTheme.onSurfaceMuted, size: 20),
+                const SizedBox(width: 12),
+                Text('Verze',
+                    style: GoogleFonts.plusJakartaSans(
+                        color: AppTheme.onBackground)),
+                const Spacer(),
+                Text('0.1.0 - Dev Preview',
+                    style: GoogleFonts.plusJakartaSans(
+                        color: AppTheme.onSurfaceMuted, fontSize: 13)),
+              ],
+            ),
           ),
-          const SizedBox(height: 8),
-          ListTile(
-            leading: const Icon(Icons.info_outline),
-            title: const Text('Verze'),
-            subtitle: const Text('0.1.0 - Dev Preview'),
-          ),
+          const SizedBox(height: 32),
         ],
       ),
     );
@@ -494,12 +686,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Resetovat paměť?'),
-        content: const Text('Tato akce vymaže vše, co si AI pamatuje o vašem pokroku. Nelze vrátit zpět.'),
+        title: Text('Resetovat paměť?',
+            style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600)),
+        content: Text(
+            'Tato akce vymaže vše, co si AI pamatuje o vašem pokroku. Nelze vrátit zpět.',
+            style: GoogleFonts.plusJakartaSans()),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Zrušit'),
+            child: Text('Zrušit',
+                style:
+                    GoogleFonts.plusJakartaSans(color: AppTheme.onSurfaceMuted)),
           ),
           TextButton(
             onPressed: () async {
@@ -511,7 +708,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 );
               }
             },
-            child: const Text('Resetovat', style: TextStyle(color: Colors.red)),
+            child: Text('Resetovat',
+                style: GoogleFonts.plusJakartaSans(color: AppTheme.error)),
           ),
         ],
       ),

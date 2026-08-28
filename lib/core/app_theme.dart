@@ -1,60 +1,160 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-/// Centrální design systém aplikace AJ Tudor.
+/// Centrální design systém aplikace AJ Tudor – Light Glassmorphism.
 ///
-/// Definuje barevnou paletu, typografii a tvary konzistentně
-/// dle psychologie barev pro vzdělávací aplikace:
-/// - Modrá: soustředění a produktivita (primary)
-/// - Zelená: úspěch a pozitivní zpětná vazba (success/listening)
-/// - Oranžová: energie a pozornost (accent/CTA)
+/// Vizuální jazyk založený na:
+/// - Světlém pozadí s jemnými gradient bloby
+/// - Frosted glass kartách (průsvitná bílá + blur)
+/// - Měkkých stínech místo ostrých okrajů
+/// - Vibrantních akcentech (indigo, emerald, violet)
 abstract final class AppTheme {
-  // ── Barevné tokeny ──────────────────────────────────────────────────────────
+  // ── Pozadí ────────────────────────────────────────────────────────────────
 
-  /// Primární modrá – tutorovy zprávy, navigace, soustředění
-  static const Color primary = Color(0xFF1A73E8);
+  /// Hlavní pozadí – jemný šedofialový (ne čistě bílý, aby glass vyniknul)
+  static const Color background = Color(0xFFF4F2FA);
 
-  /// Světlejší varianty primární modré
-  static const Color primaryLight = Color(0xFF4A9EFF);
-  static const Color primaryDark = Color(0xFF0D47A1);
+  /// Sekundární pozadí pro mírný kontrast
+  static const Color backgroundSecondary = Color(0xFFEBE8F4);
 
-  /// Zelená – listening stav, správné odpovědi, progress
-  static const Color success = Color(0xFF34A853);
-  static const Color successLight = Color(0xFF4CAF72);
+  // ── Glass povrchy ─────────────────────────────────────────────────────────
+
+  /// Standardní glass karta (~80% bílá)
+  static const Color glass = Color(0xCCFFFFFF);
+
+  /// Lehčí glass (~60% bílá) pro vnořené prvky
+  static const Color glassLight = Color(0x99FFFFFF);
+
+  /// Jemný border glass karet (subtilní bílý okraj simulující odlesk světla)
+  static const Color glassBorder = Color(0x55FFFFFF);
+
+  /// Stín pro glass karty – měkký a rozptýlený
+  static const List<BoxShadow> glassShadow = [
+    BoxShadow(
+      color: Color(0x12000000),
+      blurRadius: 24,
+      spreadRadius: 0,
+      offset: Offset(0, 8),
+    ),
+    BoxShadow(
+      color: Color(0x08000000),
+      blurRadius: 8,
+      spreadRadius: 0,
+      offset: Offset(0, 2),
+    ),
+  ];
+
+  /// Lehčí stín pro menší prvky
+  static const List<BoxShadow> glassShadowLight = [
+    BoxShadow(
+      color: Color(0x0A000000),
+      blurRadius: 16,
+      spreadRadius: 0,
+      offset: Offset(0, 4),
+    ),
+  ];
+
+  // ── Primární barvy ────────────────────────────────────────────────────────
+
+  /// Primární indigo – navigace, hlavní akce, tutorovy zprávy
+  static const Color primary = Color(0xFF6366F1);
+
+  /// Světlejší varianta
+  static const Color primaryLight = Color(0xFF818CF8);
+
+  /// Tmavší varianta
+  static const Color primaryDark = Color(0xFF4F46E5);
+
+  // ── Sémantické barvy ──────────────────────────────────────────────────────
+
+  /// Zelená – správné odpovědi, listening stav, progress
+  static const Color success = Color(0xFF10B981);
+  static const Color successLight = Color(0xFF34D399);
 
   /// Oranžová – akcent, CTA, streak, energie
-  static const Color accent = Color(0xFFFF6D00);
-  static const Color accentLight = Color(0xFFFF8F00);
+  static const Color accent = Color(0xFFF97316);
+  static const Color accentLight = Color(0xFFFB923C);
 
   /// Amber – pauza, connecting, varování
-  static const Color warning = Color(0xFFF9A825);
+  static const Color warning = Color(0xFFF59E0B);
 
-  /// Červená – chyby (měkká, ne agresivní)
-  static const Color error = Color(0xFFE53935);
+  /// Červená – chyby
+  static const Color error = Color(0xFFEF4444);
 
-  /// Fialová – speaking stav tutora
-  static const Color speaking = Color(0xFF7C4DFF);
+  /// Violet – speaking stav tutora
+  static const Color speaking = Color(0xFF8B5CF6);
 
-  // ── Povrchy (tmavý režim) ─────────────────────────────────────────────────
+  // ── Barvy typů chyb (Progress, History) ───────────────────────────────────
 
-  /// Nejhlubší pozadí
-  static const Color background = Color(0xFF0A0A14);
+  /// Gramatické chyby – amber
+  static const Color grammar = Color(0xFFF59E0B);
 
-  /// Povrch karet, dialogů
-  static const Color surface = Color(0xFF12121E);
+  /// Slovníkové chyby – blue
+  static const Color vocabulary = Color(0xFF3B82F6);
 
-  /// Elevovaný povrch (listy, bubliny)
-  static const Color surfaceVariant = Color(0xFF1A1A2E);
+  /// Výslovnostní chyby – violet
+  static const Color pronunciation = Color(0xFF8B5CF6);
 
-  /// Jemný oddělovač / border
-  static const Color outline = Color(0xFF2A2A40);
+  /// Vrátí barvu pro daný typ chyby.
+  static Color errorTypeColor(String type) {
+    switch (type.toLowerCase()) {
+      case 'grammar':
+        return grammar;
+      case 'vocabulary':
+        return vocabulary;
+      case 'pronunciation':
+        return pronunciation;
+      default:
+        return onSurfaceMuted;
+    }
+  }
+
+  /// Vrátí ikonu pro daný typ chyby.
+  static IconData errorTypeIcon(String type) {
+    switch (type.toLowerCase()) {
+      case 'grammar':
+        return Icons.architecture;
+      case 'vocabulary':
+        return Icons.abc;
+      case 'pronunciation':
+        return Icons.record_voice_over;
+      default:
+        return Icons.error_outline;
+    }
+  }
+
+  // ── Dekorativní gradient bloby ────────────────────────────────────────────
+
+  /// Indigo blob (pozadí – levý horní roh)
+  static const Color blobPrimary = Color(0x306366F1);
+
+  /// Pink blob (pozadí – pravý spodní roh)
+  static const Color blobSecondary = Color(0x30EC4899);
+
+  /// Cyan blob (pozadí – centrální)
+  static const Color blobTertiary = Color(0x3006B6D4);
 
   // ── Text ──────────────────────────────────────────────────────────────────
 
+  /// Hlavní text na pozadí – hluboká indigo
+  static const Color onBackground = Color(0xFF1E1B4B);
+
+  /// Sekundární text na kartách
+  static const Color onSurface = Color(0xFF374151);
+
+  /// Ztlumený text (labely, placeholdery)
+  static const Color onSurfaceMuted = Color(0xFF9CA3AF);
+
+  /// Text na primárním povrchu
   static const Color onPrimary = Colors.white;
-  static const Color onBackground = Color(0xFFE8E8F0);
-  static const Color onSurface = Color(0xFFD0D0E0);
-  static const Color onSurfaceMuted = Color(0xFF7070A0);
+
+  // ── Okraje ────────────────────────────────────────────────────────────────
+
+  /// Standardní border
+  static const Color outline = Color(0xFFE5E7EB);
+
+  /// Velmi jemný border
+  static const Color outlineLight = Color(0xFFF3F4F6);
 
   // ── Speciální barvy hlasového orbu podle stavu ────────────────────────────
 
@@ -74,14 +174,14 @@ abstract final class AppTheme {
       case 'error':
         return error;
       default: // idle
-        return const Color(0xFF3A3A5C);
+        return const Color(0xFFBFC0D6);
     }
   }
 
   // ── ColorScheme ───────────────────────────────────────────────────────────
 
-  static const ColorScheme _darkColorScheme = ColorScheme(
-    brightness: Brightness.dark,
+  static const ColorScheme _lightColorScheme = ColorScheme(
+    brightness: Brightness.light,
     primary: primary,
     onPrimary: onPrimary,
     secondary: success,
@@ -90,9 +190,9 @@ abstract final class AppTheme {
     onTertiary: onPrimary,
     error: error,
     onError: onPrimary,
-    surface: surface,
+    surface: glass,
     onSurface: onSurface,
-    surfaceContainerHighest: surfaceVariant,
+    surfaceContainerHighest: backgroundSecondary,
     outline: outline,
   );
 
@@ -144,16 +244,16 @@ abstract final class AppTheme {
 
   // ── Finální ThemeData ─────────────────────────────────────────────────────
 
-  static ThemeData get darkTheme => ThemeData(
+  static ThemeData get lightTheme => ThemeData(
     useMaterial3: true,
-    brightness: Brightness.dark,
-    colorScheme: _darkColorScheme,
+    brightness: Brightness.light,
+    colorScheme: _lightColorScheme,
     scaffoldBackgroundColor: background,
     textTheme: _textTheme,
 
     // AppBar
     appBarTheme: AppBarTheme(
-      backgroundColor: background,
+      backgroundColor: Colors.transparent,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       centerTitle: true,
@@ -165,12 +265,13 @@ abstract final class AppTheme {
       iconTheme: const IconThemeData(color: onBackground),
     ),
 
-    // NavigationBar (dolní lišta)
+    // NavigationBar (dolní lišta) – glass efekt
     navigationBarTheme: NavigationBarThemeData(
-      backgroundColor: surface,
+      backgroundColor: glass,
       surfaceTintColor: Colors.transparent,
-      indicatorColor: primary.withValues(alpha: 0.15),
-      height: 76, // Vyšší = labely jako 'Nastavení' se nevlévají pryč
+      indicatorColor: primary.withValues(alpha: 0.12),
+      elevation: 0,
+      height: 76,
       labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
       labelTextStyle: WidgetStateProperty.resolveWith((states) {
         final isSelected = states.contains(WidgetState.selected);
@@ -189,18 +290,18 @@ abstract final class AppTheme {
       }),
     ),
 
-    // Card
+    // Card – glass styl
     cardTheme: CardThemeData(
-      color: surfaceVariant,
+      color: glass,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: const BorderSide(color: outline, width: 1),
+        borderRadius: BorderRadius.circular(20),
       ),
+      shadowColor: Colors.black.withValues(alpha: 0.08),
     ),
 
-    // FilledButton
+    // FilledButton – gradient efekt přes primární
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
         backgroundColor: primary,
@@ -209,9 +310,11 @@ abstract final class AppTheme {
           fontWeight: FontWeight.w600,
           letterSpacing: 0.3,
         ),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
         ),
+        elevation: 0,
       ),
     ),
 
@@ -219,10 +322,11 @@ abstract final class AppTheme {
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         foregroundColor: primary,
-        side: const BorderSide(color: primary),
+        side: BorderSide(color: primary.withValues(alpha: 0.3)),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
         ),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
       ),
     ),
 
@@ -233,49 +337,49 @@ abstract final class AppTheme {
       elevation: 0,
     ),
 
-    // InputDecoration (TextField)
+    // InputDecoration (TextField) – glass styl
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: surfaceVariant,
+      fillColor: glass,
       hintStyle: TextStyle(color: onSurfaceMuted),
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(28),
-        borderSide: const BorderSide(color: outline),
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: outline),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(28),
-        borderSide: const BorderSide(color: outline),
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: outline),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(28),
-        borderSide: const BorderSide(color: primary, width: 1.5),
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: primary, width: 1.5),
       ),
     ),
 
     // SnackBar
     snackBarTheme: SnackBarThemeData(
-      backgroundColor: surfaceVariant,
-      contentTextStyle: GoogleFonts.plusJakartaSans(color: onSurface),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      backgroundColor: onBackground,
+      contentTextStyle: GoogleFonts.plusJakartaSans(color: Colors.white),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       behavior: SnackBarBehavior.floating,
     ),
 
     // Chip
     chipTheme: ChipThemeData(
-      backgroundColor: surfaceVariant,
+      backgroundColor: glass,
       labelStyle: GoogleFonts.plusJakartaSans(
         fontSize: 12,
         fontWeight: FontWeight.w500,
         color: onSurface,
       ),
-      side: const BorderSide(color: outline),
+      side: BorderSide(color: outline),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
     ),
 
     // Divider
     dividerTheme: const DividerThemeData(
-      color: outline,
+      color: outlineLight,
       thickness: 1,
       space: 1,
     ),
@@ -283,18 +387,73 @@ abstract final class AppTheme {
     // SegmentedButton
     segmentedButtonTheme: SegmentedButtonThemeData(
       style: SegmentedButton.styleFrom(
-        backgroundColor: surfaceVariant,
+        backgroundColor: glass,
         foregroundColor: onSurfaceMuted,
         selectedForegroundColor: primary,
-        selectedBackgroundColor: primary.withValues(alpha: 0.12),
-        side: const BorderSide(color: outline),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        iconSize: 15, // Menší ikona = více místa pro text
+        selectedBackgroundColor: primary.withValues(alpha: 0.10),
+        side: BorderSide(color: outline),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        iconSize: 15,
         textStyle: GoogleFonts.plusJakartaSans(
-          fontSize: 12, // 13 → 12: zabrání zlomu řádky
+          fontSize: 12,
           fontWeight: FontWeight.w500,
         ),
       ),
+    ),
+
+    // Dialog
+    dialogTheme: DialogThemeData(
+      backgroundColor: background,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+    ),
+
+    // Switch
+    switchTheme: SwitchThemeData(
+      thumbColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) return primary;
+        return onSurfaceMuted;
+      }),
+      trackColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) {
+          return primary.withValues(alpha: 0.3);
+        }
+        return outline;
+      }),
+      trackOutlineColor: WidgetStateProperty.all(Colors.transparent),
+    ),
+
+    // ListTile
+    listTileTheme: ListTileThemeData(
+      iconColor: onSurface,
+      textColor: onSurface,
+      subtitleTextStyle: GoogleFonts.plusJakartaSans(
+        fontSize: 13,
+        color: onSurfaceMuted,
+      ),
+    ),
+
+    // DropdownMenu
+    dropdownMenuTheme: DropdownMenuThemeData(
+      textStyle: GoogleFonts.plusJakartaSans(
+        fontSize: 14,
+        color: onSurface,
+      ),
+    ),
+
+    // BottomSheet
+    bottomSheetTheme: BottomSheetThemeData(
+      backgroundColor: background,
+      surfaceTintColor: Colors.transparent,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+    ),
+
+    // TimePicker
+    timePickerTheme: TimePickerThemeData(
+      backgroundColor: background,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
     ),
   );
 }

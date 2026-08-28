@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -26,9 +27,10 @@ class _SelectedIndexNotifier extends Notifier<int> {
 final _selectedIndexProvider =
     NotifierProvider<_SelectedIndexNotifier, int>(_SelectedIndexNotifier.new);
 
-/// Hlavní kostra aplikace s dolní navigační lištou.
+/// Hlavní kostra aplikace s dolní navigační lištou a gradient pozadím.
 ///
 /// Zajišťuje přepínání mezi hlavními sekcemi (Chat, Voice, Agenti, Statistiky, Nastavení).
+/// Pozadí obsahuje dekorativní gradient bloby pro glassmorphism estetiku.
 class SkeletonScreen extends ConsumerWidget {
   const SkeletonScreen({super.key});
 
@@ -57,49 +59,124 @@ class SkeletonScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppTheme.background,
 
-      // Warning banner – chybí API klíč
-      appBar: isMissingKey && currentIndex != 5
-          ? AppBar(
-              backgroundColor: AppTheme.warning.withValues(alpha: 0.12),
-              surfaceTintColor: Colors.transparent,
-              toolbarHeight: 44,
-              title: Row(
-                children: [
-                  Icon(Icons.warning_amber_rounded,
-                      color: AppTheme.warning, size: 18),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Chybí Gemini API klíč',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 13,
-                      color: AppTheme.warning,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
+      body: Stack(
+        children: [
+          // ── Dekorativní gradient bloby ──────────────────────────────────────
+          Positioned(
+            top: -120,
+            right: -80,
+            child: Container(
+              width: 300,
+              height: 300,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [AppTheme.blobPrimary, Colors.transparent],
+                ),
               ),
-              actions: [
-                TextButton(
-                  onPressed: () =>
-                      ref.read(_selectedIndexProvider.notifier).setIndex(5),
-                  child: Text(
-                    'NASTAVIT',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.accent,
+            ),
+          ),
+          Positioned(
+            bottom: -60,
+            left: -100,
+            child: Container(
+              width: 280,
+              height: 280,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [AppTheme.blobSecondary, Colors.transparent],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: MediaQuery.of(context).size.height * 0.35,
+            left: MediaQuery.of(context).size.width * 0.3,
+            child: Container(
+              width: 200,
+              height: 200,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [AppTheme.blobTertiary, Colors.transparent],
+                ),
+              ),
+            ),
+          ),
+
+          // ── Hlavní obsah ───────────────────────────────────────────────────
+          Column(
+            children: [
+              // Warning banner – chybí API klíč
+              if (isMissingKey && currentIndex != 5)
+                SafeArea(
+                  bottom: false,
+                  child: Container(
+                    margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: AppTheme.warning.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: AppTheme.warning.withValues(alpha: 0.3),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.warning_amber_rounded,
+                                  color: AppTheme.warning, size: 18),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Chybí Gemini API klíč',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 13,
+                                    color: AppTheme.warning,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: () => ref
+                                    .read(_selectedIndexProvider.notifier)
+                                    .setIndex(5),
+                                child: Text(
+                                  'NASTAVIT',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppTheme.primary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ],
-            )
-          : null,
 
-      body: IndexedStack(
-        index: currentIndex,
-        children: _pages,
+              // Stránky
+              Expanded(
+                child: IndexedStack(
+                  index: currentIndex,
+                  children: _pages,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
 
+      // ── Glass NavigationBar ─────────────────────────────────────────────
       bottomNavigationBar: AnimatedContainer(
         duration: const Duration(milliseconds: 320),
         curve: Curves.easeInOutCubic,
@@ -113,47 +190,58 @@ class SkeletonScreen extends ConsumerWidget {
               duration: const Duration(milliseconds: 320),
               curve: Curves.easeInOutCubic,
               offset: isVoiceActive ? const Offset(0, 1) : Offset.zero,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  border: Border(
-                    top: BorderSide(color: AppTheme.outline, width: 1),
+              child: ClipRRect(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: AppTheme.glass,
+                      border: Border(
+                        top: BorderSide(
+                          color: AppTheme.outline.withValues(alpha: 0.5),
+                          width: 0.5,
+                        ),
+                      ),
+                    ),
+                    child: NavigationBar(
+                      selectedIndex: currentIndex,
+                      onDestinationSelected: (index) {
+                        ref
+                            .read(_selectedIndexProvider.notifier)
+                            .setIndex(index);
+                      },
+                      destinations: const [
+                        NavigationDestination(
+                          icon: Icon(Icons.chat_bubble_outline_rounded),
+                          selectedIcon: Icon(Icons.chat_bubble_rounded),
+                          label: 'Chat',
+                        ),
+                        NavigationDestination(
+                          icon: Icon(Icons.mic_none_rounded),
+                          selectedIcon: Icon(Icons.mic_rounded),
+                          label: 'Voice',
+                        ),
+                        NavigationDestination(
+                          icon: Icon(Icons.smart_toy_outlined),
+                          selectedIcon: Icon(Icons.smart_toy_rounded),
+                          label: 'Agenti',
+                        ),
+                        NavigationDestination(
+                          icon: Icon(Icons.show_chart_rounded),
+                          label: 'Pokrok',
+                        ),
+                        NavigationDestination(
+                          icon: Icon(Icons.history_rounded),
+                          label: 'Historie',
+                        ),
+                        NavigationDestination(
+                          icon: Icon(Icons.settings_outlined),
+                          selectedIcon: Icon(Icons.settings_rounded),
+                          label: 'Nastavení',
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                child: NavigationBar(
-                  selectedIndex: currentIndex,
-                  onDestinationSelected: (index) {
-                    ref.read(_selectedIndexProvider.notifier).setIndex(index);
-                  },
-                  destinations: const [
-                    NavigationDestination(
-                      icon: Icon(Icons.chat_bubble_outline_rounded),
-                      selectedIcon: Icon(Icons.chat_bubble_rounded),
-                      label: 'Chat',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.mic_none_rounded),
-                      selectedIcon: Icon(Icons.mic_rounded),
-                      label: 'Voice',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.smart_toy_outlined),
-                      selectedIcon: Icon(Icons.smart_toy_rounded),
-                      label: 'Agenti',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.show_chart_rounded),
-                      label: 'Pokrok',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.history_rounded),
-                      label: 'Historie',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.settings_outlined),
-                      selectedIcon: Icon(Icons.settings_rounded),
-                      label: 'Nastavení',
-                    ),
-                  ],
                 ),
               ),
             ),

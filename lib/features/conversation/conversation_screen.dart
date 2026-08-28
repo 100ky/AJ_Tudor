@@ -11,6 +11,7 @@ import '../../services/prompt/system_prompt_builder.dart';
 import '../../data/database/app_database.dart';
 import '../../data/models/chat_message.dart';
 import '../../core/app_theme.dart';
+import '../../core/widgets/glass_container.dart';
 
 /// Obrazovka pro textovou konverzaci s AI a výběr scénářů.
 ///
@@ -115,7 +116,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     });
 
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         title: Text(
@@ -132,7 +133,6 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
       body: Column(
         children: [
           // ── Přepínač režimu ────────────────────────────────────────────────
-          // Padding 4px na stranách → SegmentedButton dostane skoro plnou šířku
           Padding(
             padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
             child: SegmentedButton<bool>(
@@ -186,12 +186,12 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
                       child: Text(
-                        'Doporučené scénáře',
+                        'DOPORUČENÉ SCÉNÁŘE',
                         style: GoogleFonts.plusJakartaSans(
-                          fontSize: 12,
+                          fontSize: 11,
                           fontWeight: FontWeight.w600,
                           color: AppTheme.onSurfaceMuted,
-                          letterSpacing: 0.8,
+                          letterSpacing: 1.0,
                         ),
                       ),
                     ),
@@ -205,7 +205,10 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                             _buildScenarioCard(scenarios[index]),
                       ),
                     ),
-                    const Divider(height: 8),
+                    Divider(
+                      color: AppTheme.outline.withValues(alpha: 0.6),
+                      height: 8,
+                    ),
                   ],
                 );
               },
@@ -230,19 +233,16 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: Container(
+                child: GlassContainer(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 16, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: AppTheme.surfaceVariant,
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(4),
-                      topRight: Radius.circular(20),
-                      bottomLeft: Radius.circular(20),
-                      bottomRight: Radius.circular(20),
-                    ),
-                    border: Border.all(color: AppTheme.outline),
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(4),
+                    topRight: Radius.circular(20),
+                    bottomLeft: Radius.circular(20),
+                    bottomRight: Radius.circular(20),
                   ),
+                  shadows: AppTheme.glassShadowLight,
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -279,9 +279,12 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
       decoration: BoxDecoration(
-        color: AppTheme.background,
+        color: AppTheme.background.withValues(alpha: 0.9),
         border: Border(
-          top: BorderSide(color: AppTheme.outline, width: 1),
+          top: BorderSide(
+            color: AppTheme.outline.withValues(alpha: 0.5),
+            width: 0.5,
+          ),
         ),
       ),
       child: Row(
@@ -312,9 +315,14 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
               height: 44,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: _isLoading
-                    ? AppTheme.outline
-                    : AppTheme.primary,
+                gradient: _isLoading
+                    ? null
+                    : const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [AppTheme.primaryLight, AppTheme.primaryDark],
+                      ),
+                color: _isLoading ? AppTheme.outline : null,
                 boxShadow: _isLoading
                     ? null
                     : [
@@ -325,7 +333,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                         ),
                       ],
               ),
-              child: Icon(
+              child: const Icon(
                 Icons.arrow_upward_rounded,
                 color: Colors.white,
                 size: 20,
@@ -347,9 +355,17 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
         constraints:
             BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.78),
         decoration: BoxDecoration(
-          color: isUser
-              ? AppTheme.primary.withValues(alpha: 0.18)
-              : AppTheme.surfaceVariant,
+          gradient: isUser
+              ? LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppTheme.primary.withValues(alpha: 0.12),
+                    AppTheme.primaryLight.withValues(alpha: 0.08),
+                  ],
+                )
+              : null,
+          color: isUser ? null : AppTheme.glass,
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(20),
             topRight: const Radius.circular(20),
@@ -358,9 +374,10 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
           ),
           border: Border.all(
             color: isUser
-                ? AppTheme.primary.withValues(alpha: 0.3)
+                ? AppTheme.primary.withValues(alpha: 0.25)
                 : AppTheme.outline,
           ),
+          boxShadow: AppTheme.glassShadowLight,
         ),
         child: Text(
           msg.text,
@@ -385,66 +402,65 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
           ),
         );
       },
-      child: Container(
-        width: 190,
-        margin: const EdgeInsets.fromLTRB(4, 0, 4, 4),
-        decoration: BoxDecoration(
-          color: AppTheme.surfaceVariant,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppTheme.outline),
-        ),
+      child: GlassContainer(
         padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    s.title,
-                    style: GoogleFonts.plusJakartaSans(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
-                      color: AppTheme.onBackground,
+        margin: const EdgeInsets.fromLTRB(4, 0, 4, 4),
+        borderRadius: BorderRadius.circular(16),
+        shadows: AppTheme.glassShadowLight,
+        child: SizedBox(
+          width: 166,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      s.title,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                        color: AppTheme.onBackground,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
-                const SizedBox(width: 4),
-                _buildDifficultyBadge(s.difficulty),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Expanded(
-              child: Text(
-                s.description,
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 11,
-                  color: AppTheme.onSurfaceMuted,
-                  height: 1.4,
-                ),
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
+                  const SizedBox(width: 4),
+                  _buildDifficultyBadge(s.difficulty),
+                ],
               ),
-            ),
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                Icon(Icons.mic_rounded,
-                    size: 12, color: AppTheme.primary.withValues(alpha: 0.7)),
-                const SizedBox(width: 4),
-                Text(
-                  'Spustit ve Voice',
+              const SizedBox(height: 6),
+              Expanded(
+                child: Text(
+                  s.description,
                   style: GoogleFonts.plusJakartaSans(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.primary.withValues(alpha: 0.8),
+                    fontSize: 11,
+                    color: AppTheme.onSurfaceMuted,
+                    height: 1.4,
                   ),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ],
-            ),
-          ],
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Icon(Icons.mic_rounded,
+                      size: 12, color: AppTheme.primary.withValues(alpha: 0.7)),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Spustit ve Voice',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.primary.withValues(alpha: 0.8),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -468,9 +484,9 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withValues(alpha: 0.4)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Text(
         difficulty.toUpperCase(),

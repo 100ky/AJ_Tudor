@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -5,6 +6,7 @@ import '../../services/agents/voice_tutor_agent.dart';
 import '../../services/audio/audio_session_controller.dart';
 import '../../data/models/chat_message.dart';
 import '../../core/app_theme.dart';
+import '../../core/widgets/glass_container.dart';
 import 'widgets/liquid_voice_orb.dart';
 
 class VoiceTutorScreen extends ConsumerStatefulWidget {
@@ -124,7 +126,7 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
         visibleMessages.isNotEmpty || tutorState.currentTranscript.isNotEmpty;
 
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: Colors.transparent,
       body: SafeArea(
         bottom: false,
         child: Column(
@@ -156,15 +158,14 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
               Padding(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-                child: Container(
+                child: GlassContainer(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: AppTheme.error.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                        color: AppTheme.error.withValues(alpha: 0.35)),
-                  ),
+                  borderRadius: BorderRadius.circular(12),
+                  color: AppTheme.error.withValues(alpha: 0.08),
+                  border: Border.all(
+                      color: AppTheme.error.withValues(alpha: 0.25)),
+                  shadows: const [],
                   child: Row(
                     children: [
                       Icon(Icons.error_outline_rounded,
@@ -191,7 +192,7 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
                   ? _buildEmptyState(tutorState)
                   : ShaderMask(
                       shaderCallback: (Rect bounds) {
-                        return const LinearGradient(
+                        return LinearGradient(
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                           colors: [
@@ -199,7 +200,7 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
                             Colors.white,
                             Colors.white,
                           ],
-                          stops: [0.0, 0.08, 1.0],
+                          stops: const [0.0, 0.08, 1.0],
                         ).createShader(bounds);
                       },
                       blendMode: BlendMode.dstIn,
@@ -350,8 +351,8 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
                   fontWeight: FontWeight.w500,
                 ),
               ),
-              backgroundColor: AppTheme.accent.withValues(alpha: 0.1),
-              side: BorderSide(color: AppTheme.accent.withValues(alpha: 0.3)),
+              backgroundColor: AppTheme.accent.withValues(alpha: 0.08),
+              side: BorderSide(color: AppTheme.accent.withValues(alpha: 0.25)),
               deleteIcon: Icon(Icons.close_rounded,
                   size: 14, color: AppTheme.onSurfaceMuted),
               onDeleted: () {
@@ -373,151 +374,156 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
     required Color orbColor,
     required Stream<double>? activeVolumeStream,
   }) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: AppTheme.surface.withValues(alpha: 0.85),
-        border: Border(
-          bottom: BorderSide(
-            color: AppTheme.outline.withValues(alpha: 0.6),
-            width: 1,
-          ),
-        ),
-      ),
-      child: Row(
-        children: [
-          // Mini Liquid Orb
-          SizedBox(
-            width: 44,
-            height: 44,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                LiquidVoiceOrb(
-                  color: orbColor,
-                  stateLabel: stateLabel,
-                  volumeStream: activeVolumeStream,
-                  size: 42,
-                ),
-                OrbStateIcon(
-                  stateLabel: stateLabel,
-                  color: orbColor,
-                  size: 18,
-                ),
-              ],
+    return ClipRRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: AppTheme.glass,
+            border: Border(
+              bottom: BorderSide(
+                color: AppTheme.outline.withValues(alpha: 0.5),
+                width: 0.5,
+              ),
             ),
           ),
-
-          const SizedBox(width: 12),
-
-          // Stavová pilulka
-          Expanded(
-            child: Row(
-              children: [
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: orbColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: orbColor.withValues(alpha: 0.35),
-                      width: 1,
+          child: Row(
+            children: [
+              // Mini Liquid Orb
+              SizedBox(
+                width: 44,
+                height: 44,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    LiquidVoiceOrb(
+                      color: orbColor,
+                      stateLabel: stateLabel,
+                      volumeStream: activeVolumeStream,
+                      size: 42,
                     ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
+                    OrbStateIcon(
+                      stateLabel: stateLabel,
+                      color: orbColor,
+                      size: 18,
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(width: 12),
+
+              // Stavová pilulka
+              Expanded(
+                child: Row(
+                  children: [
+                    Container(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: orbColor.withValues(alpha: 0.10),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: orbColor.withValues(alpha: 0.25),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: orbColor,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: orbColor.withValues(alpha: 0.6),
+                                  blurRadius: 4,
+                                  spreadRadius: 1,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 250),
+                            child: Text(
+                              _getStatusText(tutorState.status),
+                              key: ValueKey(tutorState.status),
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: orbColor,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Kompaktní Scenario badge
+                    if (tutorState.selectedScenarioId != null) ...[
+                      const SizedBox(width: 8),
                       Container(
-                        width: 6,
-                        height: 6,
+                        padding:
+                            const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
                         decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: orbColor,
-                          boxShadow: [
-                            BoxShadow(
-                              color: orbColor.withValues(alpha: 0.6),
-                              blurRadius: 4,
-                              spreadRadius: 1,
+                          color: AppTheme.accent.withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: AppTheme.accent.withValues(alpha: 0.25),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.theater_comedy_rounded,
+                              size: 13,
+                              color: AppTheme.accent,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Roleplay',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: AppTheme.accent,
+                              ),
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(width: 6),
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 250),
-                        child: Text(
-                          _getStatusText(tutorState.status),
-                          key: ValueKey(tutorState.status),
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: orbColor,
-                          ),
-                        ),
-                      ),
                     ],
-                  ),
+                  ],
                 ),
-
-                // Kompaktní Scenario badge
-                if (tutorState.selectedScenarioId != null) ...[
-                  const SizedBox(width: 8),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: AppTheme.accent.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: AppTheme.accent.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.theater_comedy_rounded,
-                          size: 13,
-                          color: AppTheme.accent,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Roleplay',
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.accent,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-
-          // Tlačítko pro rychlé přepnutí/odstranění scénáře nebo info
-          if (tutorState.selectedScenarioId != null)
-            GestureDetector(
-              onTap: () {
-                ref
-                    .read(voiceTutorAgentProvider.notifier)
-                    .selectScenario(0, '');
-              },
-              child: Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppTheme.surfaceVariant,
-                ),
-                child: Icon(Icons.close_rounded,
-                    size: 14, color: AppTheme.onSurfaceMuted),
               ),
-            ),
-        ],
+
+              // Tlačítko pro rychlé přepnutí/odstranění scénáře
+              if (tutorState.selectedScenarioId != null)
+                GestureDetector(
+                  onTap: () {
+                    ref
+                        .read(voiceTutorAgentProvider.notifier)
+                        .selectScenario(0, '');
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: AppTheme.backgroundSecondary,
+                    ),
+                    child: Icon(Icons.close_rounded,
+                        size: 14, color: AppTheme.onSurfaceMuted),
+                  ),
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -536,13 +542,13 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
                 shape: BoxShape.circle,
                 color: AppTheme.primary.withValues(alpha: 0.08),
                 border: Border.all(
-                  color: AppTheme.primary.withValues(alpha: 0.2),
+                  color: AppTheme.primary.withValues(alpha: 0.15),
                 ),
               ),
               child: Icon(
                 Icons.record_voice_over_rounded,
                 size: 32,
-                color: AppTheme.primaryLight,
+                color: AppTheme.primary,
               ),
             ),
             const SizedBox(height: 16),
@@ -644,7 +650,7 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
               heroTag: 'topic_btn',
               icon: Icons.shuffle_rounded,
               color: isLiveSession
-                  ? AppTheme.primaryLight
+                  ? AppTheme.primary
                   : AppTheme.onSurfaceMuted,
               tooltip: 'Změnit téma',
               onPressed: isLiveSession
@@ -654,13 +660,7 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
                           .forceTopicChange();
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          backgroundColor: AppTheme.surfaceVariant,
-                          content: Text(
-                            'Změna tématu odeslána...',
-                            style: GoogleFonts.plusJakartaSans(
-                              color: AppTheme.onBackground,
-                            ),
-                          ),
+                          content: Text('Změna tématu odeslána...'),
                           duration: const Duration(seconds: 2),
                         ),
                       );
@@ -673,13 +673,11 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
     );
   }
 
-  /// Hlavní velké tlačítko (mic / stop) s glow efektem
+  /// Hlavní velké tlačítko (mic / stop) s gradient a glow efektem
   Widget _buildMainButton({
     required bool isIdle,
     required VoidCallback onPressed,
   }) {
-    final buttonColor = isIdle ? AppTheme.primary : AppTheme.error;
-
     return GestureDetector(
       onTap: onPressed,
       child: AnimatedContainer(
@@ -694,13 +692,14 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
             end: Alignment.bottomRight,
             colors: isIdle
                 ? [AppTheme.primaryLight, AppTheme.primaryDark]
-                : [AppTheme.error, const Color(0xFFB71C1C)],
+                : [AppTheme.error, const Color(0xFFDC2626)],
           ),
           boxShadow: [
             BoxShadow(
-              color: buttonColor.withValues(alpha: 0.45),
+              color: (isIdle ? AppTheme.primary : AppTheme.error)
+                  .withValues(alpha: 0.4),
               blurRadius: isIdle ? 22 : 18,
-              spreadRadius: isIdle ? 3 : 2,
+              spreadRadius: isIdle ? 2 : 1,
             ),
           ],
         ),
@@ -713,7 +712,7 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
     );
   }
 
-  /// Sekundární tlačítko (pause, topic change)
+  /// Sekundární tlačítko (pause, topic change) – glass styl
   Widget _buildSecondaryButton({
     required String heroTag,
     required IconData icon,
@@ -730,8 +729,15 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
           height: 50,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: color.withValues(alpha: 0.12),
-            border: Border.all(color: color.withValues(alpha: 0.4), width: 1.5),
+            color: color.withValues(alpha: 0.10),
+            border: Border.all(color: color.withValues(alpha: 0.3), width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: color.withValues(alpha: 0.1),
+                blurRadius: 8,
+                spreadRadius: 0,
+              ),
+            ],
           ),
           child: Icon(icon, size: 22, color: color),
         ),
@@ -752,27 +758,18 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
 
     return Align(
       alignment: Alignment.centerLeft,
-      child: Container(
+      child: GlassContainer(
         margin: const EdgeInsets.only(bottom: 12.0),
         padding: const EdgeInsets.all(16.0),
-        decoration: BoxDecoration(
-          color: AppTheme.speaking.withValues(alpha: 0.08),
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(4),
-            topRight: Radius.circular(20),
-            bottomLeft: Radius.circular(20),
-            bottomRight: Radius.circular(20),
-          ),
-          border: Border.all(
-              color: AppTheme.speaking.withValues(alpha: 0.35)),
-          boxShadow: [
-            BoxShadow(
-              color: AppTheme.speaking.withValues(alpha: 0.06),
-              blurRadius: 12,
-              spreadRadius: 2,
-            ),
-          ],
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(4),
+          topRight: Radius.circular(20),
+          bottomLeft: Radius.circular(20),
+          bottomRight: Radius.circular(20),
         ),
+        color: AppTheme.speaking.withValues(alpha: 0.06),
+        border: Border.all(
+            color: AppTheme.speaking.withValues(alpha: 0.2)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -799,7 +796,7 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 1.5,
-                    color: AppTheme.speaking.withValues(alpha: 0.8),
+                    color: AppTheme.speaking.withValues(alpha: 0.7),
                   ),
                 ),
               ],
@@ -831,9 +828,17 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
         constraints: BoxConstraints(
             maxWidth: MediaQuery.of(context).size.width * 0.78),
         decoration: BoxDecoration(
-          color: isUser
-              ? AppTheme.primary.withValues(alpha: 0.18)
-              : AppTheme.surfaceVariant,
+          gradient: isUser
+              ? LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppTheme.primary.withValues(alpha: 0.12),
+                    AppTheme.primaryLight.withValues(alpha: 0.08),
+                  ],
+                )
+              : null,
+          color: isUser ? null : AppTheme.glass,
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(20),
             topRight: const Radius.circular(20),
@@ -842,19 +847,11 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
           ),
           border: Border.all(
             color: isUser
-                ? AppTheme.primary.withValues(alpha: 0.35)
+                ? AppTheme.primary.withValues(alpha: 0.25)
                 : AppTheme.outline,
             width: 1,
           ),
-          boxShadow: isUser
-              ? [
-                  BoxShadow(
-                    color: AppTheme.primary.withValues(alpha: 0.08),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ]
-              : null,
+          boxShadow: AppTheme.glassShadowLight,
         ),
         child: Text(
           msg.text,

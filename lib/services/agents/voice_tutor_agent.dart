@@ -97,6 +97,8 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   Timer? _vadSilenceTimer;
   int? _currentSessionId;
   bool _isStopping = false;
+  bool _isStarting = false;
+  bool _isObserverRegistered = false;
 
   // Průběžný nashromážděný přepis řeči uživatele pro aktuální repliku.
   String _currentUserTranscript = '';
@@ -122,7 +124,10 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     _memory = ref.read(memoryManagerAgentProvider);
 
     // Registrace do životního cyklu aplikace (pro detekci pozadí/popředí)
-    WidgetsBinding.instance.addObserver(this);
+    if (!_isObserverRegistered) {
+      WidgetsBinding.instance.addObserver(this);
+      _isObserverRegistered = true;
+    }
 
     // Hlídání změn nastavení v reálném čase.
     // Pokud se během hovoru změní API klíč, model nebo hlas, z bezpečnostních důvodů hovor ukončíme.
@@ -144,7 +149,10 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
 
     // Cleanup při zničení (dispose) provideru
     ref.onDispose(() {
-      WidgetsBinding.instance.removeObserver(this);
+      if (_isObserverRegistered) {
+        WidgetsBinding.instance.removeObserver(this);
+        _isObserverRegistered = false;
+      }
       
       // Zrušení všech běžících časovačů
       _watchdogTimer?.cancel();
@@ -203,6 +211,12 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   /// 4. Připojí WebSocket klienta k Gemini Live API a zaregistruje callbacky.
   /// 5. Inicializuje mikrofon a spustí nahrávání audia.
   Future<void> startSession() async {
+    if (_isStarting) {
+      L.i('startSession ignorováno - již probíhá spouštění.');
+      return;
+    }
+    _isStarting = true;
+
     if (_currentSessionId != null) {
       L.w('Pokus o startSession, ale předchozí session ($_currentSessionId) nebyla uzavřena. Uzavírám a odesílám k analýze.');
       await stopSession('forced_restart');
@@ -319,9 +333,12 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         }
       });
       
+      
     } catch (e, stack) {
       L.e('Chyba startu session', e, stack);
       state = state.copyWith(status: TutorState.error, errorMessage: 'Neočekávaná chyba při startu: $e');
+    } finally {
+      _isStarting = false;
     }
   }
 

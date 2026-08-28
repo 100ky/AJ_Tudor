@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../providers/database_provider.dart';
 import '../../services/agents/voice_tutor_agent.dart';
 import '../../services/agents/scenario_planner_agent.dart';
 import '../../data/database/app_database.dart';
 import '../../data/repositories/session_repository.dart';
+import '../../core/app_theme.dart';
+import '../../core/widgets/glass_container.dart';
 
 class AgentsScreen extends ConsumerStatefulWidget {
   const AgentsScreen({super.key});
@@ -25,34 +28,25 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
   }
 
   Future<void> _triggerScenarioPlanning() async {
-    setState(() {
-      _isPlanningScenarios = true;
-    });
-
+    setState(() => _isPlanningScenarios = true);
     try {
       await ref.read(scenarioPlannerAgentProvider).planScenarios();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Plánovač témat úspěšně vygeneroval 3 nové scénáře! 🎯'),
-            backgroundColor: Colors.green,
-          ),
+              content: Text(
+                  'Plánovač témat úspěšně vygeneroval 3 nové scénáře! 🎯')),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Chyba při plánování scénářů: $e'),
-            backgroundColor: Colors.redAccent,
-          ),
+          SnackBar(content: Text('Chyba při plánování scénářů: $e')),
         );
       }
     } finally {
       if (mounted) {
-        setState(() {
-          _isPlanningScenarios = false;
-        });
+        setState(() => _isPlanningScenarios = false);
       }
     }
   }
@@ -60,36 +54,25 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
   Future<void> _createCustomScenario() async {
     final text = _customTopicController.text.trim();
     if (text.isEmpty) return;
-
-    setState(() {
-      _isCreatingCustom = true;
-    });
-
+    setState(() => _isCreatingCustom = true);
     try {
       await ref.read(scenarioPlannerAgentProvider).planCustomScenario(text);
       if (mounted) {
         _customTopicController.clear();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Vlastní scénář "$text" úspěšně vytvořen! 🎯'),
-            backgroundColor: Colors.green,
-          ),
+              content: Text('Vlastní scénář „$text" úspěšně vytvořen! 🎯')),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Chyba při vytváření scénáře: $e'),
-            backgroundColor: Colors.redAccent,
-          ),
+          SnackBar(content: Text('Chyba při vytváření scénáře: $e')),
         );
       }
     } finally {
       if (mounted) {
-        setState(() {
-          _isCreatingCustom = false;
-        });
+        setState(() => _isCreatingCustom = false);
       }
     }
   }
@@ -102,8 +85,17 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
     final sessionsStream = repo.watchAllSessions();
 
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: const Text('Moji AI Agenti'),
+        backgroundColor: Colors.transparent,
+        title: Text(
+          'Moji AI Agenti',
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: AppTheme.onBackground,
+          ),
+        ),
         centerTitle: true,
       ),
       body: StreamBuilder<UserProfile?>(
@@ -115,24 +107,21 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
             stream: sessionsStream,
             builder: (context, sessionsSnapshot) {
               final sessions = sessionsSnapshot.data ?? [];
-              final lastSession = sessions.isNotEmpty ? sessions.first : null;
+              final lastSession =
+                  sessions.isNotEmpty ? sessions.first : null;
 
               return ListView(
                 padding: const EdgeInsets.all(16.0),
                 children: [
                   _buildHeaderCard(),
                   const SizedBox(height: 20),
-                  
-                  // AGENT 1: Konverzační Tutor
                   _buildTutorAgentCard(tutorState),
-                  const SizedBox(height: 20),
-
-                  // AGENT 2: Analytik skóre
-                  _buildAnalyzerAgentCard(profile, lastSession, tutorState.status),
-                  const SizedBox(height: 20),
-
-                  // AGENT 3: Plánovač témat
-                  _buildPlannerAgentCard(repo, tutorState.selectedScenarioId),
+                  const SizedBox(height: 16),
+                  _buildAnalyzerAgentCard(
+                      profile, lastSession, tutorState.status),
+                  const SizedBox(height: 16),
+                  _buildPlannerAgentCard(
+                      repo, tutorState.selectedScenarioId),
                 ],
               );
             },
@@ -143,37 +132,46 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
   }
 
   Widget _buildHeaderCard() {
-    return Container(
-      padding: const EdgeInsets.all(16.0),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.blueAccent.withValues(alpha: 0.15), Colors.deepPurpleAccent.withValues(alpha: 0.15)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.3)),
-      ),
-      child: const Row(
+    return GlassContainer(
+      child: Row(
         children: [
-          Icon(Icons.diversity_3, size: 40, color: Colors.blueAccent),
-          SizedBox(width: 16),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  AppTheme.primary.withValues(alpha: 0.15),
+                  AppTheme.speaking.withValues(alpha: 0.10),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(Icons.diversity_3, size: 28, color: AppTheme.primary),
+          ),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   'Multi-agentní systém AJ Tudor',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.onBackground,
+                  ),
                 ),
-                SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Text(
-                  'Tři specializovaní AI agenti spolupracují na tvé výuce angličtiny pro maximální efektivitu.',
-                  style: TextStyle(fontSize: 13, color: Colors.grey),
+                  'Tři specializovaní AI agenti spolupracují na tvé výuce angličtiny.',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 12,
+                    color: AppTheme.onSurfaceMuted,
+                  ),
                 ),
               ],
             ),
-          )
+          ),
         ],
       ),
     );
@@ -181,376 +179,460 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
 
   Widget _buildTutorAgentCard(VoiceTutorState tutorState) {
     final status = tutorState.status;
-    final isActive = status != TutorState.idle && status != TutorState.error;
-    
+    final isActive =
+        status != TutorState.idle && status != TutorState.error;
+
     Color statusColor;
     String statusText;
     switch (status) {
       case TutorState.listening:
-        statusColor = Colors.greenAccent;
+        statusColor = AppTheme.success;
         statusText = 'Poslouchá tě...';
         break;
       case TutorState.speaking:
-        statusColor = Colors.purpleAccent;
+        statusColor = AppTheme.speaking;
         statusText = 'Právě mluví...';
         break;
       case TutorState.thinking:
-        statusColor = Colors.blueAccent;
+        statusColor = AppTheme.primary;
         statusText = 'Přemýšlí...';
         break;
       case TutorState.connecting:
       case TutorState.reconnecting:
-        statusColor = Colors.orangeAccent;
+        statusColor = AppTheme.warning;
         statusText = 'Připojuje se...';
         break;
       case TutorState.error:
-        statusColor = Colors.redAccent;
+        statusColor = AppTheme.error;
         statusText = 'Chyba spojení';
         break;
       case TutorState.paused:
-        statusColor = Colors.amberAccent;
+        statusColor = AppTheme.warning;
         statusText = 'Pozastaveno';
         break;
       case TutorState.idle:
-        statusColor = Colors.grey;
+        statusColor = AppTheme.onSurfaceMuted;
         statusText = 'Připraven / Neaktivní';
     }
 
-    return Card(
-      elevation: 3,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.record_voice_over, color: Colors.blueAccent, size: 28),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '1. Konverzační Tutor',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                      ),
-                      Text(
-                        'Agent zodpovědný za přátelskou diskuzi',
-                        style: TextStyle(fontSize: 12, color: Colors.grey),
-                      ),
-                    ],
-                  ),
+    return GlassContainer(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppTheme.primary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: statusColor.withValues(alpha: 0.4)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (isActive) ...[
-                        _buildPulseIndicator(statusColor),
-                        const SizedBox(width: 6),
-                      ],
-                      Text(
-                        statusText.toUpperCase(),
-                        style: TextStyle(
-                          color: statusColor,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
+                child: Icon(Icons.record_voice_over,
+                    color: AppTheme.primary, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '1. Konverzační Tutor',
+                      style: GoogleFonts.plusJakartaSans(
+                          fontSize: 15, fontWeight: FontWeight.w600,
+                          color: AppTheme.onBackground),
+                    ),
+                    Text(
+                      'Agent zodpovědný za přátelskou diskuzi',
+                      style: GoogleFonts.plusJakartaSans(
+                          fontSize: 11, color: AppTheme.onSurfaceMuted),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            const Divider(height: 24),
-            const Text(
-              'Osobnost a styl:',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-            ),
-            const SizedBox(height: 4),
-            const Text(
-              '• AJ Tudor je rodilý mluvčí z Velké Británie, který momentálně žije v České republice.\n'
-              '• NEBUDE tě jen vyslýchat! Rád reaguje, sdílí vlastní historky o svém dni, vaření, výletech nebo o tom, jak zápasí s češtinou.\n'
-              '• Mluví pomalu a přizpůsobuje slova tvé úrovni angličtiny.',
-              style: TextStyle(fontSize: 13, height: 1.4, color: Colors.grey),
-            ),
-          ],
-        ),
+              ),
+              _buildStatusBadge(statusText, statusColor, isActive),
+            ],
+          ),
+          Divider(color: AppTheme.outlineLight, height: 24),
+          Text(
+            'Osobnost a styl:',
+            style: GoogleFonts.plusJakartaSans(
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+                color: AppTheme.onBackground),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '• AJ Tudor je rodilý mluvčí z Velké Británie, který momentálně žije v České republice.\n'
+            '• NEBUDE tě jen vyslýchat! Rád reaguje, sdílí vlastní historky o svém dni, vaření, výletech nebo o tom, jak zápasí s češtinou.\n'
+            '• Mluví pomalu a přizpůsobuje slova tvé úrovni angličtiny.',
+            style: GoogleFonts.plusJakartaSans(
+                fontSize: 12,
+                height: 1.5,
+                color: AppTheme.onSurfaceMuted),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildAnalyzerAgentCard(UserProfile? profile, Session? lastSession, TutorState tutorStatus) {
-    final isAnalyzing = tutorStatus == TutorState.connecting || tutorStatus == TutorState.thinking;
+  Widget _buildAnalyzerAgentCard(
+      UserProfile? profile, Session? lastSession, TutorState tutorStatus) {
+    final isAnalyzing = tutorStatus == TutorState.connecting ||
+        tutorStatus == TutorState.thinking;
     final fluencyScore = lastSession?.fluencyScore;
-    final fluencyPercent = fluencyScore != null ? (fluencyScore * 100).toInt() : null;
+    final fluencyPercent =
+        fluencyScore != null ? (fluencyScore * 100).toInt() : null;
 
-    return Card(
-      elevation: 3,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.analytics, color: Colors.tealAccent, size: 28),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '2. Analytik skóre',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                      ),
-                      Text(
-                        'Agent pro sémantickou analýzu pokroku',
-                        style: TextStyle(fontSize: 12, color: Colors.grey),
+    return GlassContainer(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppTheme.success.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(Icons.analytics,
+                    color: AppTheme.success, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '2. Analytik skóre',
+                      style: GoogleFonts.plusJakartaSans(
+                          fontSize: 15, fontWeight: FontWeight.w600,
+                          color: AppTheme.onBackground),
+                    ),
+                    Text(
+                      'Agent pro sémantickou analýzu pokroku',
+                      style: GoogleFonts.plusJakartaSans(
+                          fontSize: 11, color: AppTheme.onSurfaceMuted),
+                    ),
+                  ],
+                ),
+              ),
+              _buildStatusBadge(
+                isAnalyzing ? 'ČEKÁ NA KONEC RELACE' : 'AKTIVNÍ',
+                isAnalyzing ? AppTheme.warning : AppTheme.success,
+                false,
+              ),
+            ],
+          ),
+          Divider(color: AppTheme.outlineLight, height: 24),
+          Text(
+            'Poslední sémantická analýza:',
+            style: GoogleFonts.plusJakartaSans(
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+                color: AppTheme.onBackground),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                  child: _buildMetricItem(
+                      label: 'Plynulost',
+                      value:
+                          fluencyPercent != null ? '$fluencyPercent%' : 'N/A',
+                      color: AppTheme.primary)),
+              const SizedBox(width: 8),
+              Expanded(
+                  child: _buildMetricItem(
+                      label: 'Zjištěná Úroveň',
+                      value: profile?.targetLevel ?? 'B1',
+                      color: AppTheme.success)),
+              const SizedBox(width: 8),
+              Expanded(
+                  child: _buildMetricItem(
+                      label: 'Celkem chyb',
+                      value: lastSession?.totalErrors != null
+                          ? '${lastSession!.totalErrors}'
+                          : '0',
+                      color: AppTheme.error)),
+            ],
+          ),
+          if (profile?.memoryBriefing != null &&
+              profile!.memoryBriefing!.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Text(
+              'Pedagogický zápis v paměti:',
+              style: GoogleFonts.plusJakartaSans(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                  color: AppTheme.onSurfaceMuted),
+            ),
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppTheme.success.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                    color: AppTheme.success.withValues(alpha: 0.15)),
+              ),
+              child: Text(
+                profile.memoryBriefing!,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 12,
+                  fontStyle: FontStyle.italic,
+                  height: 1.5,
+                  color: AppTheme.onSurface,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPlannerAgentCard(
+      SessionRepository repo, int? selectedScenarioId) {
+    return GlassContainer(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppTheme.accent.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(Icons.auto_awesome,
+                    color: AppTheme.accent, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '3. Plánovač témat',
+                      style: GoogleFonts.plusJakartaSans(
+                          fontSize: 15, fontWeight: FontWeight.w600,
+                          color: AppTheme.onBackground),
+                    ),
+                    Text(
+                      'Agent vytvářející scénáře na základě chyb',
+                      style: GoogleFonts.plusJakartaSans(
+                          fontSize: 11, color: AppTheme.onSurfaceMuted),
+                    ),
+                  ],
+                ),
+              ),
+              _buildStatusBadge(
+                _isPlanningScenarios ? 'PLÁNUJE...' : 'PŘIPRAVEN',
+                _isPlanningScenarios
+                    ? AppTheme.warning
+                    : AppTheme.accent,
+                false,
+              ),
+            ],
+          ),
+          Divider(color: AppTheme.outlineLight, height: 24),
+          Text(
+            'Aktuální scénáře na míru:',
+            style: GoogleFonts.plusJakartaSans(
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+                color: AppTheme.onBackground),
+          ),
+          const SizedBox(height: 10),
+          StreamBuilder<List<Scenario>>(
+            stream: repo.watchAvailableScenarios(),
+            builder: (context, snapshot) {
+              final scenarios = snapshot.data ?? [];
+
+              if (scenarios.isEmpty) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    'Zatím nejsou naplánovány žádné scénáře. Klikni na tlačítko níže.',
+                    style: GoogleFonts.plusJakartaSans(
+                        fontSize: 13,
+                        fontStyle: FontStyle.italic,
+                        color: AppTheme.onSurfaceMuted),
+                  ),
+                );
+              }
+
+              return Column(
+                children: scenarios
+                    .map((s) =>
+                        _buildMiniScenarioTile(s, selectedScenarioId))
+                    .toList(),
+              );
+            },
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed:
+                  _isPlanningScenarios ? null : _triggerScenarioPlanning,
+              style: FilledButton.styleFrom(
+                backgroundColor: AppTheme.accent,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+              ),
+              icon: _isPlanningScenarios
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.auto_awesome, size: 18),
+              label: Text(_isPlanningScenarios
+                  ? 'Plánování nových témat...'
+                  : 'Vymyslet nová témata'),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Divider(color: AppTheme.outlineLight),
+          const SizedBox(height: 12),
+          Text(
+            'Nebo napiš své vlastní téma:',
+            style: GoogleFonts.plusJakartaSans(
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+                color: AppTheme.onBackground),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _customTopicController,
+                  style: GoogleFonts.plusJakartaSans(
+                      color: AppTheme.onBackground, fontSize: 14),
+                  decoration: InputDecoration(
+                    hintText: 'Napiš téma (např. „objednávka v restauraci")...',
+                    hintStyle: GoogleFonts.plusJakartaSans(
+                        color: AppTheme.onSurfaceMuted, fontSize: 13),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                    suffixIcon: _isCreatingCustom
+                        ? const Padding(
+                            padding: EdgeInsets.all(12.0),
+                            child: SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2)),
+                          )
+                        : null,
+                  ),
+                  onSubmitted: (_) => _createCustomScenario(),
+                  textInputAction: TextInputAction.send,
+                ),
+              ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: _isCreatingCustom ? null : _createCustomScenario,
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: const LinearGradient(
+                      colors: [AppTheme.accent, AppTheme.accentLight],
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.accent.withValues(alpha: 0.3),
+                        blurRadius: 10,
                       ),
                     ],
                   ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: (isAnalyzing ? Colors.amber : Colors.tealAccent).withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: (isAnalyzing ? Colors.amber : Colors.tealAccent).withValues(alpha: 0.4)),
-                  ),
-                  child: Text(
-                    isAnalyzing ? 'ČEKÁ NA KONEC RELACE' : 'AKTIVNÍ / PŘIPRAVEN',
-                    style: TextStyle(
-                      color: isAnalyzing ? Colors.amber : Colors.tealAccent,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const Divider(height: 24),
-            const Text(
-              'Poslední sémantická analýza:',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildMetricItem(
-                    label: 'Plynulost',
-                    value: fluencyPercent != null ? '$fluencyPercent%' : 'N/A',
-                    color: Colors.blueAccent,
-                  ),
-                ),
-                Expanded(
-                  child: _buildMetricItem(
-                    label: 'Zjištěná Úroveň',
-                    value: profile?.targetLevel ?? 'B1',
-                    color: Colors.tealAccent,
-                  ),
-                ),
-                Expanded(
-                  child: _buildMetricItem(
-                    label: 'Celkem chyb',
-                    value: lastSession?.totalErrors != null ? '${lastSession!.totalErrors}' : '0',
-                    color: Colors.redAccent,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (profile?.memoryBriefing != null && profile!.memoryBriefing!.isNotEmpty) ...[
-              const Text(
-                'Pedagogický zápis v paměti:',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey),
-              ),
-              const SizedBox(height: 4),
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.tealAccent.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.tealAccent.withValues(alpha: 0.1)),
-                ),
-                child: Text(
-                  profile.memoryBriefing!,
-                  style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic, height: 1.4),
+                  child: const Icon(Icons.send_rounded,
+                      color: Colors.white, size: 18),
                 ),
               ),
             ],
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildPlannerAgentCard(SessionRepository repo, int? selectedScenarioId) {
-    return Card(
-      elevation: 3,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.auto_awesome, color: Colors.orangeAccent, size: 28),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '3. Plánovač témat',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                      ),
-                      Text(
-                        'Agent vytvářející scénáře na základě chyb',
-                        style: TextStyle(fontSize: 12, color: Colors.grey),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: (_isPlanningScenarios ? Colors.deepOrangeAccent : Colors.orangeAccent).withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: (_isPlanningScenarios ? Colors.deepOrangeAccent : Colors.orangeAccent).withValues(alpha: 0.4)),
-                  ),
-                  child: Text(
-                    _isPlanningScenarios ? 'PLÁNUJE...' : 'PŘIPRAVEN',
-                    style: TextStyle(
-                      color: _isPlanningScenarios ? Colors.deepOrangeAccent : Colors.orangeAccent,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const Divider(height: 24),
-            const Text(
-              'Aktuální scénáře na míru:',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-            ),
-            const SizedBox(height: 8),
-            StreamBuilder<List<Scenario>>(
-              stream: repo.watchAvailableScenarios(),
-              builder: (context, snapshot) {
-                final scenarios = snapshot.data ?? [];
-                
-                if (scenarios.isEmpty) {
-                  return const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12),
-                    child: Text(
-                      'Zatím nejsou naplánovány žádné scénáře. Klikni na tlačítko níže pro vygenerování.',
-                      style: TextStyle(fontSize: 13, fontStyle: FontStyle.italic, color: Colors.grey),
-                    ),
-                  );
-                }
+  // ── Helpers ──────────────────────────────────────────────────────────────
 
-                return Column(
-                  children: scenarios.map((s) => _buildMiniScenarioTile(s, selectedScenarioId)).toList(),
-                );
-              },
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: _isPlanningScenarios ? null : _triggerScenarioPlanning,
-                style: FilledButton.styleFrom(
-                  backgroundColor: Colors.orangeAccent,
-                  foregroundColor: Colors.black,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                icon: _isPlanningScenarios
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
-                      )
-                    : const Icon(Icons.auto_awesome),
-                label: Text(_isPlanningScenarios ? 'Plánování nových témat...' : 'Vymyslet nová témata'),
+  Widget _buildStatusBadge(String text, Color color, bool showPulse) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.30)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (showPulse) ...[
+            Container(
+              width: 6,
+              height: 6,
+              decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                      color: color.withValues(alpha: 0.6),
+                      blurRadius: 4,
+                      spreadRadius: 1),
+                ],
               ),
             ),
-            const SizedBox(height: 16),
-            // TEXTOVÝ INPUT PRO VLASTNÍ TÉMA
-            const Divider(height: 24),
-            const Text(
-              'Nebo napiš své vlastní téma:',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _customTopicController,
-                    decoration: InputDecoration(
-                      hintText: 'Napiš stručně téma (např. "objednávka jídla v restauraci")...',
-                      border: const OutlineInputBorder(),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      suffixIcon: _isCreatingCustom
-                          ? const Padding(
-                              padding: EdgeInsets.all(12.0),
-                              child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
-                            )
-                          : null,
-                    ),
-                    onSubmitted: (_) => _createCustomScenario(),
-                    textInputAction: TextInputAction.send,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                IconButton.filled(
-                  onPressed: _isCreatingCustom ? null : _createCustomScenario,
-                  style: IconButton.styleFrom(
-                    backgroundColor: Colors.orangeAccent,
-                    foregroundColor: Colors.black,
-                  ),
-                  icon: const Icon(Icons.send),
-                ),
-              ],
-            ),
+            const SizedBox(width: 6),
           ],
-        ),
+          Text(
+            text.toUpperCase(),
+            style: GoogleFonts.plusJakartaSans(
+              color: color,
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildMetricItem({required String label, required String value, required Color color}) {
+  Widget _buildMetricItem({
+    required String label,
+    required String value,
+    required Color color,
+  }) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 4),
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withValues(alpha: 0.15)),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.12)),
       ),
       child: Column(
         children: [
           Text(
             label,
-            style: const TextStyle(fontSize: 11, color: Colors.grey),
+            style: GoogleFonts.plusJakartaSans(
+                fontSize: 10, color: AppTheme.onSurfaceMuted),
           ),
           const SizedBox(height: 4),
           Text(
             value,
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color),
+            style: GoogleFonts.plusJakartaSans(
+                fontSize: 18, fontWeight: FontWeight.w700, color: color),
           ),
         ],
       ),
@@ -562,46 +644,58 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: isSelected ? Colors.orangeAccent.withValues(alpha: 0.1) : Colors.grey[900],
-        borderRadius: BorderRadius.circular(10),
+        color: isSelected
+            ? AppTheme.accent.withValues(alpha: 0.08)
+            : AppTheme.glassLight,
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isSelected ? Colors.orangeAccent : Colors.grey[800]!,
+          color: isSelected
+              ? AppTheme.accent.withValues(alpha: 0.4)
+              : AppTheme.outline,
           width: isSelected ? 1.5 : 1.0,
         ),
       ),
       child: InkWell(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
         onTap: () {
-          ref.read(voiceTutorAgentProvider.notifier).selectScenario(scenario.id, scenario.tutorInstruction);
+          ref
+              .read(voiceTutorAgentProvider.notifier)
+              .selectScenario(scenario.id, scenario.tutorInstruction);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Scénář "${scenario.title}" vybrán! Můžeš spustit Chat nebo Voice. 🗣️'),
-              backgroundColor: Colors.orangeAccent,
-              duration: const Duration(seconds: 3),
-            ),
+                content: Text(
+                    'Scénář „${scenario.title}" vybrán! Můžeš spustit Voice. 🗣️')),
           );
         },
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          padding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           child: Row(
             children: [
               Icon(
-                isSelected ? Icons.check_circle : Icons.label_important_outline,
-                color: Colors.orangeAccent,
+                isSelected
+                    ? Icons.check_circle_rounded
+                    : Icons.label_important_outline,
+                color: AppTheme.accent,
                 size: 20,
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       scenario.title,
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                      style: GoogleFonts.plusJakartaSans(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.onBackground),
                     ),
                     Text(
                       scenario.description,
-                      style: const TextStyle(fontSize: 11, color: Colors.grey),
+                      style: GoogleFonts.plusJakartaSans(
+                          fontSize: 11,
+                          color: AppTheme.onSurfaceMuted),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -610,41 +704,31 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
               ),
               const SizedBox(width: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 6, vertical: 3),
                 decoration: BoxDecoration(
-                  color: isSelected ? Colors.orangeAccent.withValues(alpha: 0.2) : Colors.grey[800],
+                  color: isSelected
+                      ? AppTheme.accent.withValues(alpha: 0.15)
+                      : AppTheme.backgroundSecondary,
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
-                  isSelected ? 'AKTIVNÍ' : scenario.difficulty.toUpperCase(),
-                  style: TextStyle(
+                  isSelected
+                      ? 'AKTIVNÍ'
+                      : scenario.difficulty.toUpperCase(),
+                  style: GoogleFonts.plusJakartaSans(
                     fontSize: 8,
-                    fontWeight: FontWeight.bold,
-                    color: isSelected ? Colors.white : Colors.orangeAccent,
+                    fontWeight: FontWeight.w700,
+                    color: isSelected
+                        ? AppTheme.accent
+                        : AppTheme.onSurfaceMuted,
+                    letterSpacing: 0.5,
                   ),
                 ),
-              )
+              ),
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildPulseIndicator(Color color) {
-    return Container(
-      width: 8,
-      height: 8,
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: color.withValues(alpha: 0.6),
-            blurRadius: 4,
-            spreadRadius: 2,
-          )
-        ],
       ),
     );
   }

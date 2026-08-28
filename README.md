@@ -12,6 +12,7 @@
   - **Memory Manager Agent**: Po skončení lekce asynchronně analyzuje transkript pomocí *Structured Outputs (JSON)*, sleduje chyby, slovní zásobu a aplikuje Ebbinghausovu křivku zapomínání.
   - **Scenario Planner Agent**: Generuje a plánuje situační role-play scénáře (např. v restauraci, na letišti, pracovní pohovor).
 - 🛠️ **Real-time Function Calling**: Tutor během mluvení na pozadí volá nástroj `log_error` pro telemetrii gramatických, slovníkových i výslovnostních chyb.
+- 🎨 **Light Glassmorphism Design**: Moderní a čisté uživatelské rozhraní se skleněnými kartami (`BackdropFilter`), měkkými stíny a dynamickými gradientními bloby pro živý vzhled.
 - 📊 **Sledování pokroku & Statistika**: Přehledné grafy (`fl_chart`), vývoj plynulosti (fluency score), historie lekcí a kartotéka chyb.
 - 💾 **Lokální offline persistence**: Lokální SQLite databáze přes `Drift`, bezpečné ukládání API klíče přes `flutter_secure_storage`.
 
@@ -49,7 +50,7 @@ lib/
 - **Database & Storage**: `drift`, `sqlite3`, `flutter_secure_storage`, `shared_preferences`
 - **Audio Pipeline**: `record` (PCM 16-bit 16kHz mono), `flutter_pcm_sound` (PCM 16-bit 24kHz mono)
 - **Networking & AI**: `web_socket_channel` (Gemini Live WebSocket), `dio` (REST API pro analýzy)
-- **UI & Grafy**: `fl_chart`, `google_fonts` (Outfit), `wakelock_plus`
+- **UI & Grafy**: `fl_chart`, `google_fonts` (Plus Jakarta Sans), `wakelock_plus`
 
 ---
 

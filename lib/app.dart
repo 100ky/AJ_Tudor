@@ -19,7 +19,7 @@ class AjTudorApp extends ConsumerWidget {
     return MaterialApp(
       title: 'AJ Tudor',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.darkTheme,
+      theme: AppTheme.lightTheme,
       // Výchozí obrazovka aplikace s navigací
       home: const SkeletonScreen(),
     );

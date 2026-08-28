@@ -1,10 +1,14 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../providers/database_provider.dart';
 import '../../data/database/app_database.dart';
 import '../../services/agents/memory_manager_agent.dart';
 import '../../services/agents/scenario_planner_agent.dart';
+import '../../core/app_theme.dart';
+import '../../core/widgets/glass_container.dart';
 
 class HistoryScreen extends ConsumerWidget {
   const HistoryScreen({super.key});
@@ -15,27 +19,49 @@ class HistoryScreen extends ConsumerWidget {
     final sessionsStream = repo.watchAllSessions();
 
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: const Text('Historie konverzací'),
+        backgroundColor: Colors.transparent,
+        title: Text(
+          'Historie konverzací',
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: AppTheme.onBackground,
+          ),
+        ),
         centerTitle: true,
       ),
       body: StreamBuilder<List<Session>>(
         stream: sessionsStream,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return Center(
+                child: CircularProgressIndicator(color: AppTheme.primary));
           }
 
           final sessions = snapshot.data ?? [];
 
           if (sessions.isEmpty) {
-            return const Center(
+            return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.history, size: 64, color: Colors.grey),
-                  SizedBox(height: 16),
-                  Text('Zatím nemáš žádné lekce.', style: TextStyle(color: Colors.grey)),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: AppTheme.primary.withValues(alpha: 0.08),
+                    ),
+                    child:
+                        Icon(Icons.history, size: 40, color: AppTheme.primary),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Zatím nemáš žádné lekce.',
+                    style: GoogleFonts.plusJakartaSans(
+                        color: AppTheme.onSurfaceMuted, fontSize: 15),
+                  ),
                 ],
               ),
             );
@@ -65,58 +91,83 @@ class _SessionCard extends ConsumerWidget {
     final dateFormat = DateFormat('d. MMMM yyyy, HH:mm', 'cs');
     final dateStr = dateFormat.format(session.startedAt);
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    return GlassContainer(
+      margin: const EdgeInsets.only(bottom: 14),
       child: InkWell(
         onTap: () => _showSessionDetail(context, ref),
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    dateStr,
-                    style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueAccent),
+        borderRadius: BorderRadius.circular(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  dateStr,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.primary,
+                    fontSize: 13,
                   ),
-                  if (session.fluencyScore != null)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.greenAccent.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
+                ),
+                if (session.fluencyScore != null)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          AppTheme.success.withValues(alpha: 0.12),
+                          AppTheme.successLight.withValues(alpha: 0.06),
+                        ],
                       ),
-                      child: Text(
-                        '${(session.fluencyScore! * 100).toInt()}% plynulost',
-                        style: const TextStyle(fontSize: 12, color: Colors.greenAccent, fontWeight: FontWeight.bold),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                          color: AppTheme.success.withValues(alpha: 0.3)),
+                    ),
+                    child: Text(
+                      '${(session.fluencyScore! * 100).toInt()}% plynulost',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 12,
+                        color: AppTheme.success,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                ],
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              session.topicSummary ?? 'Lekce angličtiny',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.onBackground,
               ),
-              const SizedBox(height: 8),
-              Text(
-                session.topicSummary ?? 'Lekce angličtiny',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  const Icon(Icons.error_outline, size: 16, color: Colors.redAccent),
-                  const SizedBox(width: 4),
-                  Text('${session.totalErrors} chyb', style: const TextStyle(color: Colors.grey)),
-                  const Spacer(),
-                  const Text('Zobrazit přepis', style: TextStyle(color: Colors.blueAccent, fontSize: 12)),
-                  const Icon(Icons.chevron_right, size: 16, color: Colors.blueAccent),
-                ],
-              ),
-            ],
-          ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Icon(Icons.error_outline, size: 15, color: AppTheme.error),
+                const SizedBox(width: 4),
+                Text('${session.totalErrors} chyb',
+                    style: GoogleFonts.plusJakartaSans(
+                        color: AppTheme.onSurfaceMuted, fontSize: 13)),
+                const Spacer(),
+                Text(
+                  'Zobrazit přepis',
+                  style: GoogleFonts.plusJakartaSans(
+                    color: AppTheme.primary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Icon(Icons.chevron_right, size: 16, color: AppTheme.primary),
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -154,7 +205,8 @@ class _SessionDetailSheet extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<_SessionDetailSheet> createState() => _SessionDetailSheetState();
+  ConsumerState<_SessionDetailSheet> createState() =>
+      _SessionDetailSheetState();
 }
 
 class _SessionDetailSheetState extends ConsumerState<_SessionDetailSheet> {
@@ -168,13 +220,15 @@ class _SessionDetailSheetState extends ConsumerState<_SessionDetailSheet> {
       await memoryAgent.analyzeSession(widget.session.id);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Analýza dokončena!'), backgroundColor: Colors.green),
+          const SnackBar(
+              content: Text('Analýza dokončena!'),
+              backgroundColor: Color(0xFF10B981)),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Chyba při analýze: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Chyba při analýze: $e')),
         );
       }
     } finally {
@@ -188,20 +242,25 @@ class _SessionDetailSheetState extends ConsumerState<_SessionDetailSheet> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Smazat lekci?'),
-        content: const Text('Opravdu chceš smazat tuto lekci z historie? Tato akce je nevratná.'),
+        title: Text('Smazat lekci?',
+            style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600)),
+        content: Text(
+            'Opravdu chceš smazat tuto lekci z historie? Tato akce je nevratná.',
+            style: GoogleFonts.plusJakartaSans()),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Zrušit'),
+            child: Text('Zrušit',
+                style:
+                    GoogleFonts.plusJakartaSans(color: AppTheme.onSurfaceMuted)),
           ),
           TextButton(
             onPressed: () {
               Navigator.pop(context);
               _deleteSession();
             },
-            style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
-            child: const Text('Smazat'),
+            child: Text('Smazat',
+                style: GoogleFonts.plusJakartaSans(color: AppTheme.error)),
           ),
         ],
       ),
@@ -213,21 +272,21 @@ class _SessionDetailSheetState extends ConsumerState<_SessionDetailSheet> {
     try {
       final repo = ref.read(sessionRepositoryProvider);
       final result = await repo.deleteSession(widget.session.id);
-      
+
       if (mounted) {
         result.fold(
           (_) {
-            // Upozorníme scénáristu, aby přegeneroval scénáře na základě nového stavu
             ref.read(scenarioPlannerAgentProvider).planScenarios();
-            
-            Navigator.pop(context); // Zavřít bottom sheet
+            Navigator.pop(context);
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Lekce byla smazána. Paměť a scénáře se aktualizují.'), backgroundColor: Colors.orange),
+              const SnackBar(
+                  content: Text(
+                      'Lekce byla smazána. Paměť a scénáře se aktualizují.')),
             );
           },
           (failure) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Chyba: ${failure.message}'), backgroundColor: Colors.red),
+              SnackBar(content: Text('Chyba: ${failure.message}')),
             );
           },
         );
@@ -245,103 +304,200 @@ class _SessionDetailSheetState extends ConsumerState<_SessionDetailSheet> {
       initialChildSize: 0.7,
       maxChildSize: 0.95,
       minChildSize: 0.5,
-      builder: (_, controller) => Container(
-        decoration: const BoxDecoration(
-          color: Color(0xFF1E1E1E),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
-          children: [
-            const SizedBox(height: 12),
-            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2))),
-            const SizedBox(height: 16),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      widget.session.topicSummary ?? 'Detail lekce',
-                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                      textAlign: TextAlign.left,
-                    ),
-                  ),
-                  if (widget.session.topicSummary == null || widget.session.fluencyScore == null)
-                    _isAnalyzing
-                        ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
-                        : IconButton(
-                            icon: const Icon(Icons.analytics, color: Colors.blueAccent),
-                            tooltip: 'Analyzovat lekci manuálně',
-                            onPressed: _analyzeSession,
-                          ),
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
-                    tooltip: 'Smazat lekci',
-                    onPressed: _isDeleting ? null : _confirmDelete,
-                  ),
-                ],
+      builder: (_, controller) => ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppTheme.background,
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(28)),
+              border: Border(
+                top: BorderSide(
+                    color: AppTheme.glassBorder, width: 1),
               ),
             ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: ListView.builder(
-                controller: controller,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                itemCount: widget.transcripts.length,
-                itemBuilder: (context, index) {
-                  final t = widget.transcripts[index];
-                  final isUser = t.speaker == 'user';
-                  
-                  // Najdeme chybu pro tento transcript, pokud existuje
-                  final error = widget.errors.where((e) => t.content.contains(e.userSaid)).firstOrNull;
-
-                  return Align(
-                    alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-                    child: Column(
-                      crossAxisAlignment: isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          margin: const EdgeInsets.only(bottom: 4, top: 12),
-                          padding: const EdgeInsets.all(12),
-                          constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.8),
-                          decoration: BoxDecoration(
-                            color: isUser ? Colors.blueAccent.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.05),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: isUser ? Colors.blueAccent.withValues(alpha: 0.3) : Colors.white10),
+            child: Column(
+              children: [
+                const SizedBox(height: 12),
+                Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppTheme.outline,
+                      borderRadius: BorderRadius.circular(2),
+                    )),
+                const SizedBox(height: 16),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          widget.session.topicSummary ?? 'Detail lekce',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.onBackground,
                           ),
-                          child: Text(t.content),
+                          textAlign: TextAlign.left,
                         ),
-                        if (error != null)
-                          Container(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: Colors.redAccent.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(8),
+                      ),
+                      if (widget.session.topicSummary == null ||
+                          widget.session.fluencyScore == null)
+                        _isAnalyzing
+                            ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2))
+                            : IconButton(
+                                icon: Icon(Icons.analytics,
+                                    color: AppTheme.primary),
+                                tooltip: 'Analyzovat lekci manuálně',
+                                onPressed: _analyzeSession,
+                              ),
+                      IconButton(
+                        icon: Icon(Icons.delete_outline,
+                            color: AppTheme.error),
+                        tooltip: 'Smazat lekci',
+                        onPressed: _isDeleting ? null : _confirmDelete,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: ListView.builder(
+                    controller: controller,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 8),
+                    itemCount: widget.transcripts.length,
+                    itemBuilder: (context, index) {
+                      final t = widget.transcripts[index];
+                      final isUser = t.speaker == 'user';
+
+                      // Bug fix: prázdný userSaid
+                      final error = widget.errors
+                          .where((e) =>
+                              e.userSaid.isNotEmpty &&
+                              t.content.contains(e.userSaid))
+                          .firstOrNull;
+
+                      return Align(
+                        alignment: isUser
+                            ? Alignment.centerRight
+                            : Alignment.centerLeft,
+                        child: Column(
+                          crossAxisAlignment: isUser
+                              ? CrossAxisAlignment.end
+                              : CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              margin: const EdgeInsets.only(
+                                  bottom: 4, top: 12),
+                              padding: const EdgeInsets.all(14),
+                              constraints: BoxConstraints(
+                                  maxWidth:
+                                      MediaQuery.of(context).size.width *
+                                          0.78),
+                              decoration: BoxDecoration(
+                                gradient: isUser
+                                    ? LinearGradient(
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                        colors: [
+                                          AppTheme.primary
+                                              .withValues(alpha: 0.12),
+                                          AppTheme.primaryLight
+                                              .withValues(alpha: 0.06),
+                                        ],
+                                      )
+                                    : null,
+                                color: isUser ? null : AppTheme.glass,
+                                borderRadius: BorderRadius.only(
+                                  topLeft: const Radius.circular(20),
+                                  topRight: const Radius.circular(20),
+                                  bottomLeft:
+                                      Radius.circular(isUser ? 20 : 4),
+                                  bottomRight:
+                                      Radius.circular(isUser ? 4 : 20),
+                                ),
+                                border: Border.all(
+                                    color: isUser
+                                        ? AppTheme.primary
+                                            .withValues(alpha: 0.25)
+                                        : AppTheme.outline),
+                                boxShadow: AppTheme.glassShadowLight,
+                              ),
+                              child: Text(
+                                t.content,
+                                style: GoogleFonts.plusJakartaSans(
+                                  color: AppTheme.onBackground,
+                                  fontSize: 14,
+                                  height: 1.45,
+                                ),
+                              ),
                             ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
+                            if (error != null)
+                              Container(
+                                margin: const EdgeInsets.only(bottom: 8),
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.success
+                                      .withValues(alpha: 0.06),
+                                  borderRadius:
+                                      BorderRadius.circular(12),
+                                  border: Border.all(
+                                      color: AppTheme.success
+                                          .withValues(alpha: 0.2)),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
                                   children: [
-                                    const Icon(Icons.check_circle, size: 14, color: Colors.green),
-                                    const SizedBox(width: 4),
-                                    Text(error.correctForm, style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 12)),
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.check_circle_rounded,
+                                            size: 14,
+                                            color: AppTheme.success),
+                                        const SizedBox(width: 4),
+                                        Flexible(
+                                          child: Text(
+                                            error.correctForm,
+                                            style:
+                                                GoogleFonts.plusJakartaSans(
+                                              color: AppTheme.success,
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      error.explanation,
+                                      style:
+                                          GoogleFonts.plusJakartaSans(
+                                        fontSize: 12,
+                                        color: AppTheme.onSurfaceMuted,
+                                      ),
+                                    ),
                                   ],
                                 ),
-                                const SizedBox(height: 2),
-                                Text(error.explanation, style: const TextStyle(fontSize: 11, color: Colors.white70)),
-                              ],
-                            ),
-                          ),
-                      ],
-                    ),
-                  );
-                },
-              ),
+                              ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
