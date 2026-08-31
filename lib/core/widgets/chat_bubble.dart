@@ -59,11 +59,9 @@ class ChatBubble extends StatelessWidget {
     final screenWidth = MediaQuery.of(context).size.width;
     final maxBubbleWidth = screenWidth * maxWidthFraction;
 
-    final tutorBgColor = isDark ? AppTheme.glassDark : AppTheme.glass;
-    final tutorBorderColor =
-        isDark ? AppTheme.outlineDark : AppTheme.outline.withValues(alpha: 0.8);
-    final tutorTextColor =
-        isDark ? AppTheme.onBackgroundDark : AppTheme.onBackground;
+    final tutorBgColor = AppTheme.glassColor(context);
+    final tutorBorderColor = AppTheme.glassBorderColor(context);
+    final tutorTextColor = AppTheme.textColor(context);
     final tutorStrongColor =
         isDark ? AppTheme.primaryLight : AppTheme.primaryDark;
 
@@ -151,9 +149,7 @@ class ChatBubble extends StatelessWidget {
                               offset: const Offset(0, 4),
                             ),
                           ]
-                        : (isDark
-                            ? AppTheme.glassShadowDark
-                            : AppTheme.glassShadowLight),
+                        : AppTheme.glassShadowsLight(context),
                   ),
                   child: isUser
                       ? Text(

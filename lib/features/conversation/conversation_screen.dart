@@ -461,18 +461,18 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
   }
 
   Widget _buildInputBar() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark = AppTheme.isDark(context);
 
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
       decoration: BoxDecoration(
-        color: (isDark ? AppTheme.backgroundDark : AppTheme.background)
-            .withValues(alpha: 0.9),
+        color: isDark ? const Color(0xE6100C22) : const Color(0xE6FFFFFF),
         border: Border(
           top: BorderSide(
-            color: (isDark ? AppTheme.outlineDark : AppTheme.outline)
-                .withValues(alpha: 0.5),
-            width: 0.5,
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.12)
+                : Colors.white.withValues(alpha: 0.8),
+            width: 0.8,
           ),
         ),
       ),
@@ -482,15 +482,13 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
             child: TextField(
               controller: _textController,
               style: GoogleFonts.plusJakartaSans(
-                color: isDark ? AppTheme.onBackgroundDark : AppTheme.onBackground,
+                color: AppTheme.textColor(context),
                 fontSize: 15,
               ),
               decoration: InputDecoration(
                 hintText: 'Napiš anglicky (nebo česky)...',
                 hintStyle: GoogleFonts.plusJakartaSans(
-                  color: isDark
-                      ? AppTheme.onSurfaceMutedDark
-                      : AppTheme.onSurfaceMuted,
+                  color: AppTheme.mutedTextColor(context),
                   fontSize: 15,
                 ),
               ),

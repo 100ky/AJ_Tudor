@@ -83,7 +83,7 @@ class _SkeletonScreenState extends ConsumerState<SkeletonScreen>
         (tutorState.status != TutorState.idle &&
             tutorState.status != TutorState.error);
 
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark = AppTheme.isDark(context);
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -104,14 +104,14 @@ class _SkeletonScreenState extends ConsumerState<SkeletonScreen>
                     top: -120 + (sinT * 20),
                     right: -80 + (cosT * 15),
                     child: Container(
-                      width: 320 + (sinT * 20),
-                      height: 320 + (sinT * 20),
+                      width: 340 + (sinT * 20),
+                      height: 340 + (sinT * 20),
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         gradient: RadialGradient(
                           colors: [
                             AppTheme.blobPrimary.withValues(
-                              alpha: 0.18 + (sinT * 0.06),
+                              alpha: isDark ? (0.24 + sinT * 0.06) : (0.16 + sinT * 0.04),
                             ),
                             Colors.transparent,
                           ],
@@ -125,14 +125,14 @@ class _SkeletonScreenState extends ConsumerState<SkeletonScreen>
                     bottom: -60 + (cosT * 25),
                     left: -100 + (sinT * 15),
                     child: Container(
-                      width: 290 + (cosT * 20),
-                      height: 290 + (cosT * 20),
+                      width: 310 + (cosT * 20),
+                      height: 310 + (cosT * 20),
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         gradient: RadialGradient(
                           colors: [
                             AppTheme.blobSecondary.withValues(
-                              alpha: 0.16 + (cosT * 0.05),
+                              alpha: isDark ? (0.22 + cosT * 0.05) : (0.14 + cosT * 0.04),
                             ),
                             Colors.transparent,
                           ],
@@ -148,14 +148,14 @@ class _SkeletonScreenState extends ConsumerState<SkeletonScreen>
                     left: MediaQuery.of(context).size.width * 0.25 +
                         (cosT * 20),
                     child: Container(
-                      width: 220 + (sinT * 15),
-                      height: 220 + (sinT * 15),
+                      width: 240 + (sinT * 15),
+                      height: 240 + (sinT * 15),
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         gradient: RadialGradient(
                           colors: [
                             AppTheme.blobTertiary.withValues(
-                              alpha: 0.14 + (sinT * 0.04),
+                              alpha: isDark ? (0.18 + sinT * 0.04) : (0.12 + sinT * 0.03),
                             ),
                             Colors.transparent,
                           ],
@@ -172,15 +172,15 @@ class _SkeletonScreenState extends ConsumerState<SkeletonScreen>
           Column(
             children: [
               // Warning banner – chybí API klíč
-              if (isMissingKey && currentIndex != 3)
+              if (isMissingKey && currentIndex != 4)
                 SafeArea(
                   bottom: false,
                   child: Container(
                     margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(16),
                       child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
                         child: Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 16,
@@ -188,7 +188,7 @@ class _SkeletonScreenState extends ConsumerState<SkeletonScreen>
                           ),
                           decoration: BoxDecoration(
                             color: AppTheme.warning.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(14),
+                            borderRadius: BorderRadius.circular(16),
                             border: Border.all(
                               color: AppTheme.warning.withValues(alpha: 0.3),
                             ),
@@ -216,7 +216,7 @@ class _SkeletonScreenState extends ConsumerState<SkeletonScreen>
                                   HapticFeedback.lightImpact();
                                   ref
                                       .read(_selectedIndexProvider.notifier)
-                                      .setIndex(3);
+                                      .setIndex(4);
                                 },
                                 child: Text(
                                   'NASTAVIT',
@@ -247,7 +247,7 @@ class _SkeletonScreenState extends ConsumerState<SkeletonScreen>
         ],
       ),
 
-      // ── Glass NavigationBar (4 vzdušné záložky) ──────────────────────────
+      // ── Glass NavigationBar (5 vzdušných záložek) ──────────────────────────
       bottomNavigationBar: AnimatedContainer(
         duration: const Duration(milliseconds: 320),
         curve: Curves.easeInOutCubic,
@@ -263,15 +263,16 @@ class _SkeletonScreenState extends ConsumerState<SkeletonScreen>
               offset: isVoiceActive ? const Offset(0, 1) : Offset.zero,
               child: ClipRRect(
                 child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                  filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
                   child: DecoratedBox(
                     decoration: BoxDecoration(
-                      color: isDark ? AppTheme.glassDark : AppTheme.glass,
+                      color: isDark ? const Color(0xE6100C22) : const Color(0xE6FFFFFF),
                       border: Border(
                         top: BorderSide(
-                          color: (isDark ? AppTheme.outlineDark : AppTheme.outline)
-                              .withValues(alpha: 0.5),
-                          width: 0.5,
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.12)
+                              : Colors.white.withValues(alpha: 0.75),
+                          width: 0.8,
                         ),
                       ),
                     ),

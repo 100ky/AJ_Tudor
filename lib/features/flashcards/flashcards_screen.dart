@@ -581,7 +581,10 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
         builder: (context, setDialogState) => AlertDialog(
           title: Text(
             'Nová Smart Flashcard 🃏',
-            style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700),
+            style: GoogleFonts.plusJakartaSans(
+              fontWeight: FontWeight.w700,
+              color: AppTheme.textColor(context),
+            ),
           ),
           content: SingleChildScrollView(
             child: Column(
@@ -636,7 +639,12 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogCtx),
-              child: const Text('Zrušit'),
+              child: Text(
+                'Zrušit',
+                style: GoogleFonts.plusJakartaSans(
+                  color: AppTheme.mutedTextColor(context),
+                ),
+              ),
             ),
             FilledButton(
               onPressed: () async {

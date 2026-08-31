@@ -522,10 +522,10 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: AppTheme.backgroundSecondary,
+                      color: AppTheme.backgroundSecondaryColor(context),
                     ),
                     child: Icon(Icons.close_rounded,
-                        size: 14, color: AppTheme.onSurfaceMuted),
+                        size: 14, color: AppTheme.mutedTextColor(context)),
                   ),
                 ),
             ],
@@ -605,13 +605,8 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
                 begin: Alignment.bottomCenter,
                 end: Alignment.topCenter,
                 colors: [
-                  Theme.of(context).brightness == Brightness.dark
-                      ? AppTheme.backgroundDark
-                      : AppTheme.background,
-                  (Theme.of(context).brightness == Brightness.dark
-                          ? AppTheme.backgroundDark
-                          : AppTheme.background)
-                      .withValues(alpha: 0.85),
+                  AppTheme.backgroundColor(context),
+                  AppTheme.backgroundColor(context).withValues(alpha: 0.85),
                   Colors.transparent,
                 ],
               ),

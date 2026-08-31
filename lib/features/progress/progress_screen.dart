@@ -624,8 +624,6 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen> {
   }
 
   Widget _buildVocabularyChipCloud(BuildContext context, String vocabJson) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     try {
       final List<dynamic> words = jsonDecode(vocabJson);
       if (words.isEmpty) {
@@ -641,10 +639,10 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
-                    color: isDark ? AppTheme.glassLightDark : AppTheme.glassLight,
+                    color: AppTheme.glassLightColor(context),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
-                      color: isDark ? AppTheme.outlineDark : AppTheme.outline,
+                      color: AppTheme.glassBorderColor(context),
                     ),
                   ),
                   child: Text(
@@ -667,16 +665,16 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen> {
   Widget _buildErrorTile(BuildContext context, ErrorLog error) {
     final color = AppTheme.errorTypeColor(error.errorType);
     final icon = AppTheme.errorTypeIcon(error.errorType);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: isDark ? AppTheme.glassDark : AppTheme.glass,
+        color: AppTheme.glassColor(context),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isDark ? AppTheme.outlineDark : AppTheme.outline,
+          color: AppTheme.glassBorderColor(context),
         ),
+        boxShadow: AppTheme.glassShadowsLight(context),
       ),
       child: Material(
         color: Colors.transparent,
@@ -715,9 +713,7 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen> {
               child: Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: isDark
-                      ? AppTheme.backgroundSecondaryDark
-                      : AppTheme.backgroundSecondary,
+                  color: AppTheme.backgroundSecondaryColor(context),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(

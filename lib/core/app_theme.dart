@@ -19,33 +19,33 @@ abstract final class AppTheme {
 
   // ── Pozadí (Dark) ─────────────────────────────────────────────────────────
 
-  /// Hluboké tmavě fialové pozadí pro tmavý režim
-  static const Color backgroundDark = Color(0xFF0D0B18);
+  /// Hluboké obsidian / ametyst pozadí pro prémiový tmavý režim
+  static const Color backgroundDark = Color(0xFF090713);
 
-  /// Sekundární tmavé pozadí
-  static const Color backgroundSecondaryDark = Color(0xFF171328);
+  /// Sekundární tmavé pozadí pro povrchy a karty
+  static const Color backgroundSecondaryDark = Color(0xFF130E26);
 
   // ── Glass povrchy (Light) ─────────────────────────────────────────────────
 
-  /// Standardní glass karta (~80% bílá)
-  static const Color glass = Color(0xCCFFFFFF);
+  /// Standardní glass karta (~85% translucent bílá)
+  static const Color glass = Color(0xD9FFFFFF);
 
-  /// Lehčí glass (~60% bílá) pro vnořené prvky
-  static const Color glassLight = Color(0x99FFFFFF);
+  /// Lehčí glass (~65% bílá) pro vnořené prvky
+  static const Color glassLight = Color(0xA6FFFFFF);
 
   /// Jemný border glass karet (subtilní bílý okraj simulující odlesk světla)
-  static const Color glassBorder = Color(0x55FFFFFF);
+  static const Color glassBorder = Color(0x66FFFFFF);
 
-  /// Stín pro glass karty – měkký a rozptýlený
+  /// Stín pro glass karty – měkký, vznášející se a rozptýlený
   static const List<BoxShadow> glassShadow = [
     BoxShadow(
-      color: Color(0x12000000),
-      blurRadius: 24,
+      color: Color(0x0F4F46E5), // Jemný nádech primárního indiga
+      blurRadius: 28,
       spreadRadius: 0,
-      offset: Offset(0, 8),
+      offset: Offset(0, 10),
     ),
     BoxShadow(
-      color: Color(0x08000000),
+      color: Color(0x0A000000),
       blurRadius: 8,
       spreadRadius: 0,
       offset: Offset(0, 2),
@@ -55,7 +55,7 @@ abstract final class AppTheme {
   /// Lehčí stín pro menší prvky
   static const List<BoxShadow> glassShadowLight = [
     BoxShadow(
-      color: Color(0x0A000000),
+      color: Color(0x084F46E5),
       blurRadius: 16,
       spreadRadius: 0,
       offset: Offset(0, 4),
@@ -64,28 +64,28 @@ abstract final class AppTheme {
 
   // ── Glass povrchy (Dark) ──────────────────────────────────────────────────
 
-  /// Standardní tmavá glass karta (~80% tmavě fialová)
-  static const Color glassDark = Color(0xCC1A162B);
+  /// Standardní tmavá glass karta (~80% hluboká noční fialová)
+  static const Color glassDark = Color(0xCC130E26);
 
   /// Lehčí tmavý glass pro vnořené prvky
-  static const Color glassLightDark = Color(0x99241F3A);
+  static const Color glassLightDark = Color(0x991C1636);
 
   /// Jemný odlesk pro tmavé karty
-  static const Color glassBorderDark = Color(0x22FFFFFF);
+  static const Color glassBorderDark = Color(0x28FFFFFF);
 
-  /// Stín pro tmavé glass karty
+  /// Stín pro tmavé glass karty – hluboký s jemnou aurou
   static const List<BoxShadow> glassShadowDark = [
     BoxShadow(
-      color: Color(0x55000000),
-      blurRadius: 24,
+      color: Color(0x88000000),
+      blurRadius: 28,
       spreadRadius: 0,
-      offset: Offset(0, 8),
+      offset: Offset(0, 12),
     ),
     BoxShadow(
-      color: Color(0x33000000),
-      blurRadius: 8,
-      spreadRadius: 0,
-      offset: Offset(0, 2),
+      color: Color(0x1A6366F1), // Ambientní fialová aura
+      blurRadius: 16,
+      spreadRadius: -2,
+      offset: Offset(0, 4),
     ),
   ];
 
@@ -210,35 +210,98 @@ abstract final class AppTheme {
 
   // ── Adaptivní pomocné metody pro barvy dle tématu ────────────────────────
 
+  /// Zjistí, zda je aktivní tmavý režim
+  static bool isDark(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark;
+
+  /// Adaptivní barva pozadí scaffold
+  static Color backgroundColor(BuildContext context) =>
+      isDark(context) ? backgroundDark : background;
+
+  /// Adaptivní sekundární pozadí
+  static Color backgroundSecondaryColor(BuildContext context) =>
+      isDark(context) ? backgroundSecondaryDark : backgroundSecondary;
+
+  /// Adaptivní standardní glass výplň
+  static Color glassColor(BuildContext context) =>
+      isDark(context) ? glassDark : glass;
+
+  /// Adaptivní lehčí glass výplň pro vnořené prvky
+  static Color glassLightColor(BuildContext context) =>
+      isDark(context) ? glassLightDark : glassLight;
+
+  /// Adaptivní okraj skla
+  static Color glassBorderColor(BuildContext context) =>
+      isDark(context) ? glassBorderDark : glassBorder;
+
+  /// Adaptivní stíny pro skleněné karty
+  static List<BoxShadow> glassShadows(BuildContext context) =>
+      isDark(context) ? glassShadowDark : glassShadow;
+
+  /// Adaptivní lehké stíny pro menší prvky
+  static List<BoxShadow> glassShadowsLight(BuildContext context) =>
+      isDark(context) ? glassShadowDark : glassShadowLight;
+
+  /// Gradientní okraj simulující světelný odlesk hrany (specular rim highlight)
+  static LinearGradient glassBorderGradient(BuildContext context) {
+    final dark = isDark(context);
+    return LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: dark
+          ? [
+              Colors.white.withValues(alpha: 0.28),
+              Colors.white.withValues(alpha: 0.08),
+              primaryLight.withValues(alpha: 0.15),
+              Colors.white.withValues(alpha: 0.03),
+            ]
+          : [
+              Colors.white.withValues(alpha: 0.90),
+              Colors.white.withValues(alpha: 0.40),
+              primary.withValues(alpha: 0.15),
+              Colors.white.withValues(alpha: 0.20),
+            ],
+      stops: const [0.0, 0.35, 0.7, 1.0],
+    );
+  }
+
+  /// Jemný gradient výplně skla pro realistický lom světla
+  static LinearGradient glassFillGradient(BuildContext context) {
+    final dark = isDark(context);
+    return LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: dark
+          ? [
+              const Color(0xDE1A1435),
+              const Color(0xBD120D25),
+            ]
+          : [
+              const Color(0xF2FFFFFF),
+              const Color(0xD9F6F4FC),
+            ],
+    );
+  }
+
   /// Adaptivní barva hlavního textu (nadpisy, tituly, výrazné texty)
   static Color textColor(BuildContext context) =>
-      Theme.of(context).brightness == Brightness.dark
-          ? onBackgroundDark
-          : onBackground;
+      isDark(context) ? onBackgroundDark : onBackground;
 
   /// Adaptivní barva běžného textu na kartách
   static Color surfaceTextColor(BuildContext context) =>
-      Theme.of(context).brightness == Brightness.dark
-          ? onSurfaceDark
-          : onSurface;
+      isDark(context) ? onSurfaceDark : onSurface;
 
   /// Adaptivní ztlumený text (popisky, labely, placeholdery)
   static Color mutedTextColor(BuildContext context) =>
-      Theme.of(context).brightness == Brightness.dark
-          ? onSurfaceMutedDark
-          : onSurfaceMuted;
+      isDark(context) ? onSurfaceMutedDark : onSurfaceMuted;
 
   /// Adaptivní barva okrajů
   static Color outlineColor(BuildContext context) =>
-      Theme.of(context).brightness == Brightness.dark
-          ? outlineDark
-          : outline;
+      isDark(context) ? outlineDark : outline;
 
   /// Adaptivní barva jemných okrajů/oddělovačů
   static Color outlineLightColor(BuildContext context) =>
-      Theme.of(context).brightness == Brightness.dark
-          ? outlineLightDark
-          : outlineLight;
+      isDark(context) ? outlineLightDark : outlineLight;
 
   // ── Speciální barvy hlasového orbu podle stavu ────────────────────────────
 
@@ -498,6 +561,16 @@ abstract final class AppTheme {
       ),
     ),
 
+    // BottomSheet – transparent background for Frosted Glass sheets
+    bottomSheetTheme: const BottomSheetThemeData(
+      backgroundColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+    ),
+
     // Dialog
     dialogTheme: DialogThemeData(
       backgroundColor: background,
@@ -670,6 +743,16 @@ abstract final class AppTheme {
           fontSize: 12,
           fontWeight: FontWeight.w500,
         ),
+      ),
+    ),
+
+    // BottomSheet – transparent background for Frosted Glass sheets
+    bottomSheetTheme: const BottomSheetThemeData(
+      backgroundColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
     ),
 

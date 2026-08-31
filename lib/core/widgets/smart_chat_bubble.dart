@@ -131,11 +131,9 @@ class _SmartChatBubbleState extends ConsumerState<SmartChatBubble> {
     final screenWidth = MediaQuery.of(context).size.width;
     final maxBubbleWidth = screenWidth * widget.maxWidthFraction;
 
-    final tutorBgColor = isDark ? AppTheme.glassDark : AppTheme.glass;
-    final tutorBorderColor =
-        isDark ? AppTheme.outlineDark : AppTheme.outline.withValues(alpha: 0.8);
-    final tutorTextColor =
-        isDark ? AppTheme.onBackgroundDark : AppTheme.onBackground;
+    final tutorBgColor = AppTheme.glassColor(context);
+    final tutorBorderColor = AppTheme.glassBorderColor(context);
+    final tutorTextColor = AppTheme.textColor(context);
     final tutorStrongColor =
         isDark ? AppTheme.primaryLight : AppTheme.primaryDark;
 

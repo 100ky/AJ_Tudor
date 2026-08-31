@@ -243,16 +243,21 @@ class _SessionDetailSheetState extends ConsumerState<_SessionDetailSheet> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text('Smazat lekci?',
-            style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600)),
+            style: GoogleFonts.plusJakartaSans(
+              fontWeight: FontWeight.w600,
+              color: AppTheme.textColor(context),
+            )),
         content: Text(
             'Opravdu chceš smazat tuto lekci z historie? Tato akce je nevratná.',
-            style: GoogleFonts.plusJakartaSans()),
+            style: GoogleFonts.plusJakartaSans(
+              color: AppTheme.surfaceTextColor(context),
+            )),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: Text('Zrušit',
-                style:
-                    GoogleFonts.plusJakartaSans(color: AppTheme.onSurfaceMuted)),
+                style: GoogleFonts.plusJakartaSans(
+                    color: AppTheme.mutedTextColor(context))),
           ),
           TextButton(
             onPressed: () {
@@ -300,6 +305,8 @@ class _SessionDetailSheetState extends ConsumerState<_SessionDetailSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = AppTheme.isDark(context);
+
     return DraggableScrollableSheet(
       initialChildSize: 0.7,
       maxChildSize: 0.95,
@@ -307,27 +314,33 @@ class _SessionDetailSheetState extends ConsumerState<_SessionDetailSheet> {
       builder: (_, controller) => ClipRRect(
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
           child: Container(
             decoration: BoxDecoration(
-              color: AppTheme.background,
+              color: isDark ? const Color(0xF2100C22) : const Color(0xF5F6F4FC),
               borderRadius:
                   const BorderRadius.vertical(top: Radius.circular(28)),
               border: Border(
                 top: BorderSide(
-                    color: AppTheme.glassBorder, width: 1),
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.20)
+                      : Colors.white.withValues(alpha: 0.85),
+                  width: 1.0,
+                ),
               ),
+              boxShadow: AppTheme.glassShadows(context),
             ),
             child: Column(
               children: [
                 const SizedBox(height: 12),
                 Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: AppTheme.outline,
-                      borderRadius: BorderRadius.circular(2),
-                    )),
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppTheme.outlineColor(context),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
                 const SizedBox(height: 16),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -353,7 +366,7 @@ class _SessionDetailSheetState extends ConsumerState<_SessionDetailSheet> {
                                 child: CircularProgressIndicator(
                                     strokeWidth: 2))
                             : IconButton(
-                                icon: Icon(Icons.analytics,
+                                icon: Icon(Icons.analytics_outlined,
                                     color: AppTheme.primary),
                                 tooltip: 'Analyzovat lekci manuálně',
                                 onPressed: _analyzeSession,
@@ -408,19 +421,14 @@ class _SessionDetailSheetState extends ConsumerState<_SessionDetailSheet> {
                                         begin: Alignment.topLeft,
                                         end: Alignment.bottomRight,
                                         colors: [
-                                          AppTheme.primary
-                                              .withValues(alpha: 0.12),
-                                          AppTheme.primaryLight
-                                              .withValues(alpha: 0.06),
+                                          AppTheme.primary,
+                                          AppTheme.primaryDark,
                                         ],
                                       )
                                     : null,
                                 color: isUser
                                     ? null
-                                    : (Theme.of(context).brightness ==
-                                            Brightness.dark
-                                        ? AppTheme.glassDark
-                                        : AppTheme.glass),
+                                    : AppTheme.glassColor(context),
                                 borderRadius: BorderRadius.only(
                                   topLeft: const Radius.circular(20),
                                   topRight: const Radius.circular(20),
@@ -430,36 +438,50 @@ class _SessionDetailSheetState extends ConsumerState<_SessionDetailSheet> {
                                       Radius.circular(isUser ? 4 : 20),
                                 ),
                                 border: Border.all(
-                                    color: isUser
-                                        ? AppTheme.primary
-                                            .withValues(alpha: 0.25)
-                                        : (Theme.of(context).brightness ==
-                                                Brightness.dark
-                                            ? AppTheme.outlineDark
-                                            : AppTheme.outline)),
-                                boxShadow: AppTheme.glassShadowLight,
+                                  color: isUser
+                                      ? AppTheme.primaryLight
+                                          .withValues(alpha: 0.35)
+                                      : AppTheme.glassBorderColor(context),
+                                  width: 1.0,
+                                ),
+                                boxShadow: isUser
+                                    ? [
+                                        BoxShadow(
+                                          color: AppTheme.primary
+                                              .withValues(alpha: 0.25),
+                                          blurRadius: 10,
+                                          offset: const Offset(0, 4),
+                                        )
+                                      ]
+                                    : AppTheme.glassShadowsLight(context),
                               ),
                               child: Text(
                                 t.content,
                                 style: GoogleFonts.plusJakartaSans(
-                                  color: AppTheme.textColor(context),
+                                  color: isUser
+                                      ? Colors.white
+                                      : AppTheme.textColor(context),
                                   fontSize: 14,
                                   height: 1.45,
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
                             ),
                             if (error != null)
                               Container(
                                 margin: const EdgeInsets.only(bottom: 8),
-                                padding: const EdgeInsets.all(10),
+                                padding: const EdgeInsets.all(12),
+                                constraints: BoxConstraints(
+                                    maxWidth:
+                                        MediaQuery.of(context).size.width *
+                                            0.78),
                                 decoration: BoxDecoration(
                                   color: AppTheme.success
-                                      .withValues(alpha: 0.06),
-                                  borderRadius:
-                                      BorderRadius.circular(12),
+                                      .withValues(alpha: isDark ? 0.12 : 0.08),
+                                  borderRadius: BorderRadius.circular(14),
                                   border: Border.all(
                                       color: AppTheme.success
-                                          .withValues(alpha: 0.2)),
+                                          .withValues(alpha: 0.25)),
                                 ),
                                 child: Column(
                                   crossAxisAlignment:
@@ -471,14 +493,14 @@ class _SessionDetailSheetState extends ConsumerState<_SessionDetailSheet> {
                                         Icon(Icons.check_circle_rounded,
                                             size: 14,
                                             color: AppTheme.success),
-                                        const SizedBox(width: 4),
+                                        const SizedBox(width: 6),
                                         Flexible(
                                           child: Text(
                                             error.correctForm,
                                             style:
                                                 GoogleFonts.plusJakartaSans(
                                               color: AppTheme.success,
-                                              fontWeight: FontWeight.w600,
+                                              fontWeight: FontWeight.w700,
                                               fontSize: 13,
                                             ),
                                           ),
@@ -491,7 +513,8 @@ class _SessionDetailSheetState extends ConsumerState<_SessionDetailSheet> {
                                       style:
                                           GoogleFonts.plusJakartaSans(
                                         fontSize: 12,
-                                        color: AppTheme.onSurfaceMuted,
+                                        color: AppTheme.mutedTextColor(context),
+                                        height: 1.35,
                                       ),
                                     ),
                                   ],

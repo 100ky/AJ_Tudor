@@ -839,16 +839,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text('Resetovat paměť?',
-            style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600)),
+            style: GoogleFonts.plusJakartaSans(
+              fontWeight: FontWeight.w600,
+              color: AppTheme.textColor(context),
+            )),
         content: Text(
             'Tato akce vymaže vše, co si AI pamatuje o vašem pokroku. Nelze vrátit zpět.',
-            style: GoogleFonts.plusJakartaSans()),
+            style: GoogleFonts.plusJakartaSans(
+              color: AppTheme.surfaceTextColor(context),
+            )),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: Text('Zrušit',
-                style:
-                    GoogleFonts.plusJakartaSans(color: AppTheme.onSurfaceMuted)),
+                style: GoogleFonts.plusJakartaSans(
+                    color: AppTheme.mutedTextColor(context))),
           ),
           TextButton(
             onPressed: () async {
