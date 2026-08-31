@@ -990,6 +990,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
             _userSpokeInCurrentTurn = false;
             client.nudgeModel();
             _resetThinkingTimer();
+            _resetResponseSilenceTimer();
           }
         });
       }

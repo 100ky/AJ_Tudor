@@ -10,6 +10,7 @@ import 'tables/transcripts.dart';
 import 'tables/user_profiles.dart';
 import 'tables/error_logs.dart';
 import 'tables/scenarios.dart';
+import 'tables/flashcards.dart';
 
 part 'app_database.g.dart';
 
@@ -17,10 +18,15 @@ part 'app_database.g.dart';
 /// 
 /// Obsahuje definice všech tabulek a zajišťuje připojení k souboru databáze.
 /// Tabulky jsou importovány z oddělených souborů v adresáři 'tables/'.
-@DriftDatabase(tables: [Sessions, Transcripts, UserProfiles, ErrorLogs, Scenarios])
+@DriftDatabase(tables: [Sessions, Transcripts, UserProfiles, ErrorLogs, Scenarios, Flashcards])
 class AppDatabase extends _$AppDatabase {
   /// Inicializuje databázi a otevírá připojení k souboru.
   AppDatabase() : super(_openConnection());
+
+  /// Konstruktor pro testy s in-memory databází.
+  AppDatabase.forTesting(super.e);
+
+
 
   /// Verze schématu databáze. Při změně struktury tabulek je nutné ji zvýšit.
   @override

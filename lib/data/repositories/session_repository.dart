@@ -231,7 +231,7 @@ class SessionRepository {
   }
 
   /// Uloží záznam o gramatické nebo výslovnostní chybě uživatele.
-  Future<Result<void>> addErrorLog({
+  Future<Result<int>> addErrorLog({
     required int sessionId,
     required String errorType,
     required String userSaid,
@@ -239,7 +239,7 @@ class SessionRepository {
     required String explanation,
   }) async {
     try {
-      await _db.into(_db.errorLogs).insert(
+      final id = await _db.into(_db.errorLogs).insert(
         ErrorLogsCompanion.insert(
           sessionId: sessionId,
           errorType: errorType,
@@ -249,10 +249,10 @@ class SessionRepository {
           timestamp: DateTime.now(),
         ),
       );
-      return Result.success(null);
+      return Result.success(id);
     } catch (e, stack) {
-      L.e('Chyba při logování lingvistické chyby', e, stack);
-      return Result.failure(DatabaseFailure('Nepodařilo se uložit záznam o chybě.'));
+      L.e('Chyba při ukládání logu chyby', e, stack);
+      return Result.failure(DatabaseFailure('Nepodařilo se zaznamenat chybu.'));
     }
   }
 
@@ -402,5 +402,148 @@ class SessionRepository {
       return Result.failure(DatabaseFailure('Nepodařilo se smazat lekci.'));
     }
   }
+
+  // ── Smart Flashcards & SRS Repozitář ──────────────────────────────────────
+
+  /// Vloží novou kartičku do databáze (např. z chytré bubliny nebo analýzy chyb).
+  Future<Result<int>> addFlashcard({
+    required String frontText,
+    required String backText,
+    required String explanation,
+    String errorType = 'grammar',
+    String? sourceSentence,
+    int? errorLogId,
+  }) async {
+    try {
+      final now = DateTime.now();
+      final id = await _db.into(_db.flashcards).insert(
+            FlashcardsCompanion.insert(
+              frontText: frontText,
+              backText: backText,
+              explanation: explanation,
+              errorType: Value(errorType),
+              sourceSentence: Value(sourceSentence),
+              errorLogId: Value(errorLogId),
+              nextReviewAt: now, // Ihned připraveno k prvnímu procvičení
+              createdAt: now,
+            ),
+          );
+      L.i('Kartička #$id úspěšně vytvořena: "$frontText" -> "$backText"');
+      return Result.success(id);
+    } catch (e, stack) {
+      L.e('Chyba při vytváření kartičky', e, stack);
+      return Result.failure(DatabaseFailure('Nepodařilo se vytvořit kartičku.'));
+    }
+  }
+
+  /// Sleduje proud všech kartiček, které jsou připravené k dnešnímu procvičení.
+  Stream<List<Flashcard>> watchDueFlashcards() {
+    final now = DateTime.now();
+    return (_db.select(_db.flashcards)
+          ..where((t) => t.nextReviewAt.isSmallerOrEqualValue(now))
+          ..orderBy([(t) => OrderingTerm.asc(t.nextReviewAt)]))
+        .watch();
+  }
+
+  /// Načte seznam kartiček připravených k procvičení.
+  Future<List<Flashcard>> getDueFlashcards() async {
+    final now = DateTime.now();
+    return await (_db.select(_db.flashcards)
+          ..where((t) => t.nextReviewAt.isSmallerOrEqualValue(now))
+          ..orderBy([(t) => OrderingTerm.asc(t.nextReviewAt)]))
+        .get();
+  }
+
+  /// Sleduje všechny existující kartičky v databázi.
+  Stream<List<Flashcard>> watchAllFlashcards() {
+    return (_db.select(_db.flashcards)
+          ..orderBy([(t) => OrderingTerm.desc(t.createdAt)]))
+        .watch();
+  }
+
+  /// Načte všechny kartičky v databázi.
+  Future<List<Flashcard>> getAllFlashcards() async {
+    return await (_db.select(_db.flashcards)
+          ..orderBy([(t) => OrderingTerm.desc(t.createdAt)]))
+        .get();
+  }
+
+  /// Aktualizuje stav kartičky po studentově procvičení (SRS algoritmus).
+  /// 
+  /// [rating]:
+  /// - `0` (Znovu / Again): Reset intervalu na 1 den, mastery klesá.
+  /// - `1` (Těžké / Hard): Interval se prodlouží 1.2x.
+  /// - `2` (Dobré / Good): Interval se prodlouží 2.0x.
+  /// - `3` (Snadné / Easy): Interval se prodlouží 3.0x, mastery roste.
+  Future<Result<void>> reviewFlashcard({
+    required int flashcardId,
+    required int rating,
+  }) async {
+    try {
+      final card = await (_db.select(_db.flashcards)
+            ..where((t) => t.id.equals(flashcardId)))
+          .getSingleOrNull();
+
+      if (card == null) {
+        return Result.failure(DatabaseFailure('Kartička nebyla nalezena.'));
+      }
+
+      int newRepetition = card.repetitionCount;
+      int newInterval = card.intervalDays;
+      double newMastery = card.masteryScore;
+
+      switch (rating) {
+        case 0: // Again
+          newRepetition = 0;
+          newInterval = 1;
+          newMastery = (newMastery - 0.2).clamp(0.0, 1.0);
+          break;
+        case 1: // Hard
+          newRepetition += 1;
+          newInterval = (newInterval * 1.2).ceil().clamp(1, 60);
+          newMastery = (newMastery + 0.05).clamp(0.0, 1.0);
+          break;
+        case 2: // Good
+          newRepetition += 1;
+          newInterval = (newInterval * 2.0).ceil().clamp(2, 90);
+          newMastery = (newMastery + 0.15).clamp(0.0, 1.0);
+          break;
+        case 3: // Easy
+          newRepetition += 1;
+          newInterval = (newInterval * 3.0).ceil().clamp(4, 180);
+          newMastery = (newMastery + 0.25).clamp(0.0, 1.0);
+          break;
+      }
+
+      final nextReview = DateTime.now().add(Duration(days: newInterval));
+
+      await (_db.update(_db.flashcards)..where((t) => t.id.equals(flashcardId))).write(
+        FlashcardsCompanion(
+          intervalDays: Value(newInterval),
+          repetitionCount: Value(newRepetition),
+          masteryScore: Value(newMastery),
+          nextReviewAt: Value(nextReview),
+        ),
+      );
+
+      L.i('Kartička #$flashcardId ohodnocena ($rating). Nový interval: $newInterval dní.');
+      return Result.success(null);
+    } catch (e, stack) {
+      L.e('Chyba při hodnocení kartičky', e, stack);
+      return Result.failure(DatabaseFailure('Nepodařilo se uložit hodnocení kartičky.'));
+    }
+  }
+
+  /// Smaže konkrétní kartičku.
+  Future<Result<void>> deleteFlashcard(int id) async {
+    try {
+      await (_db.delete(_db.flashcards)..where((t) => t.id.equals(id))).go();
+      return Result.success(null);
+    } catch (e, stack) {
+      L.e('Chyba při mazání kartičky', e, stack);
+      return Result.failure(DatabaseFailure('Nepodařilo se smazat kartičku.'));
+    }
+  }
 }
+
 

@@ -13,6 +13,9 @@ abstract class Result<S> {
   bool get isSuccess => this is Success<S>;
   bool get isFailure => this is Error<S>;
 
+  S? get valueOrNull => isSuccess ? (this as Success<S>).value : null;
+  Failure? get failureOrNull => isFailure ? (this as Error<S>).failure : null;
+
   /// Transformuje výsledek na základě stavu.
   T fold<T>(T Function(S value) onSuccess, T Function(Failure failure) onFailure) {
     if (this is Success<S>) {

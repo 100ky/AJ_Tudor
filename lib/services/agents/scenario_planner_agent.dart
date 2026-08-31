@@ -35,17 +35,31 @@ class ScenarioPlannerAgent {
     }
 
     try {
-      // 1. Načtení aktuálního profilu uživatele z databáze
+      // 1. Načtení aktuálního profilu uživatele a problematických kartiček z databáze
       final profile = await repo.getUserProfile();
       if (profile == null) {
         L.w('Uživatelský profil nebyl nalezen, plánování scénářů nelze spustit.');
         return;
       }
 
+      final allCards = await repo.getAllFlashcards();
+      final strugglingTopics = allCards
+          .where((c) => c.masteryScore < 0.6)
+          .map((c) => '${c.frontText} (Správně: ${c.backText})')
+          .take(5)
+          .join(', ');
+
+      String combinedErrors = profile.recurringErrors;
+      if (strugglingTopics.isNotEmpty) {
+        combinedErrors = combinedErrors.isNotEmpty && combinedErrors != '[]'
+            ? '$combinedErrors, Problémy z kartiček: $strugglingTopics'
+            : 'Problémy z kartiček: $strugglingTopics';
+      }
+
       // 2. Příprava promptu s parametry uživatele
       final prompt = SystemPromptBuilder.buildScenarioPlannerPrompt(
         userInterests: profile.topicPreferences,
-        recentErrors: profile.recurringErrors,
+        recentErrors: combinedErrors,
         currentVocabulary: profile.vocabulary,
         targetLevel: profile.targetLevel,
         memoryBriefing: profile.memoryBriefing,

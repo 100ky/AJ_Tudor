@@ -9,7 +9,17 @@ class GeminiModels {
   static const String flash3_5 = 'gemini-3.5-flash';
   static const String flashLite3_5 = 'gemini-3.5-flash-lite';
   static const String flashLite3_1 = 'gemini-3.1-flash-lite';
+  static const String pro3_1 = 'gemini-3.1-pro-preview';
 
+  // --- Modely pro Speech-to-Text a Text-to-Speech ---
+  /// Model pro přesný přepis audia (Speech-to-Text) s časovými značkami slov a detekcí jazyka.
+  static const String transcribe = 'gemini-3.5-transcribe';
+
+  /// Model pro živý přepis audia přes WebSockets v reálném čase.
+  static const String transcribeLive = 'gemini-3.5-transcribe-live';
+
+  /// Model pro syntézu přirozené řeči (Text-to-Speech) s audio tagy pro tempo a intonaci.
+  static const String tts = 'gemini-3.1-flash-tts-preview';
 
   // --- Model pro Multimodal Live API (WebSocket / Voice Tutor) ---
   /// Model optimalizovaný pro real-time dialog a voice-first AI aplikace.
@@ -35,6 +45,7 @@ class GeminiModels {
     flash3_5,
     flashLite3_5,
     flashLite3_1,
+    pro3_1,
   ];
 
   /// Vrátí přehledný český název modelu pro zobrazení v UI.
@@ -50,8 +61,14 @@ class GeminiModels {
         return 'Gemini 3.5 Flash-Lite (Úsporný)';
       case flashLite3_1:
         return 'Gemini 3.1 Flash-Lite (Záložní)';
+      case pro3_1:
+        return 'Gemini 3.1 Pro (Expertní úvahy 🧠)';
       case liveVoiceModel:
         return 'Gemini 3.1 Flash Live (Hlasový)';
+      case transcribe:
+        return 'Gemini 3.5 Transcribe (Přepis)';
+      case tts:
+        return 'Gemini 3.1 Flash TTS (Výslovnost)';
       default:
         return model;
     }

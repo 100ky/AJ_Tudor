@@ -76,7 +76,10 @@ class GlassContainer extends StatelessWidget {
               borderRadius: borderRadius,
               border: effectiveBorder,
             ),
-            child: child,
+            child: Material(
+              color: Colors.transparent,
+              child: child,
+            ),
           ),
         ),
       ),

@@ -248,45 +248,11 @@ class GeminiLiveClient {
         // Povolíme transkripci jak pro vstup, tak pro výstup
         'inputAudioTranscription': {},
         'outputAudioTranscription': {},
-        // POZNÁMKA: sessionResumptionConfig není podporováno gemini-3.1-flash-live-preview.
-        // Posílání tohoto pole způsobovalo 1007 smyčku po GoAway signálu — odstraněno.
-        // Deklarace funkcí (Function Calling)
-        'tools': [
-          {
-            'functionDeclarations': [
-              {
-                'name': 'log_error',
-                'description': 'Logs a linguistic error made by the student during the conversation.',
-                'parameters': {
-                  'type': 'OBJECT',
-                  'properties': {
-                    'error_type': {
-                      'type': 'STRING', 
-                      'enum': ['grammar', 'vocabulary', 'pronunciation'],
-                      'description': 'The type of error.'
-                    },
-                    'user_said': {
-                      'type': 'STRING',
-                      'description': 'What the user actually said.'
-                    },
-                    'correct_form': {
-                      'type': 'STRING',
-                      'description': 'The correct version of the sentence/phrase.'
-                    },
-                    'explanation': {
-                      'type': 'STRING',
-                      'description': 'A short explanation in Czech.'
-                    }
-                  },
-                  'required': ['error_type', 'user_said', 'correct_form', 'explanation']
-                }
-              }
-            ]
-          }
-        ]
+        // POZNÁMKA: sessionResumptionConfig a tools pro logování odstraněny,
+        // aby nedocházelo k zamrzání audio streamu a smyčkám v Live API.
       }
     };
-    L.d('Odesílám SETUP s nástroji: ${jsonEncode(setupMessage)}');
+    L.d('Odesílám SETUP: ${jsonEncode(setupMessage)}');
     _safeSend(jsonEncode(setupMessage));
   }
 

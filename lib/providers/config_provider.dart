@@ -268,3 +268,29 @@ class ThemeModeNotifier extends Notifier<ThemeMode> {
 /// Globální provider pro ThemeMode.
 final themeModeProvider =
     NotifierProvider<ThemeModeNotifier, ThemeMode>(ThemeModeNotifier.new);
+
+/// Správce režimu zobrazení chytrých bublin v chatu (Smart Bubbles).
+/// 
+/// Pokud je zapnuto (true), bubliny zobrazují interaktivní opravy chyb, české vysvětlení
+/// a tlačítko poslechu výslovnosti. Pokud je vypnuto (false), používají se klasické minimalistické bubliny.
+class SmartBubblesNotifier extends Notifier<bool> {
+  static const _key = 'smart_bubbles_enabled';
+
+  @override
+  bool build() {
+    final prefs = ref.watch(sharedPreferencesProvider);
+    return prefs.getBool(_key) ?? true; // Výchozí hodnota: zapnuto
+  }
+
+  /// Přepne stav chytrých bublin.
+  Future<void> toggle(bool enabled) async {
+    final prefs = ref.read(sharedPreferencesProvider);
+    await prefs.setBool(_key, enabled);
+    state = enabled;
+  }
+}
+
+/// Globální stav pro chytré bubliny chatu.
+final smartBubblesEnabledProvider =
+    NotifierProvider<SmartBubblesNotifier, bool>(SmartBubblesNotifier.new);
+

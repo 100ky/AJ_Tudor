@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../conversation/conversation_screen.dart';
 import '../conversation/voice_tutor_screen.dart';
+import '../flashcards/flashcards_screen.dart';
 import '../progress/progress_screen.dart';
 import '../settings/settings_screen.dart';
 import '../../providers/config_provider.dart';
@@ -27,13 +28,14 @@ class _SelectedIndexNotifier extends Notifier<int> {
 final _selectedIndexProvider =
     NotifierProvider<_SelectedIndexNotifier, int>(_SelectedIndexNotifier.new);
 
-/// Hlavní kostra aplikace s čistou 4-položkovou navigací a živým gradient pozadím.
+/// Hlavní kostra aplikace s čistou 5-položkovou navigací a živým gradient pozadím.
 ///
 /// Zajišťuje přepínání mezi hlavními sekcemi:
 /// 0: Voice (Hlasový tutor)
 /// 1: Chat (Textový chat a dril)
-/// 2: Pokrok (Statistiky a historie)
-/// 3: Profil & Nastavení
+/// 2: Kartičky (Smart Flashcards)
+/// 3: Pokrok (Statistiky a historie)
+/// 4: Profil & Nastavení
 class SkeletonScreen extends ConsumerStatefulWidget {
   const SkeletonScreen({super.key});
 
@@ -49,6 +51,7 @@ class _SkeletonScreenState extends ConsumerState<SkeletonScreen>
   static const List<Widget> _pages = [
     VoiceTutorScreen(),
     ConversationScreen(),
+    FlashcardsScreen(),
     ProgressScreen(),
     SettingsScreen(),
   ];
@@ -290,6 +293,11 @@ class _SkeletonScreenState extends ConsumerState<SkeletonScreen>
                           icon: Icon(Icons.chat_bubble_outline_rounded),
                           selectedIcon: Icon(Icons.chat_bubble_rounded),
                           label: 'Chat',
+                        ),
+                        NavigationDestination(
+                          icon: Icon(Icons.style_outlined),
+                          selectedIcon: Icon(Icons.style_rounded),
+                          label: 'Kartičky',
                         ),
                         NavigationDestination(
                           icon: Icon(Icons.insights_rounded),

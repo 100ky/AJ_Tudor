@@ -364,11 +364,47 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
           const SizedBox(height: 24),
 
-          // ── Hlasové nastavení ──────────────────────────────────────────────
-          _buildSectionLabel('Hlasové a výukové nastavení', context),
+          // ── Hlasové a konverzační nastavení ──────────────────────────────
+          _buildSectionLabel('Hlasové a konverzační nastavení', context),
           GlassContainer(
             child: Column(
               children: [
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Row(
+                    children: [
+                      Text('Chytré bubliny chatu (Smart Bubbles)',
+                          style: GoogleFonts.plusJakartaSans(
+                              fontWeight: FontWeight.w500,
+                              color: AppTheme.textColor(context))),
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primary.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          'NOVÉ ✨',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.primary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  subtitle: Text(
+                      'Zobrazuje interaktivní opravy chyb, vysvětlení gramatiky, poslech výslovnosti a tlačítko pro uložení do kartiček.',
+                      style: GoogleFonts.plusJakartaSans(
+                          fontSize: 13, color: AppTheme.mutedTextColor(context))),
+                  value: ref.watch(smartBubblesEnabledProvider),
+                  onChanged: (value) {
+                    ref.read(smartBubblesEnabledProvider.notifier).toggle(value);
+                  },
+                ),
+                Divider(color: AppTheme.outlineLightColor(context)),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: Text('Pohlcující režim (Immersive Mode)',

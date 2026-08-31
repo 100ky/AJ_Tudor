@@ -14,6 +14,8 @@ import 'package:flutter/services.dart';
 import '../../core/app_theme.dart';
 import '../../core/widgets/glass_container.dart';
 import '../../core/widgets/chat_bubble.dart';
+import '../../core/widgets/smart_chat_bubble.dart';
+
 
 /// Obrazovka pro textovou konverzaci s AI a výběr scénářů.
 ///
@@ -535,6 +537,12 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
   }
 
   Widget _buildChatBubble(ChatMessage msg) {
+    final useSmartBubbles = ref.watch(smartBubblesEnabledProvider);
+    if (useSmartBubbles) {
+      return SmartChatBubble(
+        message: msg,
+      );
+    }
     return ChatBubble(
       text: msg.text,
       isUser: msg.isUser,

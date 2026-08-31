@@ -678,9 +678,11 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen> {
           color: isDark ? AppTheme.outlineDark : AppTheme.outline,
         ),
       ),
-      child: Theme(
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
+      child: Material(
+        color: Colors.transparent,
+        child: Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
           iconColor: color,
           collapsedIconColor: AppTheme.mutedTextColor(context),
           leading: Container(
@@ -740,6 +742,7 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen> {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }

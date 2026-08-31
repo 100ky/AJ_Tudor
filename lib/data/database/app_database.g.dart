@@ -2500,6 +2500,757 @@ class ScenariosCompanion extends UpdateCompanion<Scenario> {
   }
 }
 
+class $FlashcardsTable extends Flashcards
+    with TableInfo<$FlashcardsTable, Flashcard> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $FlashcardsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _errorLogIdMeta = const VerificationMeta(
+    'errorLogId',
+  );
+  @override
+  late final GeneratedColumn<int> errorLogId = GeneratedColumn<int>(
+    'error_log_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES error_logs (id)',
+    ),
+  );
+  static const VerificationMeta _frontTextMeta = const VerificationMeta(
+    'frontText',
+  );
+  @override
+  late final GeneratedColumn<String> frontText = GeneratedColumn<String>(
+    'front_text',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _backTextMeta = const VerificationMeta(
+    'backText',
+  );
+  @override
+  late final GeneratedColumn<String> backText = GeneratedColumn<String>(
+    'back_text',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _explanationMeta = const VerificationMeta(
+    'explanation',
+  );
+  @override
+  late final GeneratedColumn<String> explanation = GeneratedColumn<String>(
+    'explanation',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _errorTypeMeta = const VerificationMeta(
+    'errorType',
+  );
+  @override
+  late final GeneratedColumn<String> errorType = GeneratedColumn<String>(
+    'error_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('grammar'),
+  );
+  static const VerificationMeta _sourceSentenceMeta = const VerificationMeta(
+    'sourceSentence',
+  );
+  @override
+  late final GeneratedColumn<String> sourceSentence = GeneratedColumn<String>(
+    'source_sentence',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _intervalDaysMeta = const VerificationMeta(
+    'intervalDays',
+  );
+  @override
+  late final GeneratedColumn<int> intervalDays = GeneratedColumn<int>(
+    'interval_days',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _repetitionCountMeta = const VerificationMeta(
+    'repetitionCount',
+  );
+  @override
+  late final GeneratedColumn<int> repetitionCount = GeneratedColumn<int>(
+    'repetition_count',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _masteryScoreMeta = const VerificationMeta(
+    'masteryScore',
+  );
+  @override
+  late final GeneratedColumn<double> masteryScore = GeneratedColumn<double>(
+    'mastery_score',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0.0),
+  );
+  static const VerificationMeta _nextReviewAtMeta = const VerificationMeta(
+    'nextReviewAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> nextReviewAt = GeneratedColumn<DateTime>(
+    'next_review_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    errorLogId,
+    frontText,
+    backText,
+    explanation,
+    errorType,
+    sourceSentence,
+    intervalDays,
+    repetitionCount,
+    masteryScore,
+    nextReviewAt,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'flashcards';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<Flashcard> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('error_log_id')) {
+      context.handle(
+        _errorLogIdMeta,
+        errorLogId.isAcceptableOrUnknown(
+          data['error_log_id']!,
+          _errorLogIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('front_text')) {
+      context.handle(
+        _frontTextMeta,
+        frontText.isAcceptableOrUnknown(data['front_text']!, _frontTextMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_frontTextMeta);
+    }
+    if (data.containsKey('back_text')) {
+      context.handle(
+        _backTextMeta,
+        backText.isAcceptableOrUnknown(data['back_text']!, _backTextMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_backTextMeta);
+    }
+    if (data.containsKey('explanation')) {
+      context.handle(
+        _explanationMeta,
+        explanation.isAcceptableOrUnknown(
+          data['explanation']!,
+          _explanationMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_explanationMeta);
+    }
+    if (data.containsKey('error_type')) {
+      context.handle(
+        _errorTypeMeta,
+        errorType.isAcceptableOrUnknown(data['error_type']!, _errorTypeMeta),
+      );
+    }
+    if (data.containsKey('source_sentence')) {
+      context.handle(
+        _sourceSentenceMeta,
+        sourceSentence.isAcceptableOrUnknown(
+          data['source_sentence']!,
+          _sourceSentenceMeta,
+        ),
+      );
+    }
+    if (data.containsKey('interval_days')) {
+      context.handle(
+        _intervalDaysMeta,
+        intervalDays.isAcceptableOrUnknown(
+          data['interval_days']!,
+          _intervalDaysMeta,
+        ),
+      );
+    }
+    if (data.containsKey('repetition_count')) {
+      context.handle(
+        _repetitionCountMeta,
+        repetitionCount.isAcceptableOrUnknown(
+          data['repetition_count']!,
+          _repetitionCountMeta,
+        ),
+      );
+    }
+    if (data.containsKey('mastery_score')) {
+      context.handle(
+        _masteryScoreMeta,
+        masteryScore.isAcceptableOrUnknown(
+          data['mastery_score']!,
+          _masteryScoreMeta,
+        ),
+      );
+    }
+    if (data.containsKey('next_review_at')) {
+      context.handle(
+        _nextReviewAtMeta,
+        nextReviewAt.isAcceptableOrUnknown(
+          data['next_review_at']!,
+          _nextReviewAtMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_nextReviewAtMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  Flashcard map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return Flashcard(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      errorLogId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}error_log_id'],
+      ),
+      frontText: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}front_text'],
+      )!,
+      backText: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}back_text'],
+      )!,
+      explanation: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}explanation'],
+      )!,
+      errorType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}error_type'],
+      )!,
+      sourceSentence: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_sentence'],
+      ),
+      intervalDays: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}interval_days'],
+      )!,
+      repetitionCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}repetition_count'],
+      )!,
+      masteryScore: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}mastery_score'],
+      )!,
+      nextReviewAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}next_review_at'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $FlashcardsTable createAlias(String alias) {
+    return $FlashcardsTable(attachedDatabase, alias);
+  }
+}
+
+class Flashcard extends DataClass implements Insertable<Flashcard> {
+  /// Unikátní identifikátor kartičky.
+  final int id;
+
+  /// Volitelná reference na konkrétní záznam chyby v chybovém logu.
+  final int? errorLogId;
+
+  /// Text na přední straně kartičky (např. česká nápověda, věta k doplnění či otázka).
+  final String frontText;
+
+  /// Správné anglické znění na zadní straně kartičky.
+  final String backText;
+
+  /// České gramatické vysvětlení nebo kontext.
+  final String explanation;
+
+  /// Typ procvičovaného jevu ('grammar' | 'vocabulary' | 'pronunciation' | 'preposition' | 'tense').
+  final String errorType;
+
+  /// Původní věta ze sezení, ve které chyba vznikla.
+  final String? sourceSentence;
+
+  /// Aktuální interval pro opakování ve dnech (algoritmus SRS).
+  final int intervalDays;
+
+  /// Počet úspěšných po sobě jdoucích zopakování.
+  final int repetitionCount;
+
+  /// Úroveň zvládnutí kartičky (0.0 = nová, 1.0 = perfektně zvládnutá).
+  final double masteryScore;
+
+  /// Čas, kdy má být kartička znovu nabídnuta k procvičení.
+  final DateTime nextReviewAt;
+
+  /// Čas vytvoření kartičky.
+  final DateTime createdAt;
+  const Flashcard({
+    required this.id,
+    this.errorLogId,
+    required this.frontText,
+    required this.backText,
+    required this.explanation,
+    required this.errorType,
+    this.sourceSentence,
+    required this.intervalDays,
+    required this.repetitionCount,
+    required this.masteryScore,
+    required this.nextReviewAt,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    if (!nullToAbsent || errorLogId != null) {
+      map['error_log_id'] = Variable<int>(errorLogId);
+    }
+    map['front_text'] = Variable<String>(frontText);
+    map['back_text'] = Variable<String>(backText);
+    map['explanation'] = Variable<String>(explanation);
+    map['error_type'] = Variable<String>(errorType);
+    if (!nullToAbsent || sourceSentence != null) {
+      map['source_sentence'] = Variable<String>(sourceSentence);
+    }
+    map['interval_days'] = Variable<int>(intervalDays);
+    map['repetition_count'] = Variable<int>(repetitionCount);
+    map['mastery_score'] = Variable<double>(masteryScore);
+    map['next_review_at'] = Variable<DateTime>(nextReviewAt);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  FlashcardsCompanion toCompanion(bool nullToAbsent) {
+    return FlashcardsCompanion(
+      id: Value(id),
+      errorLogId: errorLogId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(errorLogId),
+      frontText: Value(frontText),
+      backText: Value(backText),
+      explanation: Value(explanation),
+      errorType: Value(errorType),
+      sourceSentence: sourceSentence == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sourceSentence),
+      intervalDays: Value(intervalDays),
+      repetitionCount: Value(repetitionCount),
+      masteryScore: Value(masteryScore),
+      nextReviewAt: Value(nextReviewAt),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory Flashcard.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return Flashcard(
+      id: serializer.fromJson<int>(json['id']),
+      errorLogId: serializer.fromJson<int?>(json['errorLogId']),
+      frontText: serializer.fromJson<String>(json['frontText']),
+      backText: serializer.fromJson<String>(json['backText']),
+      explanation: serializer.fromJson<String>(json['explanation']),
+      errorType: serializer.fromJson<String>(json['errorType']),
+      sourceSentence: serializer.fromJson<String?>(json['sourceSentence']),
+      intervalDays: serializer.fromJson<int>(json['intervalDays']),
+      repetitionCount: serializer.fromJson<int>(json['repetitionCount']),
+      masteryScore: serializer.fromJson<double>(json['masteryScore']),
+      nextReviewAt: serializer.fromJson<DateTime>(json['nextReviewAt']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'errorLogId': serializer.toJson<int?>(errorLogId),
+      'frontText': serializer.toJson<String>(frontText),
+      'backText': serializer.toJson<String>(backText),
+      'explanation': serializer.toJson<String>(explanation),
+      'errorType': serializer.toJson<String>(errorType),
+      'sourceSentence': serializer.toJson<String?>(sourceSentence),
+      'intervalDays': serializer.toJson<int>(intervalDays),
+      'repetitionCount': serializer.toJson<int>(repetitionCount),
+      'masteryScore': serializer.toJson<double>(masteryScore),
+      'nextReviewAt': serializer.toJson<DateTime>(nextReviewAt),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  Flashcard copyWith({
+    int? id,
+    Value<int?> errorLogId = const Value.absent(),
+    String? frontText,
+    String? backText,
+    String? explanation,
+    String? errorType,
+    Value<String?> sourceSentence = const Value.absent(),
+    int? intervalDays,
+    int? repetitionCount,
+    double? masteryScore,
+    DateTime? nextReviewAt,
+    DateTime? createdAt,
+  }) => Flashcard(
+    id: id ?? this.id,
+    errorLogId: errorLogId.present ? errorLogId.value : this.errorLogId,
+    frontText: frontText ?? this.frontText,
+    backText: backText ?? this.backText,
+    explanation: explanation ?? this.explanation,
+    errorType: errorType ?? this.errorType,
+    sourceSentence: sourceSentence.present
+        ? sourceSentence.value
+        : this.sourceSentence,
+    intervalDays: intervalDays ?? this.intervalDays,
+    repetitionCount: repetitionCount ?? this.repetitionCount,
+    masteryScore: masteryScore ?? this.masteryScore,
+    nextReviewAt: nextReviewAt ?? this.nextReviewAt,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  Flashcard copyWithCompanion(FlashcardsCompanion data) {
+    return Flashcard(
+      id: data.id.present ? data.id.value : this.id,
+      errorLogId: data.errorLogId.present
+          ? data.errorLogId.value
+          : this.errorLogId,
+      frontText: data.frontText.present ? data.frontText.value : this.frontText,
+      backText: data.backText.present ? data.backText.value : this.backText,
+      explanation: data.explanation.present
+          ? data.explanation.value
+          : this.explanation,
+      errorType: data.errorType.present ? data.errorType.value : this.errorType,
+      sourceSentence: data.sourceSentence.present
+          ? data.sourceSentence.value
+          : this.sourceSentence,
+      intervalDays: data.intervalDays.present
+          ? data.intervalDays.value
+          : this.intervalDays,
+      repetitionCount: data.repetitionCount.present
+          ? data.repetitionCount.value
+          : this.repetitionCount,
+      masteryScore: data.masteryScore.present
+          ? data.masteryScore.value
+          : this.masteryScore,
+      nextReviewAt: data.nextReviewAt.present
+          ? data.nextReviewAt.value
+          : this.nextReviewAt,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('Flashcard(')
+          ..write('id: $id, ')
+          ..write('errorLogId: $errorLogId, ')
+          ..write('frontText: $frontText, ')
+          ..write('backText: $backText, ')
+          ..write('explanation: $explanation, ')
+          ..write('errorType: $errorType, ')
+          ..write('sourceSentence: $sourceSentence, ')
+          ..write('intervalDays: $intervalDays, ')
+          ..write('repetitionCount: $repetitionCount, ')
+          ..write('masteryScore: $masteryScore, ')
+          ..write('nextReviewAt: $nextReviewAt, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    errorLogId,
+    frontText,
+    backText,
+    explanation,
+    errorType,
+    sourceSentence,
+    intervalDays,
+    repetitionCount,
+    masteryScore,
+    nextReviewAt,
+    createdAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Flashcard &&
+          other.id == this.id &&
+          other.errorLogId == this.errorLogId &&
+          other.frontText == this.frontText &&
+          other.backText == this.backText &&
+          other.explanation == this.explanation &&
+          other.errorType == this.errorType &&
+          other.sourceSentence == this.sourceSentence &&
+          other.intervalDays == this.intervalDays &&
+          other.repetitionCount == this.repetitionCount &&
+          other.masteryScore == this.masteryScore &&
+          other.nextReviewAt == this.nextReviewAt &&
+          other.createdAt == this.createdAt);
+}
+
+class FlashcardsCompanion extends UpdateCompanion<Flashcard> {
+  final Value<int> id;
+  final Value<int?> errorLogId;
+  final Value<String> frontText;
+  final Value<String> backText;
+  final Value<String> explanation;
+  final Value<String> errorType;
+  final Value<String?> sourceSentence;
+  final Value<int> intervalDays;
+  final Value<int> repetitionCount;
+  final Value<double> masteryScore;
+  final Value<DateTime> nextReviewAt;
+  final Value<DateTime> createdAt;
+  const FlashcardsCompanion({
+    this.id = const Value.absent(),
+    this.errorLogId = const Value.absent(),
+    this.frontText = const Value.absent(),
+    this.backText = const Value.absent(),
+    this.explanation = const Value.absent(),
+    this.errorType = const Value.absent(),
+    this.sourceSentence = const Value.absent(),
+    this.intervalDays = const Value.absent(),
+    this.repetitionCount = const Value.absent(),
+    this.masteryScore = const Value.absent(),
+    this.nextReviewAt = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  });
+  FlashcardsCompanion.insert({
+    this.id = const Value.absent(),
+    this.errorLogId = const Value.absent(),
+    required String frontText,
+    required String backText,
+    required String explanation,
+    this.errorType = const Value.absent(),
+    this.sourceSentence = const Value.absent(),
+    this.intervalDays = const Value.absent(),
+    this.repetitionCount = const Value.absent(),
+    this.masteryScore = const Value.absent(),
+    required DateTime nextReviewAt,
+    required DateTime createdAt,
+  }) : frontText = Value(frontText),
+       backText = Value(backText),
+       explanation = Value(explanation),
+       nextReviewAt = Value(nextReviewAt),
+       createdAt = Value(createdAt);
+  static Insertable<Flashcard> custom({
+    Expression<int>? id,
+    Expression<int>? errorLogId,
+    Expression<String>? frontText,
+    Expression<String>? backText,
+    Expression<String>? explanation,
+    Expression<String>? errorType,
+    Expression<String>? sourceSentence,
+    Expression<int>? intervalDays,
+    Expression<int>? repetitionCount,
+    Expression<double>? masteryScore,
+    Expression<DateTime>? nextReviewAt,
+    Expression<DateTime>? createdAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (errorLogId != null) 'error_log_id': errorLogId,
+      if (frontText != null) 'front_text': frontText,
+      if (backText != null) 'back_text': backText,
+      if (explanation != null) 'explanation': explanation,
+      if (errorType != null) 'error_type': errorType,
+      if (sourceSentence != null) 'source_sentence': sourceSentence,
+      if (intervalDays != null) 'interval_days': intervalDays,
+      if (repetitionCount != null) 'repetition_count': repetitionCount,
+      if (masteryScore != null) 'mastery_score': masteryScore,
+      if (nextReviewAt != null) 'next_review_at': nextReviewAt,
+      if (createdAt != null) 'created_at': createdAt,
+    });
+  }
+
+  FlashcardsCompanion copyWith({
+    Value<int>? id,
+    Value<int?>? errorLogId,
+    Value<String>? frontText,
+    Value<String>? backText,
+    Value<String>? explanation,
+    Value<String>? errorType,
+    Value<String?>? sourceSentence,
+    Value<int>? intervalDays,
+    Value<int>? repetitionCount,
+    Value<double>? masteryScore,
+    Value<DateTime>? nextReviewAt,
+    Value<DateTime>? createdAt,
+  }) {
+    return FlashcardsCompanion(
+      id: id ?? this.id,
+      errorLogId: errorLogId ?? this.errorLogId,
+      frontText: frontText ?? this.frontText,
+      backText: backText ?? this.backText,
+      explanation: explanation ?? this.explanation,
+      errorType: errorType ?? this.errorType,
+      sourceSentence: sourceSentence ?? this.sourceSentence,
+      intervalDays: intervalDays ?? this.intervalDays,
+      repetitionCount: repetitionCount ?? this.repetitionCount,
+      masteryScore: masteryScore ?? this.masteryScore,
+      nextReviewAt: nextReviewAt ?? this.nextReviewAt,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (errorLogId.present) {
+      map['error_log_id'] = Variable<int>(errorLogId.value);
+    }
+    if (frontText.present) {
+      map['front_text'] = Variable<String>(frontText.value);
+    }
+    if (backText.present) {
+      map['back_text'] = Variable<String>(backText.value);
+    }
+    if (explanation.present) {
+      map['explanation'] = Variable<String>(explanation.value);
+    }
+    if (errorType.present) {
+      map['error_type'] = Variable<String>(errorType.value);
+    }
+    if (sourceSentence.present) {
+      map['source_sentence'] = Variable<String>(sourceSentence.value);
+    }
+    if (intervalDays.present) {
+      map['interval_days'] = Variable<int>(intervalDays.value);
+    }
+    if (repetitionCount.present) {
+      map['repetition_count'] = Variable<int>(repetitionCount.value);
+    }
+    if (masteryScore.present) {
+      map['mastery_score'] = Variable<double>(masteryScore.value);
+    }
+    if (nextReviewAt.present) {
+      map['next_review_at'] = Variable<DateTime>(nextReviewAt.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('FlashcardsCompanion(')
+          ..write('id: $id, ')
+          ..write('errorLogId: $errorLogId, ')
+          ..write('frontText: $frontText, ')
+          ..write('backText: $backText, ')
+          ..write('explanation: $explanation, ')
+          ..write('errorType: $errorType, ')
+          ..write('sourceSentence: $sourceSentence, ')
+          ..write('intervalDays: $intervalDays, ')
+          ..write('repetitionCount: $repetitionCount, ')
+          ..write('masteryScore: $masteryScore, ')
+          ..write('nextReviewAt: $nextReviewAt, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -2508,6 +3259,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $UserProfilesTable userProfiles = $UserProfilesTable(this);
   late final $ErrorLogsTable errorLogs = $ErrorLogsTable(this);
   late final $ScenariosTable scenarios = $ScenariosTable(this);
+  late final $FlashcardsTable flashcards = $FlashcardsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -2518,6 +3270,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     userProfiles,
     errorLogs,
     scenarios,
+    flashcards,
   ];
 }
 
@@ -3637,6 +4390,24 @@ final class $$ErrorLogsTableReferences
       manager.$state.copyWith(prefetchedData: [item]),
     );
   }
+
+  static MultiTypedResultKey<$FlashcardsTable, List<Flashcard>>
+  _flashcardsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.flashcards,
+    aliasName: 'error_logs__id__flashcards__error_log_id',
+  );
+
+  $$FlashcardsTableProcessedTableManager get flashcardsRefs {
+    final manager = $$FlashcardsTableTableManager(
+      $_db,
+      $_db.flashcards,
+    ).filter((f) => f.errorLogId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_flashcardsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
 }
 
 class $$ErrorLogsTableFilterComposer
@@ -3699,6 +4470,31 @@ class $$ErrorLogsTableFilterComposer
           ),
     );
     return composer;
+  }
+
+  Expression<bool> flashcardsRefs(
+    Expression<bool> Function($$FlashcardsTableFilterComposer f) f,
+  ) {
+    final $$FlashcardsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.flashcards,
+      getReferencedColumn: (t) => t.errorLogId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$FlashcardsTableFilterComposer(
+            $db: $db,
+            $table: $db.flashcards,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
   }
 }
 
@@ -3818,6 +4614,31 @@ class $$ErrorLogsTableAnnotationComposer
     );
     return composer;
   }
+
+  Expression<T> flashcardsRefs<T extends Object>(
+    Expression<T> Function($$FlashcardsTableAnnotationComposer a) f,
+  ) {
+    final $$FlashcardsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.flashcards,
+      getReferencedColumn: (t) => t.errorLogId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$FlashcardsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.flashcards,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$ErrorLogsTableTableManager
@@ -3833,7 +4654,7 @@ class $$ErrorLogsTableTableManager
           $$ErrorLogsTableUpdateCompanionBuilder,
           (ErrorLog, $$ErrorLogsTableReferences),
           ErrorLog,
-          PrefetchHooks Function({bool sessionId})
+          PrefetchHooks Function({bool sessionId, bool flashcardsRefs})
         > {
   $$ErrorLogsTableTableManager(_$AppDatabase db, $ErrorLogsTable table)
     : super(
@@ -3890,10 +4711,10 @@ class $$ErrorLogsTableTableManager
                 ),
               )
               .toList(),
-          prefetchHooksCallback: ({sessionId = false}) {
+          prefetchHooksCallback: ({sessionId = false, flashcardsRefs = false}) {
             return PrefetchHooks(
               db: db,
-              explicitlyWatchedTables: [],
+              explicitlyWatchedTables: [if (flashcardsRefs) db.flashcards],
               addJoins:
                   <
                     T extends TableManagerState<
@@ -3927,7 +4748,27 @@ class $$ErrorLogsTableTableManager
                     return state;
                   },
               getPrefetchedDataCallback: (items) async {
-                return [];
+                return [
+                  if (flashcardsRefs)
+                    await $_getPrefetchedData<
+                      ErrorLog,
+                      $ErrorLogsTable,
+                      Flashcard
+                    >(
+                      currentTable: table,
+                      referencedTable: $$ErrorLogsTableReferences
+                          ._flashcardsRefsTable(db),
+                      managerFromTypedResult: (p0) =>
+                          $$ErrorLogsTableReferences(
+                            db,
+                            table,
+                            p0,
+                          ).flashcardsRefs,
+                      referencedItemsForCurrentItem: (item, referencedItems) =>
+                          referencedItems.where((e) => e.errorLogId == item.id),
+                      typedResults: items,
+                    ),
+                ];
               },
             );
           },
@@ -3947,7 +4788,7 @@ typedef $$ErrorLogsTableProcessedTableManager =
       $$ErrorLogsTableUpdateCompanionBuilder,
       (ErrorLog, $$ErrorLogsTableReferences),
       ErrorLog,
-      PrefetchHooks Function({bool sessionId})
+      PrefetchHooks Function({bool sessionId, bool flashcardsRefs})
     >;
 typedef $$ScenariosTableCreateCompanionBuilder =
     ScenariosCompanion Function({
@@ -4202,6 +5043,462 @@ typedef $$ScenariosTableProcessedTableManager =
       Scenario,
       PrefetchHooks Function()
     >;
+typedef $$FlashcardsTableCreateCompanionBuilder =
+    FlashcardsCompanion Function({
+      Value<int> id,
+      Value<int?> errorLogId,
+      required String frontText,
+      required String backText,
+      required String explanation,
+      Value<String> errorType,
+      Value<String?> sourceSentence,
+      Value<int> intervalDays,
+      Value<int> repetitionCount,
+      Value<double> masteryScore,
+      required DateTime nextReviewAt,
+      required DateTime createdAt,
+    });
+typedef $$FlashcardsTableUpdateCompanionBuilder =
+    FlashcardsCompanion Function({
+      Value<int> id,
+      Value<int?> errorLogId,
+      Value<String> frontText,
+      Value<String> backText,
+      Value<String> explanation,
+      Value<String> errorType,
+      Value<String?> sourceSentence,
+      Value<int> intervalDays,
+      Value<int> repetitionCount,
+      Value<double> masteryScore,
+      Value<DateTime> nextReviewAt,
+      Value<DateTime> createdAt,
+    });
+
+final class $$FlashcardsTableReferences
+    extends BaseReferences<_$AppDatabase, $FlashcardsTable, Flashcard> {
+  $$FlashcardsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $ErrorLogsTable _errorLogIdTable(_$AppDatabase db) =>
+      db.errorLogs.createAlias('flashcards__error_log_id__error_logs__id');
+
+  $$ErrorLogsTableProcessedTableManager? get errorLogId {
+    final $_column = $_itemColumn<int>('error_log_id');
+    if ($_column == null) return null;
+    final manager = $$ErrorLogsTableTableManager(
+      $_db,
+      $_db.errorLogs,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_errorLogIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$FlashcardsTableFilterComposer
+    extends Composer<_$AppDatabase, $FlashcardsTable> {
+  $$FlashcardsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get frontText => $composableBuilder(
+    column: $table.frontText,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get backText => $composableBuilder(
+    column: $table.backText,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get explanation => $composableBuilder(
+    column: $table.explanation,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get errorType => $composableBuilder(
+    column: $table.errorType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourceSentence => $composableBuilder(
+    column: $table.sourceSentence,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get intervalDays => $composableBuilder(
+    column: $table.intervalDays,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get repetitionCount => $composableBuilder(
+    column: $table.repetitionCount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get masteryScore => $composableBuilder(
+    column: $table.masteryScore,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get nextReviewAt => $composableBuilder(
+    column: $table.nextReviewAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$ErrorLogsTableFilterComposer get errorLogId {
+    final $$ErrorLogsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.errorLogId,
+      referencedTable: $db.errorLogs,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ErrorLogsTableFilterComposer(
+            $db: $db,
+            $table: $db.errorLogs,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$FlashcardsTableOrderingComposer
+    extends Composer<_$AppDatabase, $FlashcardsTable> {
+  $$FlashcardsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get frontText => $composableBuilder(
+    column: $table.frontText,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get backText => $composableBuilder(
+    column: $table.backText,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get explanation => $composableBuilder(
+    column: $table.explanation,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get errorType => $composableBuilder(
+    column: $table.errorType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourceSentence => $composableBuilder(
+    column: $table.sourceSentence,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get intervalDays => $composableBuilder(
+    column: $table.intervalDays,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get repetitionCount => $composableBuilder(
+    column: $table.repetitionCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get masteryScore => $composableBuilder(
+    column: $table.masteryScore,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get nextReviewAt => $composableBuilder(
+    column: $table.nextReviewAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$ErrorLogsTableOrderingComposer get errorLogId {
+    final $$ErrorLogsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.errorLogId,
+      referencedTable: $db.errorLogs,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ErrorLogsTableOrderingComposer(
+            $db: $db,
+            $table: $db.errorLogs,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$FlashcardsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $FlashcardsTable> {
+  $$FlashcardsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get frontText =>
+      $composableBuilder(column: $table.frontText, builder: (column) => column);
+
+  GeneratedColumn<String> get backText =>
+      $composableBuilder(column: $table.backText, builder: (column) => column);
+
+  GeneratedColumn<String> get explanation => $composableBuilder(
+    column: $table.explanation,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get errorType =>
+      $composableBuilder(column: $table.errorType, builder: (column) => column);
+
+  GeneratedColumn<String> get sourceSentence => $composableBuilder(
+    column: $table.sourceSentence,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get intervalDays => $composableBuilder(
+    column: $table.intervalDays,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get repetitionCount => $composableBuilder(
+    column: $table.repetitionCount,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get masteryScore => $composableBuilder(
+    column: $table.masteryScore,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get nextReviewAt => $composableBuilder(
+    column: $table.nextReviewAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  $$ErrorLogsTableAnnotationComposer get errorLogId {
+    final $$ErrorLogsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.errorLogId,
+      referencedTable: $db.errorLogs,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ErrorLogsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.errorLogs,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$FlashcardsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $FlashcardsTable,
+          Flashcard,
+          $$FlashcardsTableFilterComposer,
+          $$FlashcardsTableOrderingComposer,
+          $$FlashcardsTableAnnotationComposer,
+          $$FlashcardsTableCreateCompanionBuilder,
+          $$FlashcardsTableUpdateCompanionBuilder,
+          (Flashcard, $$FlashcardsTableReferences),
+          Flashcard,
+          PrefetchHooks Function({bool errorLogId})
+        > {
+  $$FlashcardsTableTableManager(_$AppDatabase db, $FlashcardsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$FlashcardsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$FlashcardsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$FlashcardsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int?> errorLogId = const Value.absent(),
+                Value<String> frontText = const Value.absent(),
+                Value<String> backText = const Value.absent(),
+                Value<String> explanation = const Value.absent(),
+                Value<String> errorType = const Value.absent(),
+                Value<String?> sourceSentence = const Value.absent(),
+                Value<int> intervalDays = const Value.absent(),
+                Value<int> repetitionCount = const Value.absent(),
+                Value<double> masteryScore = const Value.absent(),
+                Value<DateTime> nextReviewAt = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => FlashcardsCompanion(
+                id: id,
+                errorLogId: errorLogId,
+                frontText: frontText,
+                backText: backText,
+                explanation: explanation,
+                errorType: errorType,
+                sourceSentence: sourceSentence,
+                intervalDays: intervalDays,
+                repetitionCount: repetitionCount,
+                masteryScore: masteryScore,
+                nextReviewAt: nextReviewAt,
+                createdAt: createdAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int?> errorLogId = const Value.absent(),
+                required String frontText,
+                required String backText,
+                required String explanation,
+                Value<String> errorType = const Value.absent(),
+                Value<String?> sourceSentence = const Value.absent(),
+                Value<int> intervalDays = const Value.absent(),
+                Value<int> repetitionCount = const Value.absent(),
+                Value<double> masteryScore = const Value.absent(),
+                required DateTime nextReviewAt,
+                required DateTime createdAt,
+              }) => FlashcardsCompanion.insert(
+                id: id,
+                errorLogId: errorLogId,
+                frontText: frontText,
+                backText: backText,
+                explanation: explanation,
+                errorType: errorType,
+                sourceSentence: sourceSentence,
+                intervalDays: intervalDays,
+                repetitionCount: repetitionCount,
+                masteryScore: masteryScore,
+                nextReviewAt: nextReviewAt,
+                createdAt: createdAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$FlashcardsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({errorLogId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (errorLogId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.errorLogId,
+                                referencedTable: $$FlashcardsTableReferences
+                                    ._errorLogIdTable(db),
+                                referencedColumn: $$FlashcardsTableReferences
+                                    ._errorLogIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$FlashcardsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $FlashcardsTable,
+      Flashcard,
+      $$FlashcardsTableFilterComposer,
+      $$FlashcardsTableOrderingComposer,
+      $$FlashcardsTableAnnotationComposer,
+      $$FlashcardsTableCreateCompanionBuilder,
+      $$FlashcardsTableUpdateCompanionBuilder,
+      (Flashcard, $$FlashcardsTableReferences),
+      Flashcard,
+      PrefetchHooks Function({bool errorLogId})
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -4216,4 +5513,6 @@ class $AppDatabaseManager {
       $$ErrorLogsTableTableManager(_db, _db.errorLogs);
   $$ScenariosTableTableManager get scenarios =>
       $$ScenariosTableTableManager(_db, _db.scenarios);
+  $$FlashcardsTableTableManager get flashcards =>
+      $$FlashcardsTableTableManager(_db, _db.flashcards);
 }

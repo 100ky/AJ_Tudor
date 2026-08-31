@@ -165,7 +165,7 @@ class MemoryManagerAgent {
             final correctForm = err['correctForm']?.toString() ?? '';
             final explanation = err['explanation']?.toString() ?? '';
             
-            await repo.addErrorLog(
+            final errorLogRes = await repo.addErrorLog(
               sessionId: sessionId,
               errorType: type,
               userSaid: userSaid,
@@ -175,6 +175,16 @@ class MemoryManagerAgent {
             
             if (userSaid.isNotEmpty && correctForm.isNotEmpty) {
               newErrors.add('Řekl: "$userSaid", ale správně je: "$correctForm" ($explanation)');
+
+              // Automatické vytvoření Smart Flashcard pro studenta
+              await repo.addFlashcard(
+                frontText: 'Jak opravit / říct: "$userSaid"?',
+                backText: correctForm,
+                explanation: explanation,
+                errorType: type,
+                sourceSentence: userSaid,
+                errorLogId: errorLogRes.valueOrNull,
+              );
             }
           }
         }
