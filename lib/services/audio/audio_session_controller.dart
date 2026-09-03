@@ -49,6 +49,9 @@ class AudioSessionController {
   /// Indikuje, zda se aktuálně fyzicky přehrává zvuk z reproduktoru
   bool get isPlaying => _playbackService.isPlaying;
 
+  /// Zbývající čas přehrávání v milisekundách
+  int get remainingPlaybackMs => _playbackService.remainingDurationMs;
+
   void playPcm(List<int> bytes) {
     _playbackService.playPcmData(bytes);
   }

@@ -9,4 +9,5 @@ class Transcripts extends Table {
   TextColumn get content => text()();
   DateTimeColumn get timestamp => dateTime()();
   TextColumn get correctedForm => text().nullable()();
+  BoolColumn get inFlashcard => boolean().withDefault(const Constant(false))();
 }

@@ -95,6 +95,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   Timer? _thinkingTimer;
   Timer? _responseSilenceTimer;
   Timer? _vadSilenceTimer;
+  Timer? _playbackCompleteTimer;
   int? _currentSessionId;
   bool _isStopping = false;
   bool _isStarting = false;
@@ -426,6 +427,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     client.onAudioReceived = () {
       _responseSilenceTimer?.cancel();
       _vadSilenceTimer?.cancel();
+      _playbackCompleteTimer?.cancel();
       _userSpokeInCurrentTurn = false;
       _flushUserTranscript();
       _resetWatchdog();
@@ -499,8 +501,22 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
           status: isStillPlaying ? TutorState.speaking : TutorState.listening,
         );
 
-        // Pokud reprák ještě hraje, počkáme, až dozní v audio handleru; jinak jsme rovnou listening
+        // Pokud reprák ještě hraje, počkáme, až dozní v audio handleru nebo v časovači; jinak jsme rovnou listening
         _turnCompleteReceived = isStillPlaying;
+        if (isStillPlaying) {
+          _resetStuckTimer();
+          _playbackCompleteTimer?.cancel();
+          final waitMs = math.max(150, _audio.remainingPlaybackMs + 150);
+          L.i('Naplánován přechod do listening za ${waitMs}ms po dohrání audia.');
+          _playbackCompleteTimer = Timer(Duration(milliseconds: waitMs), () {
+            if (state.status == TutorState.speaking) {
+              state = state.copyWith(status: TutorState.listening);
+              _turnCompleteReceived = false;
+              _userSpokeInCurrentTurn = false;
+              L.i('🎤 Zvuk dozrál (časovač doznění), přepínám stav z speaking na listening.');
+            }
+          });
+        }
 
         // Uložení finálního přepisu řeči tutora do DB
         if (_currentSessionId != null) {
@@ -515,6 +531,19 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
           status: isStillPlaying ? TutorState.speaking : TutorState.listening,
         );
         _turnCompleteReceived = isStillPlaying;
+        if (isStillPlaying) {
+          _resetStuckTimer();
+          _playbackCompleteTimer?.cancel();
+          final waitMs = math.max(150, _audio.remainingPlaybackMs + 150);
+          _playbackCompleteTimer = Timer(Duration(milliseconds: waitMs), () {
+            if (state.status == TutorState.speaking) {
+              state = state.copyWith(status: TutorState.listening);
+              _turnCompleteReceived = false;
+              _userSpokeInCurrentTurn = false;
+              L.i('🎤 Zvuk dozrál (časovač doznění), přepínám stav z speaking na listening.');
+            }
+          });
+        }
       }
 
       // Proaktivní obnova WebSocket relace při příliš vysoké spotřebě tokenů
@@ -523,6 +552,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         client.forceReconnect();
       }
     };
+
 
     // Zpracování logování chyb přes Function Calling
     client.onToolCall = (name, args) {
@@ -542,6 +572,8 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     client.onInterrupted = () {
       _resetWatchdog();
       _resetStuckTimer();
+      _playbackCompleteTimer?.cancel();
+      _turnCompleteReceived = false;
       L.i('Model byl přerušen uživatelem.');
       
       // Uložíme rozpracovaný transkript tutora (i neúplný), aby se neztratil z historie
@@ -638,6 +670,8 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       _thinkingTimer?.cancel();
       _responseSilenceTimer?.cancel();
       _vadSilenceTimer?.cancel();
+      _playbackCompleteTimer?.cancel();
+      _turnCompleteReceived = false;
       _userSpokeInCurrentTurn = false;
       
       _wakelock.disable(); // Povolíme opětovné zhasínání displeje
@@ -755,7 +789,10 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     _thinkingTimer?.cancel();
     _responseSilenceTimer?.cancel();
     _vadSilenceTimer?.cancel();
+    _playbackCompleteTimer?.cancel();
+    _turnCompleteReceived = false;
     _userSpokeInCurrentTurn = false;
+
     
     // Zastavíme mikrofon, ale necháme WebSocket otevřený
     try {
@@ -1033,14 +1070,15 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   void _resetStuckTimer() {
     _stuckTimer?.cancel();
     if (state.status == TutorState.speaking) {
-      _stuckTimer = Timer(const Duration(seconds: 10), () {
+      _stuckTimer = Timer(const Duration(seconds: 6), () {
         if (state.status == TutorState.speaking) {
           if (_audio.isPlaying) {
-             L.i('Stuck timer: Audio ještě hraje, odkládám reset o dalších 10s.');
+             L.i('Stuck timer: Audio ještě hraje, odkládám reset o dalších 3s.');
              _resetStuckTimer();
           } else {
-             L.w('Detekováno zaseknutí ve stavu speaking (10s ticho), vracím do listening.');
+             L.w('Detekováno zaseknutí ve stavu speaking (reproduktor už nehraje), vracím do listening.');
              state = state.copyWith(status: TutorState.listening);
+             _turnCompleteReceived = false;
           }
         }
       });

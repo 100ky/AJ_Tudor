@@ -73,7 +73,26 @@ class SessionRepository {
 
   /// Načte všechny textové záznamy (transkripty) pro konkrétní lekci.
   Future<List<Transcript>> getTranscripts(int sessionId) async {
-    return await (_db.select(_db.transcripts)..where((t) => t.sessionId.equals(sessionId))).get();
+    return await (_db.select(_db.transcripts)
+          ..where((t) => t.sessionId.equals(sessionId))
+          ..orderBy([(t) => OrderingTerm.asc(t.timestamp)]))
+        .get();
+  }
+
+  /// Sleduje všechny textové záznamy pro konkrétní lekci v reálném čase.
+  Stream<List<Transcript>> watchTranscripts(int sessionId) {
+    return (_db.select(_db.transcripts)
+          ..where((t) => t.sessionId.equals(sessionId))
+          ..orderBy([(t) => OrderingTerm.asc(t.timestamp)]))
+        .watch();
+  }
+
+  /// Sleduje chyby zaznamenané v konkrétní lekci v reálném čase.
+  Stream<List<ErrorLog>> watchErrorLogs(int sessionId) {
+    return (_db.select(_db.errorLogs)
+          ..where((t) => t.sessionId.equals(sessionId))
+          ..orderBy([(t) => OrderingTerm.asc(t.timestamp)]))
+        .watch();
   }
 
   /// Aktualizuje výsledky analýzy lekce (shrnutí, plynulost, počet chyb).
@@ -429,6 +448,24 @@ class SessionRepository {
             ),
           );
       L.i('Kartička #$id úspěšně vytvořena: "$frontText" -> "$backText"');
+
+      // 1. Označíme odpovídající error_log jako zařazený do kartičky
+      if (errorLogId != null) {
+        await (_db.update(_db.errorLogs)..where((t) => t.id.equals(errorLogId)))
+            .write(const ErrorLogsCompanion(inFlashcard: Value(true)));
+      }
+
+      // 2. Označíme odpovídající věty v transkriptech a logu chyb
+      if (sourceSentence != null && sourceSentence.trim().isNotEmpty) {
+        final cleanSentence = sourceSentence.trim();
+        await (_db.update(_db.transcripts)
+              ..where((t) => t.content.like('%$cleanSentence%')))
+            .write(const TranscriptsCompanion(inFlashcard: Value(true)));
+        await (_db.update(_db.errorLogs)
+              ..where((t) => t.userSaid.equals(cleanSentence)))
+            .write(const ErrorLogsCompanion(inFlashcard: Value(true)));
+      }
+
       return Result.success(id);
     } catch (e, stack) {
       L.e('Chyba při vytváření kartičky', e, stack);
@@ -544,6 +581,116 @@ class SessionRepository {
       return Result.failure(DatabaseFailure('Nepodařilo se smazat kartičku.'));
     }
   }
+
+  /// Vytvoří kartičku přímo ze záznamu v historii/transkriptu a označí větu jako uloženou.
+  Future<Result<int>> createFlashcardFromTranscript({
+    required int transcriptId,
+    required String userSaid,
+    required String correctForm,
+    required String explanation,
+    String errorType = 'grammar',
+    int? errorLogId,
+  }) async {
+    try {
+      final res = await addFlashcard(
+        frontText: 'Jak správně říct: "$userSaid"?',
+        backText: correctForm,
+        explanation: explanation.isNotEmpty ? explanation : 'Oprava z konverzace',
+        errorType: errorType,
+        sourceSentence: userSaid,
+        errorLogId: errorLogId,
+      );
+
+      if (res.isSuccess) {
+        await (_db.update(_db.transcripts)..where((t) => t.id.equals(transcriptId)))
+            .write(const TranscriptsCompanion(inFlashcard: Value(true)));
+      }
+      return res;
+    } catch (e, stack) {
+      L.e('Chyba při vytváření kartičky z transkriptu', e, stack);
+      return Result.failure(DatabaseFailure('Nepodařilo se vytvořit kartičku.'));
+    }
+  }
+
+  /// Automaticky vygeneruje nové kartičky z dosud nezpracovaných chyb studenta.
+  /// 
+  /// [sessionId] volitelné filtrování na konkrétní lekci.
+  /// [limit] maximální počet kartiček vytvořených v jedné dávce (výchozí 15).
+  Future<Result<int>> generateFlashcardsFromErrors({
+    int? sessionId,
+    int limit = 15,
+  }) async {
+    try {
+      // 1. Získáme chyby z databáze
+      var query = _db.select(_db.errorLogs)
+        ..orderBy([(t) => OrderingTerm.desc(t.timestamp)]);
+      
+      if (sessionId != null) {
+        query = query..where((t) => t.sessionId.equals(sessionId));
+      }
+
+      final allErrors = await query.get();
+      if (allErrors.isEmpty) {
+        return Result.success(0);
+      }
+
+      // 2. Načteme existující kartičky pro kontrolu duplicit (podle sourceSentence nebo backText)
+      final existingCards = await getAllFlashcards();
+      final existingBackTexts = existingCards.map((c) => c.backText.trim().toLowerCase()).toSet();
+      final existingSources = existingCards.map((c) => (c.sourceSentence ?? '').trim().toLowerCase()).where((s) => s.isNotEmpty).toSet();
+      final existingErrorLogIds = existingCards.map((c) => c.errorLogId).whereType<int>().toSet();
+
+      int createdCount = 0;
+      final seenNewPhrases = <String>{};
+
+      for (final err in allErrors) {
+        if (createdCount >= limit) break;
+
+        final userSaid = err.userSaid.trim();
+        final correctForm = err.correctForm.trim();
+        if (userSaid.isEmpty || correctForm.isEmpty) continue;
+
+        final lowerSaid = userSaid.toLowerCase();
+        final lowerCorrect = correctForm.toLowerCase();
+
+        // Přeskočit pokud už tato fráze nebo chyba v kartičkách existuje
+        if (existingErrorLogIds.contains(err.id) ||
+            existingBackTexts.contains(lowerCorrect) ||
+            existingSources.contains(lowerSaid) ||
+            seenNewPhrases.contains(lowerCorrect)) {
+          // Alespoň synchronizujeme inFlashcard příznak
+          if (!err.inFlashcard) {
+            await (_db.update(_db.errorLogs)..where((t) => t.id.equals(err.id)))
+                .write(const ErrorLogsCompanion(inFlashcard: Value(true)));
+          }
+          continue;
+        }
+
+        seenNewPhrases.add(lowerCorrect);
+
+        final frontText = 'Jak opravit / říct: "$userSaid"?';
+        final cardRes = await addFlashcard(
+          frontText: frontText,
+          backText: correctForm,
+          explanation: err.explanation.isNotEmpty ? err.explanation : 'Oprava chyby z konverzace',
+          errorType: err.errorType,
+          sourceSentence: userSaid,
+          errorLogId: err.id,
+        );
+
+        if (cardRes.isSuccess) {
+          createdCount++;
+        }
+      }
+
+      L.i('Úspěšně vygenerováno $createdCount kartiček z chyb.');
+      return Result.success(createdCount);
+    } catch (e, stack) {
+      L.e('Chyba při hromadném generování kartiček z chyb', e, stack);
+      return Result.failure(DatabaseFailure('Nepodařilo se vygenerovat kartičky z chyb.'));
+    }
+  }
 }
+
 
 

@@ -21,6 +21,15 @@ class AudioPlaybackService {
     return DateTime.now().isBefore(_playbackEndTime.add(const Duration(milliseconds: 400)));
   }
 
+  /// Vrací zbývající čas přehrávání v milisekundách do úplného doznění.
+  int get remainingDurationMs {
+    if (!_isInitialized || !_isSupported) return 0;
+    final now = DateTime.now();
+    final endWithBuffer = _playbackEndTime.add(const Duration(milliseconds: 200));
+    if (endWithBuffer.isBefore(now)) return 0;
+    return endWithBuffer.difference(now).inMilliseconds;
+  }
+
   final StreamController<double> _volumeController = StreamController<double>.broadcast();
   Stream<double> get volumeStream => _volumeController.stream;
   

@@ -10,4 +10,5 @@ class ErrorLogs extends Table {
   TextColumn get correctForm => text()();
   TextColumn get explanation => text()();
   DateTimeColumn get timestamp => dateTime()();
+  BoolColumn get inFlashcard => boolean().withDefault(const Constant(false))();
 }

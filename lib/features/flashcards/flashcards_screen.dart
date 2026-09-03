@@ -25,6 +25,71 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
   bool _isBackVisible = false;
   int _currentIndex = 0;
   bool _isPlayingTts = false;
+  bool _isGenerating = false;
+
+  Future<void> _generateFromErrors() async {
+    if (_isGenerating) return;
+    setState(() => _isGenerating = true);
+    HapticFeedback.mediumImpact();
+
+    try {
+      final repo = ref.read(sessionRepositoryProvider);
+      final res = await repo.generateFlashcardsFromErrors(limit: 15);
+
+      if (!mounted) return;
+
+      res.fold(
+        (count) {
+          if (count > 0) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    const Icon(Icons.auto_awesome, color: Colors.white, size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Vytvořeno $count nových kartiček z tvých chyb! 🎯',
+                        style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ],
+                ),
+                backgroundColor: AppTheme.success,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Všechny tvé zaznamenané chyby už v kartičkách máš! 👍',
+                  style: GoogleFonts.plusJakartaSans(),
+                ),
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            );
+          }
+        },
+        (failure) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Chyba: ${failure.message}'),
+              backgroundColor: AppTheme.error,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          );
+        },
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isGenerating = false);
+      }
+    }
+  }
 
   @override
   void initState() {
@@ -108,6 +173,20 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
           ),
         ),
         actions: [
+          IconButton(
+            icon: _isGenerating
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppTheme.primary,
+                    ),
+                  )
+                : const Icon(Icons.auto_awesome_rounded),
+            tooltip: 'Vygenerovat kartičky z chyb',
+            onPressed: _isGenerating ? null : _generateFromErrors,
+          ),
           IconButton(
             icon: const Icon(Icons.add_rounded),
             tooltip: 'Přidat vlastní kartičku',
@@ -517,10 +596,10 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
 
   Widget _buildEmptyState(BuildContext context) {
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32.0),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24.0),
         child: GlassContainer(
-          padding: const EdgeInsets.all(28),
+          padding: const EdgeInsets.all(24),
           borderRadius: BorderRadius.circular(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -548,7 +627,7 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
               ),
               const SizedBox(height: 8),
               Text(
-                'Všechny kartičky k dnešnímu opakování jsou hotové. Nové kartičky se automaticky vytvoří z tvých chyb v konverzacích nebo si můžeš přidat vlastní tlačítkem + nahoře.',
+                'Všechny kartičky k dnešnímu opakování jsou hotové. Můžeš si automaticky vygenerovat novou sadu ze svých chyb z lekcí nebo si přidat vlastní kartičku.',
                 textAlign: TextAlign.center,
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 13,
@@ -556,9 +635,47 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
                   height: 1.45,
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 22),
+              // Hlavní tlačítko: Vygenerovat z chyb
+              FilledButton.icon(
+                onPressed: _isGenerating ? null : _generateFromErrors,
+                style: FilledButton.styleFrom(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
+                  backgroundColor: AppTheme.primary,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                ),
+                icon: _isGenerating
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.auto_awesome_rounded),
+                label: Text(
+                  _isGenerating
+                      ? 'Generuji kartičky...'
+                      : 'Vygenerovat kartičky z chyb',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              // Sekundární tlačítko: Vlastní kartička
               OutlinedButton.icon(
                 onPressed: () => _showAddFlashcardDialog(context),
+                style: OutlinedButton.styleFrom(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                ),
                 icon: const Icon(Icons.add_rounded),
                 label: const Text('Vytvořit novou kartičku'),
               ),

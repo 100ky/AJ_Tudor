@@ -554,6 +554,21 @@ class $TranscriptsTable extends Transcripts
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _inFlashcardMeta = const VerificationMeta(
+    'inFlashcard',
+  );
+  @override
+  late final GeneratedColumn<bool> inFlashcard = GeneratedColumn<bool>(
+    'in_flashcard',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("in_flashcard" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -562,6 +577,7 @@ class $TranscriptsTable extends Transcripts
     content,
     timestamp,
     correctedForm,
+    inFlashcard,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -619,6 +635,15 @@ class $TranscriptsTable extends Transcripts
         ),
       );
     }
+    if (data.containsKey('in_flashcard')) {
+      context.handle(
+        _inFlashcardMeta,
+        inFlashcard.isAcceptableOrUnknown(
+          data['in_flashcard']!,
+          _inFlashcardMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -652,6 +677,10 @@ class $TranscriptsTable extends Transcripts
         DriftSqlType.string,
         data['${effectivePrefix}corrected_form'],
       ),
+      inFlashcard: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}in_flashcard'],
+      )!,
     );
   }
 
@@ -668,6 +697,7 @@ class Transcript extends DataClass implements Insertable<Transcript> {
   final String content;
   final DateTime timestamp;
   final String? correctedForm;
+  final bool inFlashcard;
   const Transcript({
     required this.id,
     required this.sessionId,
@@ -675,6 +705,7 @@ class Transcript extends DataClass implements Insertable<Transcript> {
     required this.content,
     required this.timestamp,
     this.correctedForm,
+    required this.inFlashcard,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -687,6 +718,7 @@ class Transcript extends DataClass implements Insertable<Transcript> {
     if (!nullToAbsent || correctedForm != null) {
       map['corrected_form'] = Variable<String>(correctedForm);
     }
+    map['in_flashcard'] = Variable<bool>(inFlashcard);
     return map;
   }
 
@@ -700,6 +732,7 @@ class Transcript extends DataClass implements Insertable<Transcript> {
       correctedForm: correctedForm == null && nullToAbsent
           ? const Value.absent()
           : Value(correctedForm),
+      inFlashcard: Value(inFlashcard),
     );
   }
 
@@ -715,6 +748,7 @@ class Transcript extends DataClass implements Insertable<Transcript> {
       content: serializer.fromJson<String>(json['content']),
       timestamp: serializer.fromJson<DateTime>(json['timestamp']),
       correctedForm: serializer.fromJson<String?>(json['correctedForm']),
+      inFlashcard: serializer.fromJson<bool>(json['inFlashcard']),
     );
   }
   @override
@@ -727,6 +761,7 @@ class Transcript extends DataClass implements Insertable<Transcript> {
       'content': serializer.toJson<String>(content),
       'timestamp': serializer.toJson<DateTime>(timestamp),
       'correctedForm': serializer.toJson<String?>(correctedForm),
+      'inFlashcard': serializer.toJson<bool>(inFlashcard),
     };
   }
 
@@ -737,6 +772,7 @@ class Transcript extends DataClass implements Insertable<Transcript> {
     String? content,
     DateTime? timestamp,
     Value<String?> correctedForm = const Value.absent(),
+    bool? inFlashcard,
   }) => Transcript(
     id: id ?? this.id,
     sessionId: sessionId ?? this.sessionId,
@@ -746,6 +782,7 @@ class Transcript extends DataClass implements Insertable<Transcript> {
     correctedForm: correctedForm.present
         ? correctedForm.value
         : this.correctedForm,
+    inFlashcard: inFlashcard ?? this.inFlashcard,
   );
   Transcript copyWithCompanion(TranscriptsCompanion data) {
     return Transcript(
@@ -757,6 +794,9 @@ class Transcript extends DataClass implements Insertable<Transcript> {
       correctedForm: data.correctedForm.present
           ? data.correctedForm.value
           : this.correctedForm,
+      inFlashcard: data.inFlashcard.present
+          ? data.inFlashcard.value
+          : this.inFlashcard,
     );
   }
 
@@ -768,14 +808,22 @@ class Transcript extends DataClass implements Insertable<Transcript> {
           ..write('speaker: $speaker, ')
           ..write('content: $content, ')
           ..write('timestamp: $timestamp, ')
-          ..write('correctedForm: $correctedForm')
+          ..write('correctedForm: $correctedForm, ')
+          ..write('inFlashcard: $inFlashcard')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, sessionId, speaker, content, timestamp, correctedForm);
+  int get hashCode => Object.hash(
+    id,
+    sessionId,
+    speaker,
+    content,
+    timestamp,
+    correctedForm,
+    inFlashcard,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -785,7 +833,8 @@ class Transcript extends DataClass implements Insertable<Transcript> {
           other.speaker == this.speaker &&
           other.content == this.content &&
           other.timestamp == this.timestamp &&
-          other.correctedForm == this.correctedForm);
+          other.correctedForm == this.correctedForm &&
+          other.inFlashcard == this.inFlashcard);
 }
 
 class TranscriptsCompanion extends UpdateCompanion<Transcript> {
@@ -795,6 +844,7 @@ class TranscriptsCompanion extends UpdateCompanion<Transcript> {
   final Value<String> content;
   final Value<DateTime> timestamp;
   final Value<String?> correctedForm;
+  final Value<bool> inFlashcard;
   const TranscriptsCompanion({
     this.id = const Value.absent(),
     this.sessionId = const Value.absent(),
@@ -802,6 +852,7 @@ class TranscriptsCompanion extends UpdateCompanion<Transcript> {
     this.content = const Value.absent(),
     this.timestamp = const Value.absent(),
     this.correctedForm = const Value.absent(),
+    this.inFlashcard = const Value.absent(),
   });
   TranscriptsCompanion.insert({
     this.id = const Value.absent(),
@@ -810,6 +861,7 @@ class TranscriptsCompanion extends UpdateCompanion<Transcript> {
     required String content,
     required DateTime timestamp,
     this.correctedForm = const Value.absent(),
+    this.inFlashcard = const Value.absent(),
   }) : sessionId = Value(sessionId),
        speaker = Value(speaker),
        content = Value(content),
@@ -821,6 +873,7 @@ class TranscriptsCompanion extends UpdateCompanion<Transcript> {
     Expression<String>? content,
     Expression<DateTime>? timestamp,
     Expression<String>? correctedForm,
+    Expression<bool>? inFlashcard,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -829,6 +882,7 @@ class TranscriptsCompanion extends UpdateCompanion<Transcript> {
       if (content != null) 'content': content,
       if (timestamp != null) 'timestamp': timestamp,
       if (correctedForm != null) 'corrected_form': correctedForm,
+      if (inFlashcard != null) 'in_flashcard': inFlashcard,
     });
   }
 
@@ -839,6 +893,7 @@ class TranscriptsCompanion extends UpdateCompanion<Transcript> {
     Value<String>? content,
     Value<DateTime>? timestamp,
     Value<String?>? correctedForm,
+    Value<bool>? inFlashcard,
   }) {
     return TranscriptsCompanion(
       id: id ?? this.id,
@@ -847,6 +902,7 @@ class TranscriptsCompanion extends UpdateCompanion<Transcript> {
       content: content ?? this.content,
       timestamp: timestamp ?? this.timestamp,
       correctedForm: correctedForm ?? this.correctedForm,
+      inFlashcard: inFlashcard ?? this.inFlashcard,
     );
   }
 
@@ -871,6 +927,9 @@ class TranscriptsCompanion extends UpdateCompanion<Transcript> {
     if (correctedForm.present) {
       map['corrected_form'] = Variable<String>(correctedForm.value);
     }
+    if (inFlashcard.present) {
+      map['in_flashcard'] = Variable<bool>(inFlashcard.value);
+    }
     return map;
   }
 
@@ -882,7 +941,8 @@ class TranscriptsCompanion extends UpdateCompanion<Transcript> {
           ..write('speaker: $speaker, ')
           ..write('content: $content, ')
           ..write('timestamp: $timestamp, ')
-          ..write('correctedForm: $correctedForm')
+          ..write('correctedForm: $correctedForm, ')
+          ..write('inFlashcard: $inFlashcard')
           ..write(')'))
         .toString();
   }
@@ -1610,6 +1670,21 @@ class $ErrorLogsTable extends ErrorLogs
     type: DriftSqlType.dateTime,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _inFlashcardMeta = const VerificationMeta(
+    'inFlashcard',
+  );
+  @override
+  late final GeneratedColumn<bool> inFlashcard = GeneratedColumn<bool>(
+    'in_flashcard',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("in_flashcard" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -1619,6 +1694,7 @@ class $ErrorLogsTable extends ErrorLogs
     correctForm,
     explanation,
     timestamp,
+    inFlashcard,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1689,6 +1765,15 @@ class $ErrorLogsTable extends ErrorLogs
     } else if (isInserting) {
       context.missing(_timestampMeta);
     }
+    if (data.containsKey('in_flashcard')) {
+      context.handle(
+        _inFlashcardMeta,
+        inFlashcard.isAcceptableOrUnknown(
+          data['in_flashcard']!,
+          _inFlashcardMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -1726,6 +1811,10 @@ class $ErrorLogsTable extends ErrorLogs
         DriftSqlType.dateTime,
         data['${effectivePrefix}timestamp'],
       )!,
+      inFlashcard: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}in_flashcard'],
+      )!,
     );
   }
 
@@ -1743,6 +1832,7 @@ class ErrorLog extends DataClass implements Insertable<ErrorLog> {
   final String correctForm;
   final String explanation;
   final DateTime timestamp;
+  final bool inFlashcard;
   const ErrorLog({
     required this.id,
     required this.sessionId,
@@ -1751,6 +1841,7 @@ class ErrorLog extends DataClass implements Insertable<ErrorLog> {
     required this.correctForm,
     required this.explanation,
     required this.timestamp,
+    required this.inFlashcard,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1762,6 +1853,7 @@ class ErrorLog extends DataClass implements Insertable<ErrorLog> {
     map['correct_form'] = Variable<String>(correctForm);
     map['explanation'] = Variable<String>(explanation);
     map['timestamp'] = Variable<DateTime>(timestamp);
+    map['in_flashcard'] = Variable<bool>(inFlashcard);
     return map;
   }
 
@@ -1774,6 +1866,7 @@ class ErrorLog extends DataClass implements Insertable<ErrorLog> {
       correctForm: Value(correctForm),
       explanation: Value(explanation),
       timestamp: Value(timestamp),
+      inFlashcard: Value(inFlashcard),
     );
   }
 
@@ -1790,6 +1883,7 @@ class ErrorLog extends DataClass implements Insertable<ErrorLog> {
       correctForm: serializer.fromJson<String>(json['correctForm']),
       explanation: serializer.fromJson<String>(json['explanation']),
       timestamp: serializer.fromJson<DateTime>(json['timestamp']),
+      inFlashcard: serializer.fromJson<bool>(json['inFlashcard']),
     );
   }
   @override
@@ -1803,6 +1897,7 @@ class ErrorLog extends DataClass implements Insertable<ErrorLog> {
       'correctForm': serializer.toJson<String>(correctForm),
       'explanation': serializer.toJson<String>(explanation),
       'timestamp': serializer.toJson<DateTime>(timestamp),
+      'inFlashcard': serializer.toJson<bool>(inFlashcard),
     };
   }
 
@@ -1814,6 +1909,7 @@ class ErrorLog extends DataClass implements Insertable<ErrorLog> {
     String? correctForm,
     String? explanation,
     DateTime? timestamp,
+    bool? inFlashcard,
   }) => ErrorLog(
     id: id ?? this.id,
     sessionId: sessionId ?? this.sessionId,
@@ -1822,6 +1918,7 @@ class ErrorLog extends DataClass implements Insertable<ErrorLog> {
     correctForm: correctForm ?? this.correctForm,
     explanation: explanation ?? this.explanation,
     timestamp: timestamp ?? this.timestamp,
+    inFlashcard: inFlashcard ?? this.inFlashcard,
   );
   ErrorLog copyWithCompanion(ErrorLogsCompanion data) {
     return ErrorLog(
@@ -1836,6 +1933,9 @@ class ErrorLog extends DataClass implements Insertable<ErrorLog> {
           ? data.explanation.value
           : this.explanation,
       timestamp: data.timestamp.present ? data.timestamp.value : this.timestamp,
+      inFlashcard: data.inFlashcard.present
+          ? data.inFlashcard.value
+          : this.inFlashcard,
     );
   }
 
@@ -1848,7 +1948,8 @@ class ErrorLog extends DataClass implements Insertable<ErrorLog> {
           ..write('userSaid: $userSaid, ')
           ..write('correctForm: $correctForm, ')
           ..write('explanation: $explanation, ')
-          ..write('timestamp: $timestamp')
+          ..write('timestamp: $timestamp, ')
+          ..write('inFlashcard: $inFlashcard')
           ..write(')'))
         .toString();
   }
@@ -1862,6 +1963,7 @@ class ErrorLog extends DataClass implements Insertable<ErrorLog> {
     correctForm,
     explanation,
     timestamp,
+    inFlashcard,
   );
   @override
   bool operator ==(Object other) =>
@@ -1873,7 +1975,8 @@ class ErrorLog extends DataClass implements Insertable<ErrorLog> {
           other.userSaid == this.userSaid &&
           other.correctForm == this.correctForm &&
           other.explanation == this.explanation &&
-          other.timestamp == this.timestamp);
+          other.timestamp == this.timestamp &&
+          other.inFlashcard == this.inFlashcard);
 }
 
 class ErrorLogsCompanion extends UpdateCompanion<ErrorLog> {
@@ -1884,6 +1987,7 @@ class ErrorLogsCompanion extends UpdateCompanion<ErrorLog> {
   final Value<String> correctForm;
   final Value<String> explanation;
   final Value<DateTime> timestamp;
+  final Value<bool> inFlashcard;
   const ErrorLogsCompanion({
     this.id = const Value.absent(),
     this.sessionId = const Value.absent(),
@@ -1892,6 +1996,7 @@ class ErrorLogsCompanion extends UpdateCompanion<ErrorLog> {
     this.correctForm = const Value.absent(),
     this.explanation = const Value.absent(),
     this.timestamp = const Value.absent(),
+    this.inFlashcard = const Value.absent(),
   });
   ErrorLogsCompanion.insert({
     this.id = const Value.absent(),
@@ -1901,6 +2006,7 @@ class ErrorLogsCompanion extends UpdateCompanion<ErrorLog> {
     required String correctForm,
     required String explanation,
     required DateTime timestamp,
+    this.inFlashcard = const Value.absent(),
   }) : sessionId = Value(sessionId),
        errorType = Value(errorType),
        userSaid = Value(userSaid),
@@ -1915,6 +2021,7 @@ class ErrorLogsCompanion extends UpdateCompanion<ErrorLog> {
     Expression<String>? correctForm,
     Expression<String>? explanation,
     Expression<DateTime>? timestamp,
+    Expression<bool>? inFlashcard,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -1924,6 +2031,7 @@ class ErrorLogsCompanion extends UpdateCompanion<ErrorLog> {
       if (correctForm != null) 'correct_form': correctForm,
       if (explanation != null) 'explanation': explanation,
       if (timestamp != null) 'timestamp': timestamp,
+      if (inFlashcard != null) 'in_flashcard': inFlashcard,
     });
   }
 
@@ -1935,6 +2043,7 @@ class ErrorLogsCompanion extends UpdateCompanion<ErrorLog> {
     Value<String>? correctForm,
     Value<String>? explanation,
     Value<DateTime>? timestamp,
+    Value<bool>? inFlashcard,
   }) {
     return ErrorLogsCompanion(
       id: id ?? this.id,
@@ -1944,6 +2053,7 @@ class ErrorLogsCompanion extends UpdateCompanion<ErrorLog> {
       correctForm: correctForm ?? this.correctForm,
       explanation: explanation ?? this.explanation,
       timestamp: timestamp ?? this.timestamp,
+      inFlashcard: inFlashcard ?? this.inFlashcard,
     );
   }
 
@@ -1971,6 +2081,9 @@ class ErrorLogsCompanion extends UpdateCompanion<ErrorLog> {
     if (timestamp.present) {
       map['timestamp'] = Variable<DateTime>(timestamp.value);
     }
+    if (inFlashcard.present) {
+      map['in_flashcard'] = Variable<bool>(inFlashcard.value);
+    }
     return map;
   }
 
@@ -1983,7 +2096,8 @@ class ErrorLogsCompanion extends UpdateCompanion<ErrorLog> {
           ..write('userSaid: $userSaid, ')
           ..write('correctForm: $correctForm, ')
           ..write('explanation: $explanation, ')
-          ..write('timestamp: $timestamp')
+          ..write('timestamp: $timestamp, ')
+          ..write('inFlashcard: $inFlashcard')
           ..write(')'))
         .toString();
   }
@@ -3718,6 +3832,7 @@ typedef $$TranscriptsTableCreateCompanionBuilder =
       required String content,
       required DateTime timestamp,
       Value<String?> correctedForm,
+      Value<bool> inFlashcard,
     });
 typedef $$TranscriptsTableUpdateCompanionBuilder =
     TranscriptsCompanion Function({
@@ -3727,6 +3842,7 @@ typedef $$TranscriptsTableUpdateCompanionBuilder =
       Value<String> content,
       Value<DateTime> timestamp,
       Value<String?> correctedForm,
+      Value<bool> inFlashcard,
     });
 
 final class $$TranscriptsTableReferences
@@ -3782,6 +3898,11 @@ class $$TranscriptsTableFilterComposer
 
   ColumnFilters<String> get correctedForm => $composableBuilder(
     column: $table.correctedForm,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get inFlashcard => $composableBuilder(
+    column: $table.inFlashcard,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -3843,6 +3964,11 @@ class $$TranscriptsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get inFlashcard => $composableBuilder(
+    column: $table.inFlashcard,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$SessionsTableOrderingComposer get sessionId {
     final $$SessionsTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -3890,6 +4016,11 @@ class $$TranscriptsTableAnnotationComposer
 
   GeneratedColumn<String> get correctedForm => $composableBuilder(
     column: $table.correctedForm,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get inFlashcard => $composableBuilder(
+    column: $table.inFlashcard,
     builder: (column) => column,
   );
 
@@ -3951,6 +4082,7 @@ class $$TranscriptsTableTableManager
                 Value<String> content = const Value.absent(),
                 Value<DateTime> timestamp = const Value.absent(),
                 Value<String?> correctedForm = const Value.absent(),
+                Value<bool> inFlashcard = const Value.absent(),
               }) => TranscriptsCompanion(
                 id: id,
                 sessionId: sessionId,
@@ -3958,6 +4090,7 @@ class $$TranscriptsTableTableManager
                 content: content,
                 timestamp: timestamp,
                 correctedForm: correctedForm,
+                inFlashcard: inFlashcard,
               ),
           createCompanionCallback:
               ({
@@ -3967,6 +4100,7 @@ class $$TranscriptsTableTableManager
                 required String content,
                 required DateTime timestamp,
                 Value<String?> correctedForm = const Value.absent(),
+                Value<bool> inFlashcard = const Value.absent(),
               }) => TranscriptsCompanion.insert(
                 id: id,
                 sessionId: sessionId,
@@ -3974,6 +4108,7 @@ class $$TranscriptsTableTableManager
                 content: content,
                 timestamp: timestamp,
                 correctedForm: correctedForm,
+                inFlashcard: inFlashcard,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -4358,6 +4493,7 @@ typedef $$ErrorLogsTableCreateCompanionBuilder =
       required String correctForm,
       required String explanation,
       required DateTime timestamp,
+      Value<bool> inFlashcard,
     });
 typedef $$ErrorLogsTableUpdateCompanionBuilder =
     ErrorLogsCompanion Function({
@@ -4368,6 +4504,7 @@ typedef $$ErrorLogsTableUpdateCompanionBuilder =
       Value<String> correctForm,
       Value<String> explanation,
       Value<DateTime> timestamp,
+      Value<bool> inFlashcard,
     });
 
 final class $$ErrorLogsTableReferences
@@ -4446,6 +4583,11 @@ class $$ErrorLogsTableFilterComposer
 
   ColumnFilters<DateTime> get timestamp => $composableBuilder(
     column: $table.timestamp,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get inFlashcard => $composableBuilder(
+    column: $table.inFlashcard,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4537,6 +4679,11 @@ class $$ErrorLogsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get inFlashcard => $composableBuilder(
+    column: $table.inFlashcard,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$SessionsTableOrderingComposer get sessionId {
     final $$SessionsTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -4591,6 +4738,11 @@ class $$ErrorLogsTableAnnotationComposer
 
   GeneratedColumn<DateTime> get timestamp =>
       $composableBuilder(column: $table.timestamp, builder: (column) => column);
+
+  GeneratedColumn<bool> get inFlashcard => $composableBuilder(
+    column: $table.inFlashcard,
+    builder: (column) => column,
+  );
 
   $$SessionsTableAnnotationComposer get sessionId {
     final $$SessionsTableAnnotationComposer composer = $composerBuilder(
@@ -4676,6 +4828,7 @@ class $$ErrorLogsTableTableManager
                 Value<String> correctForm = const Value.absent(),
                 Value<String> explanation = const Value.absent(),
                 Value<DateTime> timestamp = const Value.absent(),
+                Value<bool> inFlashcard = const Value.absent(),
               }) => ErrorLogsCompanion(
                 id: id,
                 sessionId: sessionId,
@@ -4684,6 +4837,7 @@ class $$ErrorLogsTableTableManager
                 correctForm: correctForm,
                 explanation: explanation,
                 timestamp: timestamp,
+                inFlashcard: inFlashcard,
               ),
           createCompanionCallback:
               ({
@@ -4694,6 +4848,7 @@ class $$ErrorLogsTableTableManager
                 required String correctForm,
                 required String explanation,
                 required DateTime timestamp,
+                Value<bool> inFlashcard = const Value.absent(),
               }) => ErrorLogsCompanion.insert(
                 id: id,
                 sessionId: sessionId,
@@ -4702,6 +4857,7 @@ class $$ErrorLogsTableTableManager
                 correctForm: correctForm,
                 explanation: explanation,
                 timestamp: timestamp,
+                inFlashcard: inFlashcard,
               ),
           withReferenceMapper: (p0) => p0
               .map(
