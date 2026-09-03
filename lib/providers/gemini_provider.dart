@@ -39,11 +39,11 @@ final geminiBatchClientProvider = Provider<GeminiBatchClient?>((ref) {
 
 /// Specializovaný provider pro analýzu dokončených lekcí.
 /// 
-/// Využívá primárně Gemini 3.7 Flash pro zajištění nejkvalitnějších výsledků analýzy
+/// Využívá primárně Gemini 3.8 Flash pro zajištění nejkvalitnějších výsledků analýzy
 /// a specifický systémový prompt pro vyhodnocování chyb studenta.
 final geminiAnalysisClientProvider = Provider<GeminiBatchClient?>((ref) {
   final apiKey = ref.watch(apiKeyProvider);
-  const modelName = GeminiModels.flash3_7;
+  const modelName = GeminiModels.flash3_8;
   
   if (apiKey == null || apiKey.isEmpty) return null;
   return GeminiBatchClient(

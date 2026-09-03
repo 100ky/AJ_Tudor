@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -11,7 +10,7 @@ import '../../core/widgets/glass_container.dart';
 import '../../core/widgets/chat_bubble.dart';
 import '../../core/widgets/smart_chat_bubble.dart';
 import '../../providers/config_provider.dart';
-import 'widgets/liquid_voice_orb.dart';
+import 'widgets/fluid_voice_wave.dart';
 
 
 
@@ -106,7 +105,7 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
     final tutorState = ref.watch(voiceTutorAgentProvider);
     final audioController = ref.watch(audioSessionControllerProvider);
     final stateLabel = _stateToLabel(tutorState.status);
-    final orbColor = AppTheme.orbColorForState(stateLabel);
+    final waveColor = AppTheme.orbColorForState(stateLabel);
 
     final isIdle = tutorState.status == TutorState.idle ||
         tutorState.status == TutorState.error;
@@ -138,26 +137,13 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
         bottom: false,
         child: Column(
           children: [
-            // ── Adaptivní hlavička (přechod mezi Hero a Compact režimem) ───────
-            AnimatedCrossFade(
-              duration: const Duration(milliseconds: 350),
-              firstCurve: Curves.easeInOutCubic,
-              secondCurve: Curves.easeInOutCubic,
-              crossFadeState: isIdle
-                  ? CrossFadeState.showFirst
-                  : CrossFadeState.showSecond,
-              firstChild: _buildHeroHeader(
-                tutorState: tutorState,
-                stateLabel: stateLabel,
-                orbColor: orbColor,
-                activeVolumeStream: activeVolumeStream,
-              ),
-              secondChild: _buildCompactHeader(
-                tutorState: tutorState,
-                stateLabel: stateLabel,
-                orbColor: orbColor,
-                activeVolumeStream: activeVolumeStream,
-              ),
+            // ── Adaptivní hlavička (plynulý přechod z velkého banneru do úzké lišty) ─
+            _buildAnimatedHeader(
+              tutorState: tutorState,
+              stateLabel: stateLabel,
+              waveColor: waveColor,
+              activeVolumeStream: activeVolumeStream,
+              isIdle: isIdle,
             ),
 
             // ── Chybová zpráva ────────────────────────────────────────────────
@@ -254,17 +240,67 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
     );
   }
 
-  // ── Hero Header (Klidový stav / Idle) ──────────────────────────────────────
-  Widget _buildHeroHeader({
+  // ── Adaptivní hlavička (plynulý přechod z velkého banneru do úzké lišty) ───
+  Widget _buildAnimatedHeader({
     required VoiceTutorState tutorState,
     required String stateLabel,
-    required Color orbColor,
+    required Color waveColor,
+    required Stream<double>? activeVolumeStream,
+    required bool isIdle,
+  }) {
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeInOutCubic,
+      alignment: Alignment.topCenter,
+      child: Container(
+        width: double.infinity,
+        decoration: const BoxDecoration(
+          color: Colors.transparent,
+        ),
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 350),
+          switchInCurve: Curves.easeInOutCubic,
+          switchOutCurve: Curves.easeInOutCubic,
+          transitionBuilder: (child, animation) {
+            return FadeTransition(
+              opacity: animation,
+              child: child,
+            );
+          },
+              child: isIdle
+                  ? _buildHeroHeader(
+                      key: const ValueKey('hero_header'),
+                      tutorState: tutorState,
+                      stateLabel: stateLabel,
+                      waveColor: waveColor,
+                      activeVolumeStream: activeVolumeStream,
+                    )
+                  : _buildCompactHeader(
+                      key: const ValueKey('compact_header'),
+                      tutorState: tutorState,
+                      stateLabel: stateLabel,
+                      waveColor: waveColor,
+                      activeVolumeStream: activeVolumeStream,
+                    ),
+          ),
+        ),
+      );
+  }
+
+  // ── Hero Header (Klidový stav / Idle – velký wave banner) ───────────────────
+  Widget _buildHeroHeader({
+    Key? key,
+    required VoiceTutorState tutorState,
+    required String stateLabel,
+    required Color waveColor,
     required Stream<double>? activeVolumeStream,
   }) {
     return Container(
+      key: key,
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           // Titulek Hlasový Tutor
           Row(
@@ -306,25 +342,39 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
 
           const SizedBox(height: 14),
 
-          // Velký Liquid Orb
-          Stack(
-            alignment: Alignment.center,
-            children: [
-              LiquidVoiceOrb(
-                color: orbColor,
+          // Velký Fluid Wave Banner (Siri / Gemini styl)
+          Container(
+            width: double.infinity,
+            height: 105,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              color: AppTheme.glassLightColor(context),
+              border: Border.all(
+                color: waveColor.withValues(alpha: 0.22),
+                width: 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: waveColor.withValues(alpha: 0.08),
+                  blurRadius: 24,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: FluidVoiceWave(
+                color: waveColor,
                 stateLabel: stateLabel,
                 volumeStream: activeVolumeStream,
-                size: 150,
+                height: 105,
+                isCompact: false,
+                showAmbientGlow: true,
               ),
-              OrbStateIcon(
-                stateLabel: stateLabel,
-                color: orbColor,
-                size: 34,
-              ),
-            ],
+            ),
           ),
 
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
 
           // Stavový text
           AnimatedSwitcher(
@@ -374,163 +424,83 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
     );
   }
 
-  // ── Kompaktní Header (Aktivní hovor) ───────────────────────────────────────
+  // ── Kompaktní Header (Aktivní hovor – čistá vlna přes celý úzký řádek) ─────
   Widget _buildCompactHeader({
+    Key? key,
     required VoiceTutorState tutorState,
     required String stateLabel,
-    required Color orbColor,
+    required Color waveColor,
     required Stream<double>? activeVolumeStream,
   }) {
-    return ClipRRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: BoxDecoration(
-            color: AppTheme.glass,
-            border: Border(
-              bottom: BorderSide(
-                color: AppTheme.outline.withValues(alpha: 0.5),
-                width: 0.5,
-              ),
+    return SizedBox(
+      key: key,
+      width: double.infinity,
+      height: 52,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // 1. Světelná zvuková vlna rozprostřená přes CELÝ úzký řádek
+          Positioned.fill(
+            child: FluidVoiceWave(
+              color: waveColor,
+              stateLabel: stateLabel,
+              volumeStream: activeVolumeStream,
+              height: 52,
+              isCompact: true,
+              showAmbientGlow: true,
             ),
           ),
-          child: Row(
-            children: [
-              // Mini Liquid Orb
-              SizedBox(
-                width: 44,
-                height: 44,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    LiquidVoiceOrb(
-                      color: orbColor,
-                      stateLabel: stateLabel,
-                      volumeStream: activeVolumeStream,
-                      size: 42,
-                    ),
-                    OrbStateIcon(
-                      stateLabel: stateLabel,
-                      color: orbColor,
-                      size: 18,
-                    ),
-                  ],
-                ),
-              ),
 
-              const SizedBox(width: 12),
-
-              // Stavová pilulka
-              Expanded(
-                child: Row(
-                  children: [
-                    Container(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: orbColor.withValues(alpha: 0.10),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: orbColor.withValues(alpha: 0.25),
-                          width: 1,
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 6,
-                            height: 6,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: orbColor,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: orbColor.withValues(alpha: 0.6),
-                                  blurRadius: 4,
-                                  spreadRadius: 1,
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 250),
-                            child: Text(
-                              _getStatusText(tutorState.status),
-                              key: ValueKey(tutorState.status),
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: orbColor,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // Kompaktní Scenario badge
-                    if (tutorState.selectedScenarioId != null) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding:
-                            const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: AppTheme.accent.withValues(alpha: 0.10),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: AppTheme.accent.withValues(alpha: 0.25),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.theater_comedy_rounded,
-                              size: 13,
-                              color: AppTheme.accent,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              'Roleplay',
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: AppTheme.accent,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-
-              // Tlačítko pro rychlé přepnutí/odstranění scénáře
-              if (tutorState.selectedScenarioId != null)
-                GestureDetector(
-                  onTap: () {
-                    ref
-                        .read(voiceTutorAgentProvider.notifier)
-                        .selectScenario(0, '');
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: AppTheme.backgroundSecondaryColor(context),
-                    ),
-                    child: Icon(Icons.close_rounded,
-                        size: 14, color: AppTheme.mutedTextColor(context)),
+          // 2. Pouze případný scénář badge vpravo, pokud je aktivní
+          if (tutorState.selectedScenarioId != null)
+            Positioned(
+              right: 16,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: AppTheme.backgroundColor(context)
+                      .withValues(alpha: 0.70),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: AppTheme.accent.withValues(alpha: 0.35),
                   ),
                 ),
-            ],
-          ),
-        ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.theater_comedy_rounded,
+                      size: 13,
+                      color: AppTheme.accent,
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      'Roleplay',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.accent,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    GestureDetector(
+                      onTap: () {
+                        ref
+                            .read(voiceTutorAgentProvider.notifier)
+                            .selectScenario(0, '');
+                      },
+                      child: Icon(
+                        Icons.close_rounded,
+                        size: 13,
+                        color: AppTheme.onSurfaceMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

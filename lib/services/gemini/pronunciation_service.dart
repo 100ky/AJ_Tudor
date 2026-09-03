@@ -122,6 +122,7 @@ Vrať VÝHRADNĚ validní JSON bez markdownu dle schématu:
 
       final modelsToTry = [
         GeminiModels.transcribe,
+        GeminiModels.flash3_8,
         GeminiModels.flash3_7,
         GeminiModels.flash3_6,
       ];

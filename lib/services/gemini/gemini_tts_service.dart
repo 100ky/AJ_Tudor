@@ -65,9 +65,10 @@ class GeminiTtsService {
         }
       };
 
-      // Zkoušíme primárně dedikovaný TTS model, se zálohou na Flash 3.7
+      // Zkoušíme primárně dedikovaný TTS model, se zálohou na Flash 3.8 / 3.7
       final modelsToTry = [
         GeminiModels.tts,
+        GeminiModels.flash3_8,
         GeminiModels.flash3_7,
         GeminiModels.flash3_6,
       ];
