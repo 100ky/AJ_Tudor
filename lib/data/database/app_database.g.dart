@@ -1074,6 +1074,41 @@ class $UserProfilesTable extends UserProfiles
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _userFactsMeta = const VerificationMeta(
+    'userFacts',
+  );
+  @override
+  late final GeneratedColumn<String> userFacts = GeneratedColumn<String>(
+    'user_facts',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('[]'),
+  );
+  static const VerificationMeta _preparedTopicMeta = const VerificationMeta(
+    'preparedTopic',
+  );
+  @override
+  late final GeneratedColumn<String> preparedTopic = GeneratedColumn<String>(
+    'prepared_topic',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _preparedTopicAtMeta = const VerificationMeta(
+    'preparedTopicAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> preparedTopicAt =
+      GeneratedColumn<DateTime>(
+        'prepared_topic_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -1086,6 +1121,9 @@ class $UserProfilesTable extends UserProfiles
     lastSessionAt,
     totalSessions,
     memoryBriefing,
+    userFacts,
+    preparedTopic,
+    preparedTopicAt,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1180,6 +1218,30 @@ class $UserProfilesTable extends UserProfiles
         ),
       );
     }
+    if (data.containsKey('user_facts')) {
+      context.handle(
+        _userFactsMeta,
+        userFacts.isAcceptableOrUnknown(data['user_facts']!, _userFactsMeta),
+      );
+    }
+    if (data.containsKey('prepared_topic')) {
+      context.handle(
+        _preparedTopicMeta,
+        preparedTopic.isAcceptableOrUnknown(
+          data['prepared_topic']!,
+          _preparedTopicMeta,
+        ),
+      );
+    }
+    if (data.containsKey('prepared_topic_at')) {
+      context.handle(
+        _preparedTopicAtMeta,
+        preparedTopicAt.isAcceptableOrUnknown(
+          data['prepared_topic_at']!,
+          _preparedTopicAtMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -1229,6 +1291,18 @@ class $UserProfilesTable extends UserProfiles
         DriftSqlType.string,
         data['${effectivePrefix}memory_briefing'],
       ),
+      userFacts: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}user_facts'],
+      )!,
+      preparedTopic: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}prepared_topic'],
+      ),
+      preparedTopicAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}prepared_topic_at'],
+      ),
     );
   }
 
@@ -1249,6 +1323,9 @@ class UserProfile extends DataClass implements Insertable<UserProfile> {
   final DateTime? lastSessionAt;
   final int totalSessions;
   final String? memoryBriefing;
+  final String userFacts;
+  final String? preparedTopic;
+  final DateTime? preparedTopicAt;
   const UserProfile({
     required this.id,
     required this.displayName,
@@ -1260,6 +1337,9 @@ class UserProfile extends DataClass implements Insertable<UserProfile> {
     this.lastSessionAt,
     required this.totalSessions,
     this.memoryBriefing,
+    required this.userFacts,
+    this.preparedTopic,
+    this.preparedTopicAt,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1277,6 +1357,13 @@ class UserProfile extends DataClass implements Insertable<UserProfile> {
     map['total_sessions'] = Variable<int>(totalSessions);
     if (!nullToAbsent || memoryBriefing != null) {
       map['memory_briefing'] = Variable<String>(memoryBriefing);
+    }
+    map['user_facts'] = Variable<String>(userFacts);
+    if (!nullToAbsent || preparedTopic != null) {
+      map['prepared_topic'] = Variable<String>(preparedTopic);
+    }
+    if (!nullToAbsent || preparedTopicAt != null) {
+      map['prepared_topic_at'] = Variable<DateTime>(preparedTopicAt);
     }
     return map;
   }
@@ -1297,6 +1384,13 @@ class UserProfile extends DataClass implements Insertable<UserProfile> {
       memoryBriefing: memoryBriefing == null && nullToAbsent
           ? const Value.absent()
           : Value(memoryBriefing),
+      userFacts: Value(userFacts),
+      preparedTopic: preparedTopic == null && nullToAbsent
+          ? const Value.absent()
+          : Value(preparedTopic),
+      preparedTopicAt: preparedTopicAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(preparedTopicAt),
     );
   }
 
@@ -1316,6 +1410,9 @@ class UserProfile extends DataClass implements Insertable<UserProfile> {
       lastSessionAt: serializer.fromJson<DateTime?>(json['lastSessionAt']),
       totalSessions: serializer.fromJson<int>(json['totalSessions']),
       memoryBriefing: serializer.fromJson<String?>(json['memoryBriefing']),
+      userFacts: serializer.fromJson<String>(json['userFacts']),
+      preparedTopic: serializer.fromJson<String?>(json['preparedTopic']),
+      preparedTopicAt: serializer.fromJson<DateTime?>(json['preparedTopicAt']),
     );
   }
   @override
@@ -1332,6 +1429,9 @@ class UserProfile extends DataClass implements Insertable<UserProfile> {
       'lastSessionAt': serializer.toJson<DateTime?>(lastSessionAt),
       'totalSessions': serializer.toJson<int>(totalSessions),
       'memoryBriefing': serializer.toJson<String?>(memoryBriefing),
+      'userFacts': serializer.toJson<String>(userFacts),
+      'preparedTopic': serializer.toJson<String?>(preparedTopic),
+      'preparedTopicAt': serializer.toJson<DateTime?>(preparedTopicAt),
     };
   }
 
@@ -1346,6 +1446,9 @@ class UserProfile extends DataClass implements Insertable<UserProfile> {
     Value<DateTime?> lastSessionAt = const Value.absent(),
     int? totalSessions,
     Value<String?> memoryBriefing = const Value.absent(),
+    String? userFacts,
+    Value<String?> preparedTopic = const Value.absent(),
+    Value<DateTime?> preparedTopicAt = const Value.absent(),
   }) => UserProfile(
     id: id ?? this.id,
     displayName: displayName ?? this.displayName,
@@ -1361,6 +1464,13 @@ class UserProfile extends DataClass implements Insertable<UserProfile> {
     memoryBriefing: memoryBriefing.present
         ? memoryBriefing.value
         : this.memoryBriefing,
+    userFacts: userFacts ?? this.userFacts,
+    preparedTopic: preparedTopic.present
+        ? preparedTopic.value
+        : this.preparedTopic,
+    preparedTopicAt: preparedTopicAt.present
+        ? preparedTopicAt.value
+        : this.preparedTopicAt,
   );
   UserProfile copyWithCompanion(UserProfilesCompanion data) {
     return UserProfile(
@@ -1392,6 +1502,13 @@ class UserProfile extends DataClass implements Insertable<UserProfile> {
       memoryBriefing: data.memoryBriefing.present
           ? data.memoryBriefing.value
           : this.memoryBriefing,
+      userFacts: data.userFacts.present ? data.userFacts.value : this.userFacts,
+      preparedTopic: data.preparedTopic.present
+          ? data.preparedTopic.value
+          : this.preparedTopic,
+      preparedTopicAt: data.preparedTopicAt.present
+          ? data.preparedTopicAt.value
+          : this.preparedTopicAt,
     );
   }
 
@@ -1407,7 +1524,10 @@ class UserProfile extends DataClass implements Insertable<UserProfile> {
           ..write('topicPreferences: $topicPreferences, ')
           ..write('lastSessionAt: $lastSessionAt, ')
           ..write('totalSessions: $totalSessions, ')
-          ..write('memoryBriefing: $memoryBriefing')
+          ..write('memoryBriefing: $memoryBriefing, ')
+          ..write('userFacts: $userFacts, ')
+          ..write('preparedTopic: $preparedTopic, ')
+          ..write('preparedTopicAt: $preparedTopicAt')
           ..write(')'))
         .toString();
   }
@@ -1424,6 +1544,9 @@ class UserProfile extends DataClass implements Insertable<UserProfile> {
     lastSessionAt,
     totalSessions,
     memoryBriefing,
+    userFacts,
+    preparedTopic,
+    preparedTopicAt,
   );
   @override
   bool operator ==(Object other) =>
@@ -1438,7 +1561,10 @@ class UserProfile extends DataClass implements Insertable<UserProfile> {
           other.topicPreferences == this.topicPreferences &&
           other.lastSessionAt == this.lastSessionAt &&
           other.totalSessions == this.totalSessions &&
-          other.memoryBriefing == this.memoryBriefing);
+          other.memoryBriefing == this.memoryBriefing &&
+          other.userFacts == this.userFacts &&
+          other.preparedTopic == this.preparedTopic &&
+          other.preparedTopicAt == this.preparedTopicAt);
 }
 
 class UserProfilesCompanion extends UpdateCompanion<UserProfile> {
@@ -1452,6 +1578,9 @@ class UserProfilesCompanion extends UpdateCompanion<UserProfile> {
   final Value<DateTime?> lastSessionAt;
   final Value<int> totalSessions;
   final Value<String?> memoryBriefing;
+  final Value<String> userFacts;
+  final Value<String?> preparedTopic;
+  final Value<DateTime?> preparedTopicAt;
   const UserProfilesCompanion({
     this.id = const Value.absent(),
     this.displayName = const Value.absent(),
@@ -1463,6 +1592,9 @@ class UserProfilesCompanion extends UpdateCompanion<UserProfile> {
     this.lastSessionAt = const Value.absent(),
     this.totalSessions = const Value.absent(),
     this.memoryBriefing = const Value.absent(),
+    this.userFacts = const Value.absent(),
+    this.preparedTopic = const Value.absent(),
+    this.preparedTopicAt = const Value.absent(),
   });
   UserProfilesCompanion.insert({
     this.id = const Value.absent(),
@@ -1475,6 +1607,9 @@ class UserProfilesCompanion extends UpdateCompanion<UserProfile> {
     this.lastSessionAt = const Value.absent(),
     this.totalSessions = const Value.absent(),
     this.memoryBriefing = const Value.absent(),
+    this.userFacts = const Value.absent(),
+    this.preparedTopic = const Value.absent(),
+    this.preparedTopicAt = const Value.absent(),
   });
   static Insertable<UserProfile> custom({
     Expression<int>? id,
@@ -1487,6 +1622,9 @@ class UserProfilesCompanion extends UpdateCompanion<UserProfile> {
     Expression<DateTime>? lastSessionAt,
     Expression<int>? totalSessions,
     Expression<String>? memoryBriefing,
+    Expression<String>? userFacts,
+    Expression<String>? preparedTopic,
+    Expression<DateTime>? preparedTopicAt,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -1499,6 +1637,9 @@ class UserProfilesCompanion extends UpdateCompanion<UserProfile> {
       if (lastSessionAt != null) 'last_session_at': lastSessionAt,
       if (totalSessions != null) 'total_sessions': totalSessions,
       if (memoryBriefing != null) 'memory_briefing': memoryBriefing,
+      if (userFacts != null) 'user_facts': userFacts,
+      if (preparedTopic != null) 'prepared_topic': preparedTopic,
+      if (preparedTopicAt != null) 'prepared_topic_at': preparedTopicAt,
     });
   }
 
@@ -1513,6 +1654,9 @@ class UserProfilesCompanion extends UpdateCompanion<UserProfile> {
     Value<DateTime?>? lastSessionAt,
     Value<int>? totalSessions,
     Value<String?>? memoryBriefing,
+    Value<String>? userFacts,
+    Value<String?>? preparedTopic,
+    Value<DateTime?>? preparedTopicAt,
   }) {
     return UserProfilesCompanion(
       id: id ?? this.id,
@@ -1525,6 +1669,9 @@ class UserProfilesCompanion extends UpdateCompanion<UserProfile> {
       lastSessionAt: lastSessionAt ?? this.lastSessionAt,
       totalSessions: totalSessions ?? this.totalSessions,
       memoryBriefing: memoryBriefing ?? this.memoryBriefing,
+      userFacts: userFacts ?? this.userFacts,
+      preparedTopic: preparedTopic ?? this.preparedTopic,
+      preparedTopicAt: preparedTopicAt ?? this.preparedTopicAt,
     );
   }
 
@@ -1561,6 +1708,15 @@ class UserProfilesCompanion extends UpdateCompanion<UserProfile> {
     if (memoryBriefing.present) {
       map['memory_briefing'] = Variable<String>(memoryBriefing.value);
     }
+    if (userFacts.present) {
+      map['user_facts'] = Variable<String>(userFacts.value);
+    }
+    if (preparedTopic.present) {
+      map['prepared_topic'] = Variable<String>(preparedTopic.value);
+    }
+    if (preparedTopicAt.present) {
+      map['prepared_topic_at'] = Variable<DateTime>(preparedTopicAt.value);
+    }
     return map;
   }
 
@@ -1576,7 +1732,10 @@ class UserProfilesCompanion extends UpdateCompanion<UserProfile> {
           ..write('topicPreferences: $topicPreferences, ')
           ..write('lastSessionAt: $lastSessionAt, ')
           ..write('totalSessions: $totalSessions, ')
-          ..write('memoryBriefing: $memoryBriefing')
+          ..write('memoryBriefing: $memoryBriefing, ')
+          ..write('userFacts: $userFacts, ')
+          ..write('preparedTopic: $preparedTopic, ')
+          ..write('preparedTopicAt: $preparedTopicAt')
           ..write(')'))
         .toString();
   }
@@ -4189,6 +4348,9 @@ typedef $$UserProfilesTableCreateCompanionBuilder =
       Value<DateTime?> lastSessionAt,
       Value<int> totalSessions,
       Value<String?> memoryBriefing,
+      Value<String> userFacts,
+      Value<String?> preparedTopic,
+      Value<DateTime?> preparedTopicAt,
     });
 typedef $$UserProfilesTableUpdateCompanionBuilder =
     UserProfilesCompanion Function({
@@ -4202,6 +4364,9 @@ typedef $$UserProfilesTableUpdateCompanionBuilder =
       Value<DateTime?> lastSessionAt,
       Value<int> totalSessions,
       Value<String?> memoryBriefing,
+      Value<String> userFacts,
+      Value<String?> preparedTopic,
+      Value<DateTime?> preparedTopicAt,
     });
 
 class $$UserProfilesTableFilterComposer
@@ -4260,6 +4425,21 @@ class $$UserProfilesTableFilterComposer
 
   ColumnFilters<String> get memoryBriefing => $composableBuilder(
     column: $table.memoryBriefing,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get userFacts => $composableBuilder(
+    column: $table.userFacts,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get preparedTopic => $composableBuilder(
+    column: $table.preparedTopic,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get preparedTopicAt => $composableBuilder(
+    column: $table.preparedTopicAt,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -4322,6 +4502,21 @@ class $$UserProfilesTableOrderingComposer
     column: $table.memoryBriefing,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get userFacts => $composableBuilder(
+    column: $table.userFacts,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get preparedTopic => $composableBuilder(
+    column: $table.preparedTopic,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get preparedTopicAt => $composableBuilder(
+    column: $table.preparedTopicAt,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$UserProfilesTableAnnotationComposer
@@ -4380,6 +4575,19 @@ class $$UserProfilesTableAnnotationComposer
     column: $table.memoryBriefing,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get userFacts =>
+      $composableBuilder(column: $table.userFacts, builder: (column) => column);
+
+  GeneratedColumn<String> get preparedTopic => $composableBuilder(
+    column: $table.preparedTopic,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get preparedTopicAt => $composableBuilder(
+    column: $table.preparedTopicAt,
+    builder: (column) => column,
+  );
 }
 
 class $$UserProfilesTableTableManager
@@ -4423,6 +4631,9 @@ class $$UserProfilesTableTableManager
                 Value<DateTime?> lastSessionAt = const Value.absent(),
                 Value<int> totalSessions = const Value.absent(),
                 Value<String?> memoryBriefing = const Value.absent(),
+                Value<String> userFacts = const Value.absent(),
+                Value<String?> preparedTopic = const Value.absent(),
+                Value<DateTime?> preparedTopicAt = const Value.absent(),
               }) => UserProfilesCompanion(
                 id: id,
                 displayName: displayName,
@@ -4434,6 +4645,9 @@ class $$UserProfilesTableTableManager
                 lastSessionAt: lastSessionAt,
                 totalSessions: totalSessions,
                 memoryBriefing: memoryBriefing,
+                userFacts: userFacts,
+                preparedTopic: preparedTopic,
+                preparedTopicAt: preparedTopicAt,
               ),
           createCompanionCallback:
               ({
@@ -4447,6 +4661,9 @@ class $$UserProfilesTableTableManager
                 Value<DateTime?> lastSessionAt = const Value.absent(),
                 Value<int> totalSessions = const Value.absent(),
                 Value<String?> memoryBriefing = const Value.absent(),
+                Value<String> userFacts = const Value.absent(),
+                Value<String?> preparedTopic = const Value.absent(),
+                Value<DateTime?> preparedTopicAt = const Value.absent(),
               }) => UserProfilesCompanion.insert(
                 id: id,
                 displayName: displayName,
@@ -4458,6 +4675,9 @@ class $$UserProfilesTableTableManager
                 lastSessionAt: lastSessionAt,
                 totalSessions: totalSessions,
                 memoryBriefing: memoryBriefing,
+                userFacts: userFacts,
+                preparedTopic: preparedTopic,
+                preparedTopicAt: preparedTopicAt,
               ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))

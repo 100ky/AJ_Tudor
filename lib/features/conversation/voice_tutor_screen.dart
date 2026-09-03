@@ -10,6 +10,7 @@ import '../../core/widgets/glass_container.dart';
 import '../../core/widgets/chat_bubble.dart';
 import '../../core/widgets/smart_chat_bubble.dart';
 import '../../providers/config_provider.dart';
+import '../../services/agents/topic_preparation_agent.dart';
 import 'widgets/fluid_voice_wave.dart';
 
 
@@ -507,9 +508,12 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
 
   // ── Prázdný stav před zahájením konverzace ─────────────────────────────────
   Widget _buildEmptyState(VoiceTutorState tutorState) {
+    final topicState = ref.watch(topicPreparationAgentProvider);
+    final preparedTopic = topicState.topic;
+
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -528,7 +532,7 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
                 color: AppTheme.primary,
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
             Text(
               'Připraven k hlasové lekci',
               style: GoogleFonts.plusJakartaSans(
@@ -539,7 +543,7 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
             ),
             const SizedBox(height: 6),
             Text(
-              'Stiskněte tlačítko mikrofonu a začněte mluvit anglicky. Tutor vás okamžitě uslyší.',
+              'Stiskněte tlačítko mikrofonu a začněte mluvit. Tutor rozhovor přirozeně odstartuje.',
               textAlign: TextAlign.center,
               style: GoogleFonts.plusJakartaSans(
                 fontSize: 13,
@@ -547,6 +551,111 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
                 height: 1.4,
               ),
             ),
+            const SizedBox(height: 20),
+
+            // Karta připraveného tématu
+            if (topicState.isLoading)
+              GlassContainer(
+                padding: const EdgeInsets.all(14),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      'Příprava tématu z historie...',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 12.5,
+                        color: AppTheme.mutedTextColor(context),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else if (preparedTopic != null)
+              GlassContainer(
+                padding: const EdgeInsets.all(16),
+                color: AppTheme.primary.withValues(alpha: 0.06),
+                border:
+                    Border.all(color: AppTheme.primary.withValues(alpha: 0.2)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.lightbulb_rounded,
+                            size: 16, color: AppTheme.accent),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'TÉMA NA POKEC Z HISTORIE',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.8,
+                              color: AppTheme.accent,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        InkWell(
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            ref
+                                .read(topicPreparationAgentProvider.notifier)
+                                .prepareTopic(force: true);
+                          },
+                          borderRadius: BorderRadius.circular(12),
+                          child: Padding(
+                            padding: const EdgeInsets.all(4.0),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.refresh_rounded,
+                                    size: 14, color: AppTheme.primary),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'Jiné téma',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppTheme.primary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      preparedTopic.title,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                        color: AppTheme.textColor(context),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '„${preparedTopic.openerEn}“',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontStyle: FontStyle.italic,
+                        fontSize: 12.5,
+                        color: AppTheme.surfaceTextColor(context),
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
           ],
         ),
       ),

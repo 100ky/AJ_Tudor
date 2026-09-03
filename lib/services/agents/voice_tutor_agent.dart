@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -280,6 +281,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         vocabulary: userProfile?.vocabulary,
         recentTopics: userProfile?.topicPreferences,
         memoryBriefing: userProfile?.memoryBriefing,
+        userFacts: userProfile?.userFacts,
         personalFact: personalFact,
       );
       
@@ -323,12 +325,23 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
           
           String initialPrompt = "Hello! Please greet me and start the conversation according to your instructions.";
           final briefing = userProfile?.memoryBriefing;
+          final prepTopicJson = userProfile?.preparedTopic;
+          String? preparedOpener;
+          if (prepTopicJson != null && prepTopicJson.isNotEmpty) {
+            try {
+              final data = jsonDecode(prepTopicJson);
+              preparedOpener = data['openerEn']?.toString();
+            } catch (_) {}
+          }
+
           if (state.scenarioContext != null) {
             initialPrompt += " Introduce the role-play scenario and immediately start playing your role.";
+          } else if (preparedOpener != null && preparedOpener.isNotEmpty) {
+            initialPrompt += ' Open the conversation naturally and casually as AJ Tudor using this prepared hook/question: "$preparedOpener". Do NOT introduce yourself or ask generic questions about pets/hobbies.';
           } else if (briefing != null && briefing.isNotEmpty) {
             initialPrompt += " Refer briefly to our last lesson and follow up on the recommended topic or question.";
           } else {
-            initialPrompt += " Start with a casual and warm greeting as a friend (do NOT introduce yourself, say your name or where you are from). Share a small, natural detail about your day or mood (following your system instructions example) and ask how my day is going.";
+            initialPrompt += " Start with a casual and warm greeting as a friend (do NOT introduce yourself, say your name or where you are from). Share a small, natural detail about your day or mood (following your system instructions example) and ask an open question to kick off the chat.";
           }
           currentClient.sendText(initialPrompt);
         }

@@ -12,6 +12,7 @@ import '../progress/progress_screen.dart';
 import '../settings/settings_screen.dart';
 import '../../providers/config_provider.dart';
 import '../../services/agents/voice_tutor_agent.dart';
+import '../../services/agents/topic_preparation_agent.dart';
 import '../../core/app_theme.dart';
 
 /// Notifier pro správu indexu vybrané záložky v dolní navigaci.
@@ -63,6 +64,11 @@ class _SkeletonScreenState extends ConsumerState<SkeletonScreen>
       vsync: this,
       duration: const Duration(seconds: 10),
     )..repeat(reverse: true);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Probrání agenta pro přípravu konverzačního tématu z historie při startu aplikace
+      ref.read(topicPreparationAgentProvider.notifier).prepareTopic();
+    });
   }
 
   @override

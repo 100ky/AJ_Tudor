@@ -5,6 +5,7 @@ import '../../providers/gemini_provider.dart';
 import '../../core/utils/logger.dart';
 import '../prompt/system_prompt_builder.dart';
 import 'scenario_planner_agent.dart';
+import 'topic_preparation_agent.dart';
 
 /// Agent zodpovědný za správu dlouhodobé paměti a analýzu ukončených lekcí.
 /// 
@@ -155,7 +156,19 @@ class MemoryManagerAgent {
         }
       }
 
-      // 4. Uložení jednotlivých gramatických/výslovnostních chyb do detailního chybového logu a profilu
+      // 4. Uložení nově zjištěných osobních faktů o studentovi do profilu ("O mně")
+      if (data['newLearnedUserFacts'] != null && data['newLearnedUserFacts'] is List) {
+        final List<String> newFacts = (data['newLearnedUserFacts'] as List)
+            .map((e) => e?.toString() ?? '')
+            .where((s) => s.isNotEmpty)
+            .toList();
+        if (newFacts.isNotEmpty) {
+          await repo.updateUserFacts(newFacts);
+          L.i('Uloženo ${newFacts.length} nových faktů o studentovi do "O mně": $newFacts');
+        }
+      }
+
+      // 5. Uložení jednotlivých gramatických/výslovnostních chyb do detailního chybového logu a profilu
       if (data['errors'] != null && data['errors'] is List) {
         final List<String> newErrors = [];
         for (var err in data['errors']) {
@@ -197,8 +210,11 @@ class MemoryManagerAgent {
       
       L.i('Analýza session $sessionId dokončena přesně (JSON).');
 
-      // 5. Spuštění plánování nových scénářů na příště (asynchronně na pozadí)
+      // 6. Spuštění plánování nových scénářů na příště (asynchronně na pozadí)
       _ref.read(scenarioPlannerAgentProvider).planScenarios();
+
+      // 7. Příprava nového konverzačního tématu pro příště z čerstvé historie
+      _ref.read(topicPreparationAgentProvider.notifier).prepareTopic(force: true);
 
     } catch (e, stack) {
       L.e('Chyba při strukturované analýze session', e, stack);

@@ -79,6 +79,32 @@ class SessionRepository {
         .get();
   }
 
+  /// Načte transkripty z posledních N sezení pro kontextovou analýzu historie.
+  Future<List<Transcript>> getRecentTranscripts({int sessionLimit = 3}) async {
+    final recentSessions = await (_db.select(_db.sessions)
+          ..orderBy([(t) => OrderingTerm.desc(t.startedAt)])
+          ..limit(sessionLimit))
+        .get();
+
+    if (recentSessions.isEmpty) return [];
+
+    final sessionIds = recentSessions.map((s) => s.id).toList();
+
+    return await (_db.select(_db.transcripts)
+          ..where((t) => t.sessionId.isIn(sessionIds))
+          ..orderBy([(t) => OrderingTerm.asc(t.timestamp)]))
+        .get();
+  }
+
+  /// Načte všechny transkripty studenta (speaker = 'user') napříč historií pro extrakci profilových dat.
+  Future<List<Transcript>> getAllUserTranscripts({int limit = 100}) async {
+    return await (_db.select(_db.transcripts)
+          ..where((t) => t.speaker.equals('user'))
+          ..orderBy([(t) => OrderingTerm.desc(t.timestamp)])
+          ..limit(limit))
+        .get();
+  }
+
   /// Sleduje všechny textové záznamy pro konkrétní lekci v reálném čase.
   Stream<List<Transcript>> watchTranscripts(int sessionId) {
     return (_db.select(_db.transcripts)
@@ -233,6 +259,111 @@ class SessionRepository {
     }
   }
 
+  /// Aktualizuje seznam zapamatovaných osobních faktů o studentovi ("O mně").
+  Future<void> updateUserFacts(List<String> newFacts) async {
+    final user = await (_db.select(_db.userProfiles)..where((t) => t.id.equals(1))).getSingleOrNull();
+    if (user == null) return;
+
+    List<dynamic> currentFacts = [];
+    try {
+      currentFacts = jsonDecode(user.userFacts);
+    } catch (_) {}
+
+    final List<String> factsList = currentFacts.map((e) => e.toString().trim()).where((s) => s.isNotEmpty).toList();
+
+    for (final fact in newFacts.map((e) => e.trim()).where((e) => e.isNotEmpty)) {
+      final isDuplicate = factsList.any((existing) =>
+          existing.toLowerCase() == fact.toLowerCase() ||
+          existing.toLowerCase().contains(fact.toLowerCase()) ||
+          fact.toLowerCase().contains(existing.toLowerCase()));
+      if (!isDuplicate) {
+        factsList.add(fact);
+      }
+    }
+
+    // Omezení na max 40 faktů pro zamezení přetížení promptu
+    final trimmedFacts = factsList.length > 40
+        ? factsList.sublist(factsList.length - 40)
+        : factsList;
+
+    await (_db.update(_db.userProfiles)..where((t) => t.id.equals(1))).write(
+      UserProfilesCompanion(
+        userFacts: Value(jsonEncode(trimmedFacts)),
+      ),
+    );
+  }
+
+  /// Přidá jednotlivý fakt do "O mně" (např. ručně z UI).
+  Future<void> addUserFact(String fact) async {
+    final clean = fact.trim();
+    if (clean.isEmpty) return;
+    await updateUserFacts([clean]);
+  }
+
+  /// Odebere konkrétní fakt z "O mně".
+  Future<void> removeUserFact(String fact) async {
+    final user = await (_db.select(_db.userProfiles)..where((t) => t.id.equals(1))).getSingleOrNull();
+    if (user == null) return;
+
+    List<dynamic> currentFacts = [];
+    try {
+      currentFacts = jsonDecode(user.userFacts);
+    } catch (_) {}
+
+    final List<String> factsList = currentFacts.map((e) => e.toString().trim()).toList();
+    factsList.removeWhere((item) => item.toLowerCase() == fact.trim().toLowerCase());
+
+    await (_db.update(_db.userProfiles)..where((t) => t.id.equals(1))).write(
+      UserProfilesCompanion(
+        userFacts: Value(jsonEncode(factsList)),
+      ),
+    );
+  }
+
+  /// Načte seznam zapamatovaných faktů jako `List<String>`.
+  Future<List<String>> getUserFacts() async {
+    final user = await (_db.select(_db.userProfiles)..where((t) => t.id.equals(1))).getSingleOrNull();
+    if (user == null) return [];
+    try {
+      final List<dynamic> raw = jsonDecode(user.userFacts);
+      return raw.map((e) => e.toString()).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Uloží téma připravené agentem při startu aplikace pro příští hlasovou lekci.
+  Future<void> savePreparedTopic(String topicJson) async {
+    final user = await (_db.select(_db.userProfiles)..where((t) => t.id.equals(1))).getSingleOrNull();
+    if (user != null) {
+      await (_db.update(_db.userProfiles)..where((t) => t.id.equals(1))).write(
+        UserProfilesCompanion(
+          preparedTopic: Value(topicJson),
+          preparedTopicAt: Value(DateTime.now()),
+        ),
+      );
+    }
+  }
+
+  /// Vymaže připravené téma (např. po jeho spotřebování v lekci).
+  Future<void> clearPreparedTopic() async {
+    final user = await (_db.select(_db.userProfiles)..where((t) => t.id.equals(1))).getSingleOrNull();
+    if (user != null) {
+      await (_db.update(_db.userProfiles)..where((t) => t.id.equals(1))).write(
+        const UserProfilesCompanion(
+          preparedTopic: Value(null),
+          preparedTopicAt: Value(null),
+        ),
+      );
+    }
+  }
+
+  /// Načte připravené téma, pokud existuje.
+  Future<String?> getPreparedTopic() async {
+    final user = await (_db.select(_db.userProfiles)..where((t) => t.id.equals(1))).getSingleOrNull();
+    return user?.preparedTopic;
+  }
+
   /// Načte poslední uložený briefing (paměť) pro potřeby AI tutora.
   Future<Result<String?>> getLatestBriefing() async {
     try {
@@ -299,6 +430,9 @@ class SessionRepository {
         recurringErrors: Value('[]'),
         vocabulary: Value('[]'),
         topicPreferences: Value('[]'),
+        userFacts: Value('[]'),
+        preparedTopic: Value(null),
+        preparedTopicAt: Value(null),
         targetLevel: Value('B1'),
       ),
     );

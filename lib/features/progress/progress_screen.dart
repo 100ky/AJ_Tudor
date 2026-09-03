@@ -8,6 +8,8 @@ import '../../providers/database_provider.dart';
 import '../../data/database/app_database.dart';
 import '../../core/app_theme.dart';
 import '../../core/widgets/glass_container.dart';
+import '../../services/agents/topic_preparation_agent.dart';
+import '../../data/repositories/session_repository.dart';
 import '../history/history_screen.dart';
 
 class ProgressScreen extends ConsumerStatefulWidget {
@@ -67,12 +69,17 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen> {
                             ButtonSegment<int>(
                               value: 0,
                               icon: Icon(Icons.analytics_outlined, size: 16),
-                              label: Text('Přehled & Slovíčka'),
+                              label: Text('Přehled'),
                             ),
                             ButtonSegment<int>(
                               value: 1,
+                              icon: Icon(Icons.psychology_outlined, size: 16),
+                              label: Text('O mně'),
+                            ),
+                            ButtonSegment<int>(
+                              value: 2,
                               icon: Icon(Icons.history_rounded, size: 16),
-                              label: Text('Historie lekcí'),
+                              label: Text('Historie'),
                             ),
                           ],
                           selected: {_selectedTabIndex},
@@ -89,7 +96,9 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen> {
                       Expanded(
                         child: _selectedTabIndex == 0
                             ? _buildOverviewTab(context, profile, sessions, errors)
-                            : _buildHistoryTab(context, sessions),
+                            : _selectedTabIndex == 1
+                                ? _buildAboutMeTab(context, profile)
+                                : _buildHistoryTab(context, sessions),
                       ),
                     ],
                   );
@@ -741,4 +750,397 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen> {
     ),
   );
 }
+
+  // ── Záložka "O mně" (Znalosti tutora o studentovi) ──────────────────────────
+  Widget _buildAboutMeTab(BuildContext context, UserProfile? profile) {
+    final topicState = ref.watch(topicPreparationAgentProvider);
+    final repo = ref.watch(sessionRepositoryProvider);
+
+    List<String> facts = [];
+    if (profile?.userFacts != null && profile!.userFacts.isNotEmpty) {
+      try {
+        final List<dynamic> raw = jsonDecode(profile.userFacts);
+        facts = raw.map((e) => e.toString()).toList();
+      } catch (_) {}
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // ── Karta: Informace o profilové paměti ───────────────────────────────
+          GlassContainer(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(Icons.psychology_rounded,
+                      color: AppTheme.primary, size: 24),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Co si o tobě Tudor pamatuje',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15,
+                          color: AppTheme.textColor(context),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Tudor si tyto informace automaticky doplňuje po každé hlasové lekci. Díky nim se neptá dokola na stejné věci a konverzace navazuje na tvůj život.',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 12.5,
+                          color: AppTheme.mutedTextColor(context),
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          // ── Karta: Připravené téma od Startup Agenta ─────────────────────────
+          _buildSectionTitle('Připravené téma do hlasu', context),
+          const SizedBox(height: 8),
+          _buildPreparedTopicCard(context, topicState),
+
+          const SizedBox(height: 24),
+
+          // ── Sekce: Osobní fakta ─────────────────────────────────────────────
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _buildSectionTitle('Fakta o mně (${facts.length})', context),
+              TextButton.icon(
+                onPressed: () => _showAddFactDialog(context),
+                icon: const Icon(Icons.add_rounded, size: 16),
+                label: const Text('Přidat fakt'),
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  foregroundColor: AppTheme.primary,
+                  textStyle: GoogleFonts.plusJakartaSans(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12.5,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+
+          if (facts.isEmpty)
+            _buildEmptyStateCard(
+              context,
+              'Zatím zde nejsou žádné záznamy.\nTudor si z vašich rozhovorů automaticky zapamatuje záliby, práci, mazlíčky i zážitky, nebo můžete přidat informaci tlačítkem výše.',
+            )
+          else
+            ...facts.map((fact) => _buildFactTile(context, fact, repo)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPreparedTopicCard(
+      BuildContext context, TopicPreparationState topicState) {
+    if (topicState.isLoading) {
+      return GlassContainer(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                'Agent připravuje nové originální téma z historie...',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 13,
+                  color: AppTheme.mutedTextColor(context),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final topic = topicState.topic;
+    if (topic == null) {
+      return GlassContainer(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Icon(Icons.lightbulb_outline_rounded,
+                color: AppTheme.onSurfaceMuted, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Zatím není připraveno žádné téma.',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 13,
+                  color: AppTheme.mutedTextColor(context),
+                ),
+              ),
+            ),
+            IconButton(
+              tooltip: 'Připravit téma',
+              icon: const Icon(Icons.refresh_rounded, size: 20),
+              onPressed: () {
+                ref
+                    .read(topicPreparationAgentProvider.notifier)
+                    .prepareTopic(force: true);
+              },
+            ),
+          ],
+        ),
+      );
+    }
+
+    return GlassContainer(
+      padding: const EdgeInsets.all(16),
+      color: AppTheme.primary.withValues(alpha: 0.05),
+      border: Border.all(color: AppTheme.primary.withValues(alpha: 0.18)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: AppTheme.accent.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(Icons.auto_awesome_rounded,
+                    color: AppTheme.accent, size: 16),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  topic.title,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                    color: AppTheme.textColor(context),
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Vyměnit téma',
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                color: AppTheme.primary,
+                visualDensity: VisualDensity.compact,
+                onPressed: () {
+                  HapticFeedback.lightImpact();
+                  ref
+                      .read(topicPreparationAgentProvider.notifier)
+                      .prepareTopic(force: true);
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppTheme.backgroundSecondaryColor(context),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.format_quote_rounded,
+                    size: 16, color: AppTheme.primary),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    topic.openerEn,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 13,
+                      fontStyle: FontStyle.italic,
+                      color: AppTheme.textColor(context),
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (topic.rationale.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              topic.rationale,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 11.5,
+                color: AppTheme.mutedTextColor(context),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFactTile(
+      BuildContext context, String fact, SessionRepository repo) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppTheme.glassColor(context),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.glassBorderColor(context)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppTheme.primary,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              fact,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w500,
+                color: AppTheme.textColor(context),
+              ),
+            ),
+          ),
+          IconButton(
+            icon: Icon(Icons.close_rounded,
+                size: 16, color: AppTheme.onSurfaceMuted),
+            visualDensity: VisualDensity.compact,
+            tooltip: 'Smazat fakt',
+            onPressed: () async {
+              HapticFeedback.selectionClick();
+              await repo.removeUserFact(fact);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Fakt byl odstraněn z paměti.'),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAddFactDialog(BuildContext context) {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: AppTheme.backgroundSecondaryColor(context),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          'Přidat informaci o mně',
+          style: GoogleFonts.plusJakartaSans(
+            fontWeight: FontWeight.w600,
+            fontSize: 17,
+            color: AppTheme.textColor(context),
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Zadej fakt, který by si měl Tudor pamatovat (např. o zálibách, mazlíčcích, práci nebo životě):',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 13,
+                color: AppTheme.mutedTextColor(context),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              maxLines: 2,
+              decoration: InputDecoration(
+                hintText: 'Např. Mám psa labradora jménem Rex',
+                hintStyle: GoogleFonts.plusJakartaSans(
+                  fontSize: 13,
+                  color: AppTheme.onSurfaceMuted,
+                ),
+                filled: true,
+                fillColor: AppTheme.glassLightColor(context),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide:
+                      BorderSide(color: AppTheme.glassBorderColor(context)),
+                ),
+              ),
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 14,
+                color: AppTheme.textColor(context),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: Text(
+              'Zrušit',
+              style: GoogleFonts.plusJakartaSans(
+                  color: AppTheme.mutedTextColor(context)),
+            ),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final text = controller.text.trim();
+              if (text.isNotEmpty) {
+                Navigator.pop(dialogCtx);
+                await ref.read(sessionRepositoryProvider).addUserFact(text);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text('Informace byla úspěšně přidána! ✅')),
+                  );
+                }
+              }
+            },
+            style: FilledButton.styleFrom(
+              backgroundColor: AppTheme.primary,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            child: Text(
+              'Uložit',
+              style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

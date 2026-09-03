@@ -12,4 +12,7 @@ class UserProfiles extends Table {
   DateTimeColumn get lastSessionAt => dateTime().nullable()();
   IntColumn get totalSessions => integer().withDefault(const Constant(0))();
   TextColumn get memoryBriefing => text().nullable()(); // Poslední shrnutí pro tutora
+  TextColumn get userFacts => text().withDefault(const Constant('[]'))(); // Informace "O mně" (osobní fakta o studentovi)
+  TextColumn get preparedTopic => text().nullable()(); // Připravené téma do voice z historie
+  DateTimeColumn get preparedTopicAt => dateTime().nullable()(); // Kdy bylo téma připraveno
 }

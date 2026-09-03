@@ -30,7 +30,7 @@ class AppDatabase extends _$AppDatabase {
 
   /// Verze schématu databáze. Při změně struktury tabulek je nutné ji zvýšit.
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   /// Definice strategie pro migraci databáze (např. při upgrade verze).
   @override
@@ -80,6 +80,26 @@ class AppDatabase extends _$AppDatabase {
             await customStatement(
                 'UPDATE transcripts SET in_flashcard = 1 WHERE content IN (SELECT source_sentence FROM flashcards WHERE source_sentence IS NOT NULL);');
           } catch (_) {}
+
+          // 5. Bezpečné přidání nových sloupců do user_profiles (O mně a připravené téma)
+          try {
+            await customStatement(
+                "ALTER TABLE user_profiles ADD COLUMN user_facts TEXT NOT NULL DEFAULT '[]';");
+          } catch (_) {
+            // Sloupec již existuje
+          }
+          try {
+            await customStatement(
+                'ALTER TABLE user_profiles ADD COLUMN prepared_topic TEXT;');
+          } catch (_) {
+            // Sloupec již existuje
+          }
+          try {
+            await customStatement(
+                'ALTER TABLE user_profiles ADD COLUMN prepared_topic_at INTEGER;');
+          } catch (_) {
+            // Sloupec již existuje
+          }
         },
         onUpgrade: (m, from, to) async {
           // Při vývoji jednoduše vytvoříme všechny chybějící tabulky.
