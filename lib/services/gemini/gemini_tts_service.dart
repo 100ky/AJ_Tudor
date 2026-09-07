@@ -38,12 +38,15 @@ class GeminiTtsService {
     final voiceName = _ref.read(voiceProvider);
     final audioPlayback = _ref.read(audioPlaybackServiceProvider);
 
+    final cleanText = _sanitizeTextForSpeech(text);
+    if (cleanText.isEmpty) return false;
+
     try {
-      L.i('Gemini TTS: Generuji výslovnost pro text: "$text" (hlas: $voiceName)...');
+      L.i('Gemini TTS: Generuji výslovnost pro text: "$cleanText" (hlas: $voiceName)...');
 
       final promptText = instruction != null && instruction.isNotEmpty
-          ? '$instruction\n\nText: "$text"'
-          : 'Pronounce clearly with standard native accent: "$text"';
+          ? '$instruction\n\nText: "$cleanText"'
+          : 'Pronounce clearly with standard native accent: "$cleanText"';
 
       final requestBody = {
         'contents': [
@@ -65,12 +68,15 @@ class GeminiTtsService {
         }
       };
 
-      // Zkoušíme primárně dedikovaný TTS model, se zálohou na Flash 3.8 / 3.7
+      // Nativní audio modely s podporou responseModalities: ['AUDIO']
       final modelsToTry = [
         GeminiModels.tts,
+        GeminiModels.flash2_5,
+        'gemini-2.0-flash',
+        'gemini-2.0-flash-exp',
+        'gemini-2.0-flash-preview',
         GeminiModels.flash3_8,
         GeminiModels.flash3_7,
-        GeminiModels.flash3_6,
       ];
 
       for (var model in modelsToTry) {
@@ -119,6 +125,20 @@ class GeminiTtsService {
   Future<void> stop() async {
     final audioPlayback = _ref.read(audioPlaybackServiceProvider);
     await audioPlayback.stop();
+  }
+
+  /// Očistí text od markdown značek (hvězdičky, mřížky, odrážky),
+  /// aby syntetizér četl přirozeně a nevyslovoval formátovací značky.
+  String _sanitizeTextForSpeech(String rawText) {
+    return rawText
+        .replaceAll(RegExp(r'\*\*([^*]+)\*\*'), r'$1')
+        .replaceAll(RegExp(r'\*([^*]+)\*'), r'$1')
+        .replaceAll(RegExp(r'`([^`]+)`'), r'$1')
+        .replaceAll(RegExp(r'^#+\s*', multiLine: true), '')
+        .replaceAll(RegExp(r'^\s*[-*+]\s+', multiLine: true), '')
+        .replaceAll(RegExp(r'\[([^\]]+)\]\([^)]+\)'), r'$1')
+        .replaceAll(RegExp(r'[#_~]'), '')
+        .trim();
   }
 }
 

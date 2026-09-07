@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/database_provider.dart';
 import '../../providers/gemini_provider.dart';
+import '../../data/repositories/session_repository.dart';
 import '../../core/utils/logger.dart';
 import '../prompt/system_prompt_builder.dart';
 import 'scenario_planner_agent.dart';
@@ -189,9 +190,15 @@ class MemoryManagerAgent {
             if (userSaid.isNotEmpty && correctForm.isNotEmpty) {
               newErrors.add('Řekl: "$userSaid", ale správně je: "$correctForm" ($explanation)');
 
-              // Automatické vytvoření Smart Flashcard pro studenta
+              final czechTranslation = err['czechTranslation']?.toString().trim();
+              final extracted = SessionRepository.extractCzechFromExplanation(explanation);
+              final frontText = (czechTranslation != null && czechTranslation.isNotEmpty)
+                  ? czechTranslation
+                  : (extracted != null && extracted.isNotEmpty ? extracted : 'Přeložte do angličtiny');
+
+              // Automatické vytvoření Smart Flashcard pro studenta v češtině k překladu do angličtiny
               await repo.addFlashcard(
-                frontText: 'Jak opravit / říct: "$userSaid"?',
+                frontText: frontText,
                 backText: correctForm,
                 explanation: explanation,
                 errorType: type,

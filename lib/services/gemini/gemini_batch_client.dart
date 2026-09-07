@@ -24,16 +24,19 @@ class GeminiBatchClient {
 
   final Dio _dio;
 
+  /// Dočasný cooldown pro modely přetížené chybami 503/429/timeout.
+  static final Map<String, DateTime> _batchModelCooldowns = {};
+
   /// Inicializuje klienta s potřebnými konfiguračními údaji.
   GeminiBatchClient(this.apiKey, this.primaryModelName, {this.systemPrompt})
       : _dio = Dio(BaseOptions(
-          connectTimeout: const Duration(seconds: 10),
-          receiveTimeout: const Duration(seconds: 30),
+          connectTimeout: const Duration(seconds: 8),
+          receiveTimeout: const Duration(seconds: 15),
         ));
 
   /// Pokusí se odeslat zprávu a vrátí odpověď modelu jako [String].
   ///
-  /// Pokud je primární model přetížený (chyba 429, 503 atd.) nebo neodpoví do 10 sekund,
+  /// Pokud je primární model přetížený (chyba 429, 503 atd.) nebo neodpoví v limitu,
   /// metoda postupně vyzkouší záložní modely (tzv. "waterfall" / kaskádový fallback).
   ///
   /// [text] je samotná zpráva od uživatele.
@@ -46,7 +49,7 @@ class GeminiBatchClient {
   }) async {
     // Definice pořadí zkoušených modelů (waterfall).
     // Začínáme primárně vybraným modelem a v případě selhání pokračujeme na záložní.
-    final modelsToTry = {
+    final allCandidates = {
       primaryModelName,
       GeminiModels.flash3_8,
       GeminiModels.flash3_7,
@@ -55,6 +58,16 @@ class GeminiBatchClient {
       GeminiModels.flash3_5,
       GeminiModels.flashLite3_1,
     }.toList();
+
+    final now = DateTime.now();
+    var modelsToTry = allCandidates.where((m) {
+      final cooldown = _batchModelCooldowns[m];
+      return cooldown == null || now.isAfter(cooldown);
+    }).toList();
+
+    if (modelsToTry.isEmpty) {
+      modelsToTry = allCandidates;
+    }
 
     String lastError = '';
 
@@ -69,6 +82,7 @@ class GeminiBatchClient {
           systemPromptOverride: systemPrompt,
         );
 
+        _batchModelCooldowns.remove(modelName);
         if (modelName != primaryModelName) {
           L.w('⚠️ Fallback úspěšný s modelem: $modelName');
         }
@@ -77,14 +91,14 @@ class GeminiBatchClient {
         final statusCode = e.response?.statusCode ?? 0;
         lastError = _extractErrorMessage(e);
 
-        // Trvalé chyby (401, 403, 404) – nemá smysl zkoušet další model
+        // Trvalé autentizační chyby (401, 403) – nemá smysl zkoušet další model
         if (statusCode == 401 || statusCode == 403) {
           L.e('Trvalá autentizační chyba u $modelName: $lastError');
           return _handlePermanentError(statusCode, lastError);
         }
         if (statusCode == 404) {
-          L.e('Model $modelName nebyl nalezen (404).');
-          return '❌ Model nebyl nalezen.';
+          L.w('Model $modelName nebyl nalezen (404). Zkouším další záložní model v pořadí...');
+          continue;
         }
 
         // Dočasné přetížení – zkusíme další model
@@ -94,7 +108,8 @@ class GeminiBatchClient {
             e.type == DioExceptionType.receiveTimeout;
 
         if (isOverloaded) {
-          L.w('Model $modelName je přetížený ($statusCode). Zkouším další v pořadí...');
+          _batchModelCooldowns[modelName] = DateTime.now().add(const Duration(minutes: 3));
+          L.w('Model $modelName je přetížený ($statusCode). Dávám na 3min cooldown a zkouším další...');
         } else {
           L.e('Neočekávaná chyba u modelu $modelName: $lastError');
           lastError = lastError;

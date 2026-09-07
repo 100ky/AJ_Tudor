@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../conversation/conversation_screen.dart';
 import '../conversation/voice_tutor_screen.dart';
 import '../flashcards/flashcards_screen.dart';
 import '../progress/progress_screen.dart';
@@ -33,7 +32,7 @@ final _selectedIndexProvider =
 ///
 /// Zajišťuje přepínání mezi hlavními sekcemi:
 /// 0: Voice (Hlasový tutor)
-/// 1: Chat (Textový chat a dril)
+/// 1: Dril (Gramatický dril a cvičebna)
 /// 2: Kartičky (Smart Flashcards)
 /// 3: Pokrok (Statistiky a historie)
 /// 4: Profil & Nastavení
@@ -51,7 +50,6 @@ class _SkeletonScreenState extends ConsumerState<SkeletonScreen>
 
   static const List<Widget> _pages = [
     VoiceTutorScreen(),
-    ConversationScreen(),
     FlashcardsScreen(),
     ProgressScreen(),
     SettingsScreen(),
@@ -178,7 +176,7 @@ class _SkeletonScreenState extends ConsumerState<SkeletonScreen>
           Column(
             children: [
               // Warning banner – chybí API klíč
-              if (isMissingKey && currentIndex != 4)
+              if (isMissingKey && currentIndex != 3)
                 SafeArea(
                   bottom: false,
                   child: Container(
@@ -222,7 +220,7 @@ class _SkeletonScreenState extends ConsumerState<SkeletonScreen>
                                   HapticFeedback.lightImpact();
                                   ref
                                       .read(_selectedIndexProvider.notifier)
-                                      .setIndex(4);
+                                      .setIndex(3);
                                 },
                                 child: Text(
                                   'NASTAVIT',
@@ -297,14 +295,9 @@ class _SkeletonScreenState extends ConsumerState<SkeletonScreen>
                           label: 'Hlas',
                         ),
                         NavigationDestination(
-                          icon: Icon(Icons.chat_bubble_outline_rounded),
-                          selectedIcon: Icon(Icons.chat_bubble_rounded),
-                          label: 'Chat',
-                        ),
-                        NavigationDestination(
-                          icon: Icon(Icons.style_outlined),
-                          selectedIcon: Icon(Icons.style_rounded),
-                          label: 'Kartičky',
+                          icon: Icon(Icons.school_outlined),
+                          selectedIcon: Icon(Icons.school_rounded),
+                          label: 'Cvičebna',
                         ),
                         NavigationDestination(
                           icon: Icon(Icons.insights_rounded),

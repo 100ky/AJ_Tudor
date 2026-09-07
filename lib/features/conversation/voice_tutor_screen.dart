@@ -10,7 +10,10 @@ import '../../core/widgets/glass_container.dart';
 import '../../core/widgets/chat_bubble.dart';
 import '../../core/widgets/smart_chat_bubble.dart';
 import '../../providers/config_provider.dart';
+import '../../providers/database_provider.dart';
 import '../../services/agents/topic_preparation_agent.dart';
+import '../../services/agents/scenario_planner_agent.dart';
+import '../../data/database/app_database.dart';
 import 'widgets/fluid_voice_wave.dart';
 
 
@@ -26,6 +29,16 @@ class VoiceTutorScreen extends ConsumerStatefulWidget {
 class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
     with SingleTickerProviderStateMixin {
   final _scrollController = ScrollController();
+
+  /// Zvolená záložka v prázdném stavu: 0 = Téma z historie, 1 = Scénáře, 2 = Volný pokec
+  int _selectedModeTab = 0;
+
+  /// Indikátor generování nových scénářů
+  bool _isGeneratingScenarios = false;
+
+  /// Kontrolér pro zadání vlastního příběhu / scénáře na přání
+  final _customScenarioController = TextEditingController();
+  bool _isCreatingCustomScenario = false;
 
   /// Animace pro blikající kurzor v live transkriptu
   late AnimationController _cursorController;
@@ -43,7 +56,83 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
   void dispose() {
     _scrollController.dispose();
     _cursorController.dispose();
+    _customScenarioController.dispose();
     super.dispose();
+  }
+
+  Future<void> _createCustomScenario() async {
+    final text = _customScenarioController.text.trim();
+    if (text.isEmpty) return;
+
+    FocusScope.of(context).unfocus();
+    setState(() => _isCreatingCustomScenario = true);
+    HapticFeedback.mediumImpact();
+
+    try {
+      final scenario = await ref
+          .read(scenarioPlannerAgentProvider)
+          .planCustomScenario(text);
+
+      if (!mounted) return;
+
+      if (scenario != null) {
+        _customScenarioController.clear();
+        ref
+            .read(voiceTutorAgentProvider.notifier)
+            .selectScenario(scenario.id, scenario.tutorInstruction);
+        HapticFeedback.heavyImpact();
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle_rounded,
+                    color: Colors.white, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Scénář "${scenario.title}" byl vytvořen a aktivován! 🎭',
+                    style: GoogleFonts.plusJakartaSans(
+                        fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: AppTheme.success,
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+                'Nepodařilo se vygenerovat scénář. Zkontrolujte připojení.'),
+            backgroundColor: AppTheme.warning,
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Chyba při tvorbě scénáře: $e'),
+            backgroundColor: AppTheme.error,
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isCreatingCustomScenario = false);
+      }
+    }
   }
 
   void _scrollToBottom() {
@@ -392,17 +481,21 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
             ),
           ),
 
-          // Aktivní scénář chip
+          // Aktivní scénář / režim chip
           if (tutorState.selectedScenarioId != null) ...[
             const SizedBox(height: 8),
             Chip(
               avatar: Icon(
-                Icons.theater_comedy_rounded,
+                tutorState.scenarioContext == '__free_talk__'
+                    ? Icons.chat_bubble_outline_rounded
+                    : Icons.theater_comedy_rounded,
                 size: 14,
                 color: AppTheme.accent,
               ),
               label: Text(
-                'Role-Play scénář aktivní',
+                tutorState.scenarioContext == '__free_talk__'
+                    ? 'Volný rozhovor aktivní'
+                    : 'Role-Play scénář aktivní',
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 12,
                   color: AppTheme.accent,
@@ -414,9 +507,11 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
               deleteIcon: Icon(Icons.close_rounded,
                   size: 14, color: AppTheme.onSurfaceMuted),
               onDeleted: () {
+                HapticFeedback.lightImpact();
                 ref
                     .read(voiceTutorAgentProvider.notifier)
                     .selectScenario(0, '');
+                setState(() => _selectedModeTab = 0);
               },
             ),
           ],
@@ -453,7 +548,8 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
           ),
 
           // 2. Pouze případný scénář badge vpravo, pokud je aktivní
-          if (tutorState.selectedScenarioId != null)
+          if (tutorState.selectedScenarioId != null &&
+              tutorState.selectedScenarioId! > 0)
             Positioned(
               right: 16,
               child: Container(
@@ -487,9 +583,11 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
                     const SizedBox(width: 6),
                     GestureDetector(
                       onTap: () {
+                        HapticFeedback.lightImpact();
                         ref
                             .read(voiceTutorAgentProvider.notifier)
                             .selectScenario(0, '');
+                        setState(() => _selectedModeTab = 0);
                       },
                       child: Icon(
                         Icons.close_rounded,
@@ -506,19 +604,19 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
     );
   }
 
-  // ── Prázdný stav před zahájením konverzace ─────────────────────────────────
+  // ── Prázdný stav před zahájením konverzace (Výběr tématu a scénářů) ───────
   Widget _buildEmptyState(VoiceTutorState tutorState) {
-    final topicState = ref.watch(topicPreparationAgentProvider);
-    final preparedTopic = topicState.topic;
+    final activeTab = _getActiveModeTab(tutorState);
 
     return Center(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
+            // ── Úvodní ikona a titulek ──────────────────────────────────────
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: AppTheme.primary.withValues(alpha: 0.08),
@@ -528,136 +626,733 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
               ),
               child: Icon(
                 Icons.record_voice_over_rounded,
-                size: 32,
+                size: 28,
                 color: AppTheme.primary,
               ),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 10),
             Text(
               'Připraven k hlasové lekci',
               style: GoogleFonts.plusJakartaSans(
                 fontSize: 16,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w700,
                 color: AppTheme.textColor(context),
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 4),
             Text(
-              'Stiskněte tlačítko mikrofonu a začněte mluvit. Tutor rozhovor přirozeně odstartuje.',
+              'Zvol si téma nebo scénář a stiskni mikrofon dole.',
               textAlign: TextAlign.center,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 12.5,
+                color: AppTheme.mutedTextColor(context),
+                height: 1.35,
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // ── Přepínač režimu tématu ──────────────────────────────────────
+            SegmentedButton<int>(
+              style: ButtonStyle(
+                visualDensity: VisualDensity.compact,
+                textStyle: WidgetStatePropertyAll(
+                  GoogleFonts.plusJakartaSans(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              segments: const [
+                ButtonSegment<int>(
+                  value: 0,
+                  icon: Icon(Icons.lightbulb_rounded, size: 14),
+                  label: Text('Historie', maxLines: 1),
+                ),
+                ButtonSegment<int>(
+                  value: 1,
+                  icon: Icon(Icons.theater_comedy_rounded, size: 14),
+                  label: Text('Scénáře', maxLines: 1),
+                ),
+                ButtonSegment<int>(
+                  value: 2,
+                  icon: Icon(Icons.chat_bubble_outline_rounded, size: 14),
+                  label: Text('Volný', maxLines: 1),
+                ),
+              ],
+              selected: {activeTab},
+              onSelectionChanged: (set) {
+                final mode = set.first;
+                HapticFeedback.selectionClick();
+                setState(() => _selectedModeTab = mode);
+                final notifier = ref.read(voiceTutorAgentProvider.notifier);
+                if (mode == 0) {
+                  notifier.selectScenario(0, '');
+                } else if (mode == 1) {
+                  if (tutorState.scenarioContext == '__free_talk__') {
+                    notifier.selectScenario(0, '');
+                  }
+                } else if (mode == 2) {
+                  notifier.selectScenario(-1, '__free_talk__');
+                }
+              },
+            ),
+
+            const SizedBox(height: 14),
+
+            // ── Obsah podle vybraného režimu ────────────────────────────────
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 280),
+              child: activeTab == 0
+                  ? _buildHistoryTopicTab()
+                  : activeTab == 1
+                      ? _buildScenariosTab(tutorState)
+                      : _buildFreeTalkTab(tutorState),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  int _getActiveModeTab(VoiceTutorState state) {
+    if (state.scenarioContext == '__free_talk__') return 2;
+    if (state.selectedScenarioId != null && state.selectedScenarioId! > 0) {
+      return 1;
+    }
+    return _selectedModeTab;
+  }
+
+  // ── Záložka 0: Téma z historie ──────────────────────────────────────────────
+  Widget _buildHistoryTopicTab() {
+    final topicState = ref.watch(topicPreparationAgentProvider);
+    final preparedTopic = topicState.topic;
+
+    if (topicState.isLoading) {
+      return GlassContainer(
+        padding: const EdgeInsets.all(16),
+        borderRadius: BorderRadius.circular(16),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'Příprava tématu z historie...',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 12.5,
+                color: AppTheme.mutedTextColor(context),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (preparedTopic == null) {
+      return GlassContainer(
+        padding: const EdgeInsets.all(16),
+        borderRadius: BorderRadius.circular(16),
+        child: Column(
+          children: [
+            Text(
+              'Zatím nemáš připravené téma.',
               style: GoogleFonts.plusJakartaSans(
                 fontSize: 13,
                 color: AppTheme.mutedTextColor(context),
-                height: 1.4,
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: () {
+                HapticFeedback.lightImpact();
+                ref
+                    .read(topicPreparationAgentProvider.notifier)
+                    .prepareTopic(force: true);
+              },
+              icon: const Icon(Icons.auto_awesome_rounded, size: 15),
+              label: const Text('Připravit téma z historie'),
+            ),
+          ],
+        ),
+      );
+    }
 
-            // Karta připraveného tématu
-            if (topicState.isLoading)
-              GlassContainer(
-                padding: const EdgeInsets.all(14),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      'Příprava tématu z historie...',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 12.5,
-                        color: AppTheme.mutedTextColor(context),
-                      ),
-                    ),
-                  ],
+    return GlassContainer(
+      key: const ValueKey('history_topic_card'),
+      padding: const EdgeInsets.all(16),
+      borderRadius: BorderRadius.circular(18),
+      color: AppTheme.primary.withValues(alpha: 0.06),
+      border: Border.all(color: AppTheme.primary.withValues(alpha: 0.22)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.lightbulb_rounded, size: 16, color: AppTheme.accent),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'TÉMA NA POKEC Z HISTORIE',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.8,
+                    color: AppTheme.accent,
+                  ),
                 ),
-              )
-            else if (preparedTopic != null)
+              ),
+              const SizedBox(width: 6),
+              InkWell(
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  ref
+                      .read(topicPreparationAgentProvider.notifier)
+                      .prepareTopic(force: true);
+                },
+                borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding: const EdgeInsets.all(4.0),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.refresh_rounded,
+                          size: 14, color: AppTheme.primary),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Jiné téma',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            preparedTopic.title,
+            style: GoogleFonts.plusJakartaSans(
+              fontWeight: FontWeight.w700,
+              fontSize: 14.5,
+              color: AppTheme.textColor(context),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '„${preparedTopic.openerEn}“',
+            style: GoogleFonts.plusJakartaSans(
+              fontStyle: FontStyle.italic,
+              fontSize: 12.5,
+              color: AppTheme.surfaceTextColor(context),
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Icon(Icons.check_circle_rounded,
+                  size: 14, color: AppTheme.primary),
+              const SizedBox(width: 6),
+              Text(
+                'Aktivní téma pro hovor',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.primary,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCustomScenarioInput() {
+    final isDark = AppTheme.isDark(context);
+
+    return GlassContainer(
+      padding: const EdgeInsets.all(14),
+      borderRadius: BorderRadius.circular(16),
+      color: AppTheme.accent.withValues(alpha: isDark ? 0.08 : 0.04),
+      border: Border.all(color: AppTheme.accent.withValues(alpha: 0.25)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.edit_note_rounded, size: 16, color: AppTheme.accent),
+              const SizedBox(width: 6),
+              Text(
+                'VLASTNÍ PŘÍBĚH / SCÉNÁŘ NA PŘÁNÍ ✍️',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.8,
+                  color: AppTheme.accent,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _customScenarioController,
+            maxLines: 2,
+            minLines: 1,
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 13,
+              color: AppTheme.textColor(context),
+            ),
+            decoration: InputDecoration(
+              hintText: 'Popiš situaci... (např. Pohovor v IT firmě, nákup veterána v Londýně, hádka se sousedem)',
+              hintStyle: GoogleFonts.plusJakartaSans(
+                fontSize: 12,
+                color: AppTheme.mutedTextColor(context),
+              ),
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              filled: true,
+              fillColor: isDark
+                  ? Colors.black.withValues(alpha: 0.2)
+                  : Colors.white.withValues(alpha: 0.5),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(
+                  color: AppTheme.outline.withValues(alpha: 0.3),
+                ),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(
+                  color: AppTheme.outline.withValues(alpha: 0.25),
+                ),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: AppTheme.accent, width: 1.5),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton.icon(
+              onPressed: _isCreatingCustomScenario ? null : _createCustomScenario,
+              style: FilledButton.styleFrom(
+                backgroundColor: AppTheme.accent,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                visualDensity: VisualDensity.compact,
+              ),
+              icon: _isCreatingCustomScenario
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.auto_awesome_rounded, size: 14),
+              label: Text(
+                _isCreatingCustomScenario ? 'Tvořím scénář...' : 'Vytvořit a aktivovat ✨',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Záložka 1: Scénáře na míru (Role-play) ─────────────────────────────────
+  Widget _buildScenariosTab(VoiceTutorState tutorState) {
+    final repo = ref.watch(sessionRepositoryProvider);
+
+    return StreamBuilder<List<Scenario>>(
+      stream: repo.watchAvailableScenarios(),
+      builder: (context, snapshot) {
+        final scenarios = snapshot.data ?? [];
+
+        return Column(
+          key: const ValueKey('scenarios_view'),
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 1. Vlastní promptované téma / příběh
+            _buildCustomScenarioInput(),
+            const SizedBox(height: 14),
+
+            if (scenarios.isEmpty)
               GlassContainer(
-                padding: const EdgeInsets.all(16),
-                color: AppTheme.primary.withValues(alpha: 0.06),
-                border:
-                    Border.all(color: AppTheme.primary.withValues(alpha: 0.2)),
+                key: const ValueKey('scenarios_empty'),
+                padding: const EdgeInsets.all(18),
+                borderRadius: BorderRadius.circular(18),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Icon(Icons.lightbulb_rounded,
-                            size: 16, color: AppTheme.accent),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'TÉMA NA POKEC Z HISTORIE',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.8,
-                              color: AppTheme.accent,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        InkWell(
-                          onTap: () {
-                            HapticFeedback.lightImpact();
-                            ref
-                                .read(topicPreparationAgentProvider.notifier)
-                                .prepareTopic(force: true);
-                          },
-                          borderRadius: BorderRadius.circular(12),
-                          child: Padding(
-                            padding: const EdgeInsets.all(4.0),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.refresh_rounded,
-                                    size: 14, color: AppTheme.primary),
-                                const SizedBox(width: 4),
-                                Text(
-                                  'Jiné téma',
-                                  style: GoogleFonts.plusJakartaSans(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: AppTheme.primary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
+                    Icon(
+                      Icons.theater_comedy_rounded,
+                      size: 32,
+                      color: AppTheme.accent,
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      preparedTopic.title,
+                      'Žádné předpřipravené scénáře',
                       style: GoogleFonts.plusJakartaSans(
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w700,
                         fontSize: 14,
                         color: AppTheme.textColor(context),
                       ),
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 4),
                     Text(
-                      '„${preparedTopic.openerEn}“',
+                      'Vypromptuj si vlastní příběh výše, nebo si nech vygenerovat 3 scénáře na míru.',
+                      textAlign: TextAlign.center,
                       style: GoogleFonts.plusJakartaSans(
-                        fontStyle: FontStyle.italic,
-                        fontSize: 12.5,
-                        color: AppTheme.surfaceTextColor(context),
-                        height: 1.3,
+                        fontSize: 12,
+                        color: AppTheme.mutedTextColor(context),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: _isGeneratingScenarios
+                          ? null
+                          : () async {
+                              HapticFeedback.lightImpact();
+                              setState(() => _isGeneratingScenarios = true);
+                              try {
+                                await ref
+                                    .read(scenarioPlannerAgentProvider)
+                                    .planScenarios();
+                              } finally {
+                                if (mounted) {
+                                  setState(() => _isGeneratingScenarios = false);
+                                }
+                              }
+                            },
+                      icon: _isGeneratingScenarios
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.auto_awesome_rounded, size: 15),
+                      label: Text(_isGeneratingScenarios
+                          ? 'Plánuji scénáře...'
+                          : 'Vygenerovat scénáře na míru'),
+                    ),
+                  ],
+                ),
+              )
+            else ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                child: Row(
+                  children: [
+                    Icon(Icons.theater_comedy_rounded,
+                        size: 14, color: AppTheme.accent),
+                    const SizedBox(width: 6),
+                    Text(
+                      'ROLE-PLAY SCÉNÁŘE (${scenarios.length})',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.8,
+                        color: AppTheme.accent,
+                      ),
+                    ),
+                    const Spacer(),
+                    InkWell(
+                      onTap: _isGeneratingScenarios
+                          ? null
+                          : () async {
+                              HapticFeedback.lightImpact();
+                              setState(() => _isGeneratingScenarios = true);
+                              try {
+                                await ref
+                                    .read(scenarioPlannerAgentProvider)
+                                    .planScenarios();
+                              } finally {
+                                if (mounted) {
+                                  setState(() => _isGeneratingScenarios = false);
+                                }
+                              }
+                            },
+                      borderRadius: BorderRadius.circular(12),
+                      child: Padding(
+                        padding: const EdgeInsets.all(4.0),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _isGeneratingScenarios
+                                ? const SizedBox(
+                                    width: 12,
+                                    height: 12,
+                                    child:
+                                        CircularProgressIndicator(strokeWidth: 1.8),
+                                  )
+                                : Icon(Icons.refresh_rounded,
+                                    size: 14, color: AppTheme.primary),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Přeplánovat',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: AppTheme.primary,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
+              const SizedBox(height: 6),
+              ...scenarios.map((s) => _buildVoiceScenarioCard(
+                    s,
+                    tutorState.selectedScenarioId == s.id,
+                  )),
+            ],
           ],
+        );
+      },
+    );
+  }
+
+  Widget _buildVoiceScenarioCard(Scenario s, bool isSelected) {
+    final isDark = AppTheme.isDark(context);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () {
+          HapticFeedback.selectionClick();
+          final notifier = ref.read(voiceTutorAgentProvider.notifier);
+          if (isSelected) {
+            notifier.selectScenario(0, '');
+          } else {
+            notifier.selectScenario(s.id, s.tutorInstruction);
+          }
+        },
+        child: GlassContainer(
+          padding: const EdgeInsets.all(14),
+          borderRadius: BorderRadius.circular(16),
+          color: isSelected
+              ? AppTheme.accent.withValues(alpha: isDark ? 0.22 : 0.08)
+              : null,
+          border: Border.all(
+            color: isSelected
+                ? AppTheme.accent.withValues(alpha: 0.55)
+                : (isDark ? AppTheme.outlineDark : AppTheme.outline),
+            width: isSelected ? 1.5 : 1.0,
+          ),
+          shadows: isSelected ? AppTheme.glassShadow : AppTheme.glassShadowLight,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? AppTheme.accent
+                          : AppTheme.primary.withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.theater_comedy_rounded,
+                      size: 15,
+                      color: isSelected ? Colors.white : AppTheme.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      s.title,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                        color: AppTheme.textColor(context),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  _buildDifficultyBadge(s.difficulty),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                s.description,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 12.5,
+                  color: AppTheme.surfaceTextColor(context),
+                  height: 1.35,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Icon(
+                    isSelected
+                        ? Icons.check_circle_rounded
+                        : Icons.radio_button_unchecked_rounded,
+                    size: 14,
+                    color: isSelected
+                        ? AppTheme.accent
+                        : AppTheme.mutedTextColor(context),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    isSelected
+                        ? 'Vybráno pro příští hovor'
+                        : 'Klepnutím vybrat pro hovor',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 11.5,
+                      fontWeight:
+                          isSelected ? FontWeight.w700 : FontWeight.w500,
+                      color: isSelected
+                          ? AppTheme.accent
+                          : AppTheme.mutedTextColor(context),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildDifficultyBadge(String difficulty) {
+    Color color;
+    switch (difficulty.toLowerCase()) {
+      case 'easy':
+        color = AppTheme.success;
+        break;
+      case 'medium':
+        color = AppTheme.warning;
+        break;
+      case 'hard':
+        color = AppTheme.error;
+        break;
+      default:
+        color = AppTheme.onSurfaceMuted;
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Text(
+        difficulty.toUpperCase(),
+        style: GoogleFonts.plusJakartaSans(
+          color: color,
+          fontSize: 8.5,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.5,
+        ),
+      ),
+    );
+  }
+
+  // ── Záložka 2: Volný rozhovor ───────────────────────────────────────────────
+  Widget _buildFreeTalkTab(VoiceTutorState tutorState) {
+    return GlassContainer(
+      key: const ValueKey('free_talk_card'),
+      padding: const EdgeInsets.all(16),
+      borderRadius: BorderRadius.circular(18),
+      color: AppTheme.accent.withValues(alpha: 0.06),
+      border: Border.all(color: AppTheme.accent.withValues(alpha: 0.25)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.chat_bubble_outline_rounded,
+                  size: 16, color: AppTheme.accent),
+              const SizedBox(width: 8),
+              Text(
+                'SPONTÁNNÍ ROZHOVOR',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.8,
+                  color: AppTheme.accent,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Volný pokec o čemkoliv',
+            style: GoogleFonts.plusJakartaSans(
+              fontWeight: FontWeight.w700,
+              fontSize: 14.5,
+              color: AppTheme.textColor(context),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Žádný konkrétní scénář ani předem dané téma. Přirozený přátelský rozhovor v angličtině o tom, co tě zrovna napadne.',
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 12.5,
+              color: AppTheme.surfaceTextColor(context),
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Icon(Icons.check_circle_rounded,
+                  size: 14, color: AppTheme.accent),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Aktivní pro příští hovor',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.accent,
+                  ),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: () {
+                  HapticFeedback.lightImpact();
+                  ref
+                      .read(voiceTutorAgentProvider.notifier)
+                      .selectScenario(0, '');
+                  setState(() => _selectedModeTab = 0);
+                },
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                ),
+                icon: const Icon(Icons.close_rounded, size: 14),
+                label:
+                    const Text('Zrušit a zpět', style: TextStyle(fontSize: 11.5)),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

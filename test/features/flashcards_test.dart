@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:aj_tudor/data/database/app_database.dart';
 import 'package:aj_tudor/data/models/chat_message.dart';
 import 'package:aj_tudor/data/repositories/session_repository.dart';
+import 'package:aj_tudor/services/gemini/gemini_batch_client.dart';
 
 void main() {
   group('ChatMessage & Smart Bubbles Model Tests', () {
@@ -75,5 +76,188 @@ void main() {
       expect(allCards.first.intervalDays, greaterThanOrEqualTo(2));
       expect(allCards.first.masteryScore, greaterThan(0.0));
     });
+
+    test('createFlashcardFromTranscript uses czechPrompt for frontText', () async {
+      final res = await repo.createFlashcardFromTranscript(
+        transcriptId: 1,
+        czechPrompt: 'Mám 25 let',
+        correctForm: 'I am 25 years old.',
+        explanation: 'Sloveso to be.',
+        errorType: 'grammar',
+        userSaid: 'I have 25 years.',
+      );
+
+      expect(res.isSuccess, true);
+      final cards = await repo.getAllFlashcards();
+      expect(cards.first.frontText, 'Mám 25 let');
+      expect(cards.first.backText, 'I am 25 years old.');
+      expect(cards.first.sourceSentence, 'I have 25 years.');
+    });
+
+    test('autoMigrateLegacyCardsToCzech translates legacy English questions to Czech', () async {
+      // Vložíme starou kartičku s chybnou angličtinou na líci
+      await repo.addFlashcard(
+        frontText: 'Jak opravit / říct: "I have 25 years"?',
+        backText: 'I am 25 years old.',
+        explanation: 'Věk se váže se slovesem to be.',
+        errorType: 'grammar',
+        sourceSentence: 'I have 25 years.',
+      );
+
+      final fakeClient = _FakeGeminiBatchClient((prompt) {
+        return 'Je mi 25 let';
+      });
+
+      final migratedCount = await repo.autoMigrateLegacyCardsToCzech(fakeClient);
+      expect(migratedCount, 1);
+
+      final cards = await repo.getAllFlashcards();
+      expect(cards.first.frontText, 'Je mi 25 let');
+    });
+
+    test('generateRandomVocabularyCards generates vocabulary flashcards tailored to student', () async {
+      final fakeClient = _FakeGeminiBatchClient((prompt) {
+        return '''
+[
+  {
+    "czech": "těšit se na",
+    "english": "look forward to",
+    "exampleSentence": "I look forward to seeing you. (Těším se na setkání s tebou.)"
+  },
+  {
+    "czech": "vytrvalost",
+    "english": "perseverance",
+    "exampleSentence": "Success requires perseverance. (Úspěch vyžaduje vytrvalost.)"
+  }
+]
+''';
+      });
+
+      final result = await repo.generateRandomVocabularyCards(
+        geminiClient: fakeClient,
+        count: 2,
+      );
+
+      expect(result.isSuccess, true);
+      expect(result.valueOrNull, 2);
+
+      final cards = await repo.getAllFlashcards();
+      expect(cards.length, 2);
+      expect(cards.any((c) => c.backText == 'look forward to' && c.frontText == 'těšit se na'), true);
+      expect(cards.any((c) => c.backText == 'perseverance' && c.frontText == 'vytrvalost'), true);
+    });
+
+    test('autoMigrateLegacyCardsToCzech handles batch JSON translation', () async {
+      await repo.addFlashcard(
+        frontText: 'Jak správně říct: "I have hunger"?',
+        backText: 'I am hungry.',
+        explanation: 'Hlad se vyjadřuje přídavným jménem hungry.',
+        errorType: 'grammar',
+        sourceSentence: 'I have hunger.',
+      );
+
+      final fakeClient = _FakeGeminiBatchClient((prompt) {
+        return '[{"id": 1, "czechPrompt": "Mám hlad"}]';
+      });
+
+      final count = await repo.autoMigrateLegacyCardsToCzech(fakeClient);
+      expect(count, 1);
+
+      final cards = await repo.getAllFlashcards();
+      expect(cards.first.frontText, 'Mám hlad');
+    });
+
+    test('insertScenario inserts custom scenario into database without wiping existing', () async {
+      final scenario = await repo.insertScenario(
+        title: 'Pohovor v IT firmě',
+        description: 'Role-play technického pohovoru.',
+        tutorInstruction: 'Act as a friendly interviewer asking about Flutter.',
+        difficulty: 'hard',
+      );
+
+      expect(scenario.id, greaterThan(0));
+      expect(scenario.title, 'Pohovor v IT firmě');
+      expect(scenario.difficulty, 'hard');
+
+      final available = await repo.watchAvailableScenarios().first;
+      expect(available.any((s) => s.id == scenario.id), true);
+    });
+
+    test('extractCzechFromExplanation extracts Czech phrase from explanation parentheses', () {
+      expect(
+        SessionRepository.extractCzechFromExplanation("Místo 'one months' má být 'one month' (jeden měsíc)."),
+        'jeden měsíc',
+      );
+      expect(
+        SessionRepository.extractCzechFromExplanation("Správný výraz: look forward to (těšit se na)"),
+        'těšit se na',
+      );
+      expect(
+        SessionRepository.extractCzechFromExplanation("Minulý čas slovesa (noun)"),
+        null,
+      );
+    });
+
+    test('isLegacyOrEnglishFront detects English or legacy templates', () {
+      expect(SessionRepository.isLegacyOrEnglishFront('Jak říct: "one months"'), true);
+      expect(SessionRepository.isLegacyOrEnglishFront('Jak opravit / říct: "one months"?'), true);
+      expect(SessionRepository.isLegacyOrEnglishFront('Přeložte: "one month"'), true);
+      expect(SessionRepository.isLegacyOrEnglishFront('Přeložte do angličtiny správné vyjádření'), true);
+      expect(SessionRepository.isLegacyOrEnglishFront('one month', backText: 'one month'), true);
+      
+      // Čistá čeština nesmí být označena jako legacy
+      expect(SessionRepository.isLegacyOrEnglishFront('jeden měsíc', backText: 'one month'), false);
+      expect(SessionRepository.isLegacyOrEnglishFront('těšit se na', backText: 'look forward to'), false);
+    });
+
+    test('autoMigrateLegacyCardsToCzech converts "Jak říct: one months" to Czech', () async {
+      await repo.addFlashcard(
+        frontText: 'Jak říct: "one months"',
+        backText: 'one month',
+        explanation: 'Použijte jednotné číslo (jeden měsíc).',
+        errorType: 'grammar',
+        sourceSentence: 'I stayed there for one months.',
+      );
+
+      final fakeClient = _FakeGeminiBatchClient((prompt) {
+        return 'jeden měsíc';
+      });
+
+      final count = await repo.autoMigrateLegacyCardsToCzech(fakeClient);
+      expect(count, 1);
+
+      final cards = await repo.getAllFlashcards();
+      expect(cards.first.frontText, 'jeden měsíc');
+      expect(cards.first.backText, 'one month');
+    });
+
+    test('createFlashcardFromTranscript falls back to explanation extraction instead of English', () async {
+      final res = await repo.createFlashcardFromTranscript(
+        transcriptId: 10,
+        userSaid: 'for one months',
+        correctForm: 'for one month',
+        explanation: 'Jednotné číslo (na jeden měsíc).',
+      );
+
+      expect(res.isSuccess, true);
+      final cards = await repo.getAllFlashcards();
+      expect(cards.first.frontText, 'na jeden měsíc');
+      expect(cards.first.backText, 'for one month');
+    });
   });
 }
+
+class _FakeGeminiBatchClient extends GeminiBatchClient {
+  final String Function(String prompt) onSendMessage;
+  _FakeGeminiBatchClient(this.onSendMessage) : super('dummy_key', 'dummy_model');
+
+  @override
+  Future<String> sendMessage(
+    String text, {
+    Map<String, dynamic>? responseSchema,
+    String? systemPrompt,
+  }) async {
+    return onSendMessage(text);
+  }
+}
+

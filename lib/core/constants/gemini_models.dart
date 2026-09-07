@@ -12,7 +12,11 @@ class GeminiModels {
   static const String flashLite3_1 = 'gemini-3.1-flash-lite';
   static const String pro3_1 = 'gemini-3.1-pro-preview';
 
-  // --- Modely pro Speech-to-Text a Text-to-Speech ---
+  // --- Modely pro Multimodální vstup, Speech-to-Text a Text-to-Speech ---
+  /// Model Gemini 2.0 Flash podporující nativní audio výstup (AUDIO modality) i audio vstup.
+  static const String flash2_0 = 'gemini-2.0-flash';
+  static const String flash2_5 = 'gemini-2.5-flash';
+
   /// Model pro přesný přepis audia (Speech-to-Text) s časovými značkami slov a detekcí jazyka.
   static const String transcribe = 'gemini-3.5-transcribe';
 
@@ -20,7 +24,7 @@ class GeminiModels {
   static const String transcribeLive = 'gemini-3.5-transcribe-live';
 
   /// Model pro syntézu přirozené řeči (Text-to-Speech) s audio tagy pro tempo a intonaci.
-  static const String tts = 'gemini-3.1-flash-tts-preview';
+  static const String tts = flash2_0;
 
   // --- Model pro Multimodal Live API (WebSocket / Voice Tutor) ---
   /// Model optimalizovaný pro real-time dialog a voice-first AI aplikace.

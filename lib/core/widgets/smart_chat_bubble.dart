@@ -4,7 +4,9 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../data/models/chat_message.dart';
+import '../../data/repositories/session_repository.dart';
 import '../../providers/database_provider.dart';
+import '../../providers/gemini_provider.dart';
 import '../../services/gemini/gemini_tts_service.dart';
 import '../app_theme.dart';
 
@@ -67,10 +69,19 @@ class _SmartChatBubbleState extends ConsumerState<SmartChatBubble> {
     setState(() => _isPlayingTts = true);
 
     final tts = ref.read(geminiTtsServiceProvider);
-    await tts.speak(textToSpeak);
+    final success = await tts.speak(textToSpeak);
 
     if (mounted) {
       setState(() => _isPlayingTts = false);
+      if (!success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Nepodařilo se přehrát výslovnost. Zkontrolujte připojení.'),
+            backgroundColor: AppTheme.warning,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 
@@ -79,9 +90,30 @@ class _SmartChatBubbleState extends ConsumerState<SmartChatBubble> {
 
     HapticFeedback.mediumImpact();
     final repo = ref.read(sessionRepositoryProvider);
+    final gemini = ref.read(geminiBatchClientProvider);
+
+    String front = '';
+    if (gemini != null) {
+      try {
+        final tr = await gemini.sendMessage(
+          'Přelož tuto anglickou větu/frázi do přirozené češtiny (vrať VÝHRADNĚ čistý český překlad bez uvozovek a bez vysvětlování): "${correction.correctForm}"',
+        );
+        final clean = tr.trim().replaceAll('"', '').replaceAll('\n', ' ');
+        if (clean.isNotEmpty && !clean.startsWith('❌')) {
+          front = clean;
+        }
+      } catch (_) {}
+    }
+
+    if (front.isEmpty) {
+      final extracted = SessionRepository.extractCzechFromExplanation(correction.explanation);
+      front = (extracted != null && extracted.isNotEmpty)
+          ? extracted
+          : 'Přeložte do angličtiny';
+    }
 
     final result = await repo.addFlashcard(
-      frontText: 'Jak se řekne / oprav: "${correction.userSaid}"?',
+      frontText: front,
       backText: correction.correctForm,
       explanation: correction.explanation,
       errorType: correction.errorType,

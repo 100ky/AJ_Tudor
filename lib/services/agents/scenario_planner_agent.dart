@@ -104,8 +104,8 @@ class ScenarioPlannerAgent {
   /// Vygeneruje jeden personalizovaný scénář na základě uživatelova popisu tématu.
   ///
   /// [userHint] je stručný popis tématu v češtině (např. "objednávka jídla v restauraci").
-  /// AI ho doladí a vytvoří z něj kompletní role-play scénář.
-  Future<void> planCustomScenario(String userHint) async {
+  /// AI ho doladí a vytvoří z něj kompletní role-play scénář a uloží ho do databáze.
+  Future<Scenario?> planCustomScenario(String userHint) async {
     L.i('Generuji vlastní scénář z popisu: "$userHint"');
     
     final repo = _ref.read(sessionRepositoryProvider);
@@ -113,7 +113,7 @@ class ScenarioPlannerAgent {
     
     if (gemini == null) {
       L.e('Gemini Batch Client není k dispozici. Generování zrušeno.');
-      return;
+      return null;
     }
 
     try {
@@ -128,9 +128,9 @@ POPIS OD STUDENTA: "$userHint"
 ${profile?.recurringErrors != null && profile!.recurringErrors.isNotEmpty && profile.recurringErrors != '[]' ? 'ČASTÉ CHYBY: ${profile.recurringErrors}' : ''}
 
 POŽADAVKY:
-1. Vytvoř scénář, který odpovídá popisu studenta.
-2. Navrhni ho tak, aby přirozeně procvičoval gramatiku, ve které student chybuje.
-3. Název a popis v ČEŠTINĚ. Instrukce pro tutora v ANGLIČTINĚ.
+1. Vytvoř scénář, který věrně odpovídá popisu studenta.
+2. Navrhni ho tak, aby přirozeně procvičoval danou situaci a slovní zásobu pro studentovu úroveň.
+3. Název a popis v ČEŠTINĚ. Instrukce pro tutora v ANGLIČTINĚ (jasně definuj roli tutora a roli studenta).
 ''';
 
       final result = await gemini.sendMessage(
@@ -143,22 +143,25 @@ POŽADAVKY:
 
       if (data['scenarios'] != null && data['scenarios'] is List && (data['scenarios'] as List).isNotEmpty) {
         final s = data['scenarios'][0];
-        final scenario = Scenario(
-          id: 0,
-          externalId: s['id'] ?? 'custom',
-          title: s['title'] ?? userHint,
-          description: s['description'] ?? '',
-          tutorInstruction: s['tutorInstruction'] ?? '',
-          difficulty: s['difficulty'] ?? 'medium',
-          isUsed: false,
-          createdAt: DateTime.now(),
+        final title = (s['title'] ?? userHint).toString();
+        final description = (s['description'] ?? '').toString();
+        final tutorInstruction = (s['tutorInstruction'] ?? '').toString();
+        final difficulty = (s['difficulty'] ?? 'medium').toString();
+
+        final createdScenario = await repo.insertScenario(
+          title: title.isNotEmpty ? title : userHint,
+          description: description,
+          tutorInstruction: tutorInstruction,
+          difficulty: difficulty,
         );
         
-        await _ref.read(sessionRepositoryProvider).replaceScenarios([scenario]);
-        L.i('Vlastní scénář úspěšně vytvořen: "${scenario.title}"');
+        L.i('Vlastní scénář úspěšně vytvořen: "${createdScenario.title}" (ID: ${createdScenario.id})');
+        return createdScenario;
       }
+      return null;
     } catch (e, stack) {
       L.e('Chyba při generování vlastního scénáře', e, stack);
+      return null;
     }
   }
 }

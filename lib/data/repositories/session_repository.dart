@@ -4,6 +4,7 @@ import '../database/app_database.dart';
 import '../../core/error/error_handling.dart';
 import '../../core/utils/result.dart';
 import '../../core/utils/logger.dart';
+import '../../services/gemini/gemini_batch_client.dart';
 
 /// Repozitář pro správu dat souvisejících s výukovými lekcemi (sessions).
 /// 
@@ -501,6 +502,35 @@ class SessionRepository {
     );
   }
 
+  /// Vloží jeden nový vlastní scénář do databáze a vrátí vytvořený [Scenario].
+  Future<Scenario> insertScenario({
+    required String title,
+    required String description,
+    required String tutorInstruction,
+    String difficulty = 'medium',
+  }) async {
+    final externalId = 'custom_${DateTime.now().millisecondsSinceEpoch}';
+    final id = await _db.into(_db.scenarios).insert(
+      ScenariosCompanion.insert(
+        externalId: externalId,
+        title: title,
+        description: description,
+        tutorInstruction: tutorInstruction,
+        difficulty: difficulty,
+      ),
+    );
+    return Scenario(
+      id: id,
+      externalId: externalId,
+      title: title,
+      description: description,
+      tutorInstruction: tutorInstruction,
+      difficulty: difficulty,
+      isUsed: false,
+      createdAt: DateTime.now(),
+    );
+  }
+
   /// Načte aktuální uživatelský profil (pokud existuje).
   Future<UserProfile?> getUserProfile() async {
     return await (_db.select(_db.userProfiles)..where((t) => t.id.equals(1))).getSingleOrNull();
@@ -716,18 +746,77 @@ class SessionRepository {
     }
   }
 
+  /// Aktualizuje přední text (české zadání) konkrétní kartičky.
+  Future<Result<void>> updateFlashcardFrontText(int id, String newFrontText) async {
+    try {
+      await (_db.update(_db.flashcards)..where((t) => t.id.equals(id))).write(
+        FlashcardsCompanion(
+          frontText: Value(newFrontText),
+        ),
+      );
+      return Result.success(null);
+    } catch (e, stack) {
+      L.e('Chyba při aktualizaci textu kartičky', e, stack);
+      return Result.failure(DatabaseFailure('Nepodařilo se aktualizovat kartičku.'));
+    }
+  }
+
+  /// Statická pomocná metoda pro extrakci českého překladu z vysvětlení (např. z "(jeden měsíc)").
+  static String? extractCzechFromExplanation(String explanation) {
+    if (explanation.isEmpty) return null;
+    final parensMatch = RegExp(r'\(([^)]{2,60})\)').firstMatch(explanation);
+    if (parensMatch != null) {
+      final candidate = parensMatch.group(1)?.trim() ?? '';
+      final lower = candidate.toLowerCase();
+      if (!lower.contains('minulý') &&
+          !lower.contains('čas') &&
+          !lower.contains('sloves') &&
+          lower != 'noun' &&
+          lower != 'verb' &&
+          lower != 'adj' &&
+          candidate.isNotEmpty) {
+        return candidate.replaceAll('"', '').replaceAll("'", '').trim();
+      }
+    }
+    return null;
+  }
+
+  /// Určuje, zda kartička obsahuje zastaralé či anglické zadání na líci.
+  static bool isLegacyOrEnglishFront(String frontText, {String? backText, String? sourceSentence}) {
+    final text = frontText.trim();
+    if (text.isEmpty) return true;
+    if (text == 'Přeložte do angličtiny správné vyjádření' || text == 'Přeložte do angličtiny') return true;
+    if (text.startsWith('Jak ') || text.startsWith('Jak:') || text.startsWith('Přeložte') || text.startsWith('Opravte')) return true;
+    if (text.contains('"') || text.contains('”') || text.contains('“')) return true;
+    if (backText != null && text.toLowerCase() == backText.trim().toLowerCase()) return true;
+    if (sourceSentence != null && text.toLowerCase() == sourceSentence.trim().toLowerCase()) return true;
+    return false;
+  }
+
   /// Vytvoří kartičku přímo ze záznamu v historii/transkriptu a označí větu jako uloženou.
   Future<Result<int>> createFlashcardFromTranscript({
     required int transcriptId,
     required String userSaid,
     required String correctForm,
     required String explanation,
+    String? czechPrompt,
     String errorType = 'grammar',
     int? errorLogId,
   }) async {
     try {
+      String front = (czechPrompt != null && czechPrompt.trim().isNotEmpty)
+          ? czechPrompt.trim()
+          : '';
+
+      if (front.isEmpty) {
+        final extracted = extractCzechFromExplanation(explanation);
+        front = (extracted != null && extracted.isNotEmpty)
+            ? extracted
+            : 'Přeložte do angličtiny';
+      }
+
       final res = await addFlashcard(
-        frontText: 'Jak správně říct: "$userSaid"?',
+        frontText: front,
         backText: correctForm,
         explanation: explanation.isNotEmpty ? explanation : 'Oprava z konverzace',
         errorType: errorType,
@@ -750,9 +839,11 @@ class SessionRepository {
   /// 
   /// [sessionId] volitelné filtrování na konkrétní lekci.
   /// [limit] maximální počet kartiček vytvořených v jedné dávce (výchozí 15).
+  /// [geminiClient] volitelný klient pro rychlý překlad do češtiny (zadání na líci).
   Future<Result<int>> generateFlashcardsFromErrors({
     int? sessionId,
     int limit = 15,
+    GeminiBatchClient? geminiClient,
   }) async {
     try {
       // 1. Získáme chyby z databáze
@@ -802,7 +893,26 @@ class SessionRepository {
 
         seenNewPhrases.add(lowerCorrect);
 
-        final frontText = 'Jak opravit / říct: "$userSaid"?';
+        String frontText = '';
+        if (geminiClient != null) {
+          try {
+            final prompt =
+                'Přelož tuto anglickou větu/frázi do přirozené češtiny (vrať VÝHRADNĚ čistý český překlad bez uvozovek a bez vysvětlení): "$correctForm"';
+            final czech = await geminiClient.sendMessage(prompt);
+            final cleanCzech = czech.trim().replaceAll('"', '').replaceAll('\n', ' ');
+            if (cleanCzech.isNotEmpty && !cleanCzech.startsWith('❌')) {
+              frontText = cleanCzech;
+            }
+          } catch (_) {}
+        }
+
+        if (frontText.isEmpty) {
+          final extracted = extractCzechFromExplanation(err.explanation);
+          frontText = (extracted != null && extracted.isNotEmpty)
+              ? extracted
+              : 'Přeložte do angličtiny';
+        }
+
         final cardRes = await addFlashcard(
           frontText: frontText,
           backText: correctForm,
@@ -822,6 +932,182 @@ class SessionRepository {
     } catch (e, stack) {
       L.e('Chyba při hromadném generování kartiček z chyb', e, stack);
       return Result.failure(DatabaseFailure('Nepodařilo se vygenerovat kartičky z chyb.'));
+    }
+  }
+
+  /// Automaticky přeloží a opraví staré kartičky se zadáním v chybné angličtině do přirozené češtiny.
+  Future<int> autoMigrateLegacyCardsToCzech(GeminiBatchClient geminiClient) async {
+    try {
+      final allCards = await getAllFlashcards();
+      final legacyCards = allCards.where((c) {
+        return isLegacyOrEnglishFront(
+          c.frontText,
+          backText: c.backText,
+          sourceSentence: c.sourceSentence,
+        );
+      }).toList();
+
+      if (legacyCards.isEmpty) return 0;
+
+      int migrated = 0;
+
+      // Pokus o dávkový překlad všech starých kartiček v 1 rychlém JSON dotazu
+      try {
+        final batchList = legacyCards.map((c) => {
+          'id': c.id,
+          'english': c.backText,
+        }).toList();
+
+        final batchPrompt = '''Přelož následující anglické věty/fráze do přirozené češtiny pro zadání na výukové kartičky.
+Vrať VÝHRADNĚ validní JSON pole objektů bez formátování a bez dalšího textu:
+[
+  {"id": 1, "czechPrompt": "Přirozený český překlad"}
+]
+
+Věty k překladu:
+${jsonEncode(batchList)}''';
+
+        final response = await geminiClient.sendMessage(batchPrompt);
+        final cleanJson = response
+            .replaceAll(RegExp(r'^```json\s*', multiLine: true), '')
+            .replaceAll(RegExp(r'^```\s*', multiLine: true), '')
+            .trim();
+
+        final dynamic decoded = jsonDecode(cleanJson);
+        if (decoded is List) {
+          for (var item in decoded) {
+            if (item is Map && item['id'] != null && item['czechPrompt'] != null) {
+              final id = int.tryParse(item['id'].toString());
+              final czech = item['czechPrompt'].toString().trim().replaceAll('"', '');
+              if (id != null && czech.isNotEmpty && !czech.startsWith('❌')) {
+                await updateFlashcardFrontText(id, czech);
+                migrated++;
+              }
+            }
+          }
+        }
+      } catch (batchErr) {
+        L.w('Dávkový překlad kartiček selhal, zkouším jednotlivě: $batchErr');
+      }
+
+      // Pokud dávkový překlad selhal nebo nezpracoval vše, zpracujeme zbývající jednotlivě
+      if (migrated < legacyCards.length) {
+        final currentCards = await getAllFlashcards();
+        final remainingCards = currentCards.where((c) {
+          return isLegacyOrEnglishFront(
+            c.frontText,
+            backText: c.backText,
+            sourceSentence: c.sourceSentence,
+          );
+        }).toList();
+
+        for (final card in remainingCards) {
+          try {
+            // Nejprve zkusíme okamžitou extrakci z vysvětlení
+            final extracted = extractCzechFromExplanation(card.explanation);
+            if (extracted != null && extracted.isNotEmpty) {
+              await updateFlashcardFrontText(card.id, extracted);
+              migrated++;
+              continue;
+            }
+
+            final prompt =
+                'Přelož tuto anglickou větu/frázi do přirozené češtiny (vrať VÝHRADNĚ čistý český překlad bez uvozovek a bez vysvětlování): "${card.backText}"';
+            final czech = await geminiClient.sendMessage(prompt);
+            final cleanCzech = czech.trim().replaceAll('"', '').replaceAll('\n', ' ');
+            if (cleanCzech.isNotEmpty && !cleanCzech.startsWith('❌')) {
+              await updateFlashcardFrontText(card.id, cleanCzech);
+              migrated++;
+            }
+          } catch (e) {
+            L.w('Chyba při migraci kartičky #${card.id}: $e');
+          }
+        }
+      }
+
+      if (migrated > 0) {
+        L.i('Úspěšně migrováno $migrated starých kartiček na české zadání.');
+      }
+      return migrated;
+    } catch (e, stack) {
+      L.e('Chyba při migraci kartiček', e, stack);
+      return 0;
+    }
+  }
+
+  /// Vygeneruje sadu nových náhodných slovíček přizpůsobených úrovni a zájmům studenta.
+  Future<Result<int>> generateRandomVocabularyCards({
+    required GeminiBatchClient geminiClient,
+    int count = 5,
+  }) async {
+    try {
+      final user = await (_db.select(_db.userProfiles)..where((t) => t.id.equals(1))).getSingleOrNull();
+      final level = user?.targetLevel ?? 'B1';
+
+      // Získáme fakta studenta ("O mně") pro personalizaci slovní zásoby
+      final facts = await getUserFacts();
+      final interests = facts.take(5).toList();
+
+      // Získáme dosud existující kartičky pro kontrolu duplicit
+      final existingCards = await getAllFlashcards();
+      final existingWords = existingCards
+          .map((c) => c.backText.trim().toLowerCase())
+          .toSet();
+
+      final prompt = '''Jsi expert na výuku angličtiny. Vygeneruj přesně $count náhodných, užitečných a moderních anglických slovíček nebo hovorových frází/idiomů pro studenta na úrovni $level.
+${interests.isNotEmpty ? 'Témata a zájmy studenta (zaměř se na ně): ${interests.join(', ')}.' : ''}
+${existingWords.isNotEmpty ? 'Vyhni se těmto již známým slovíčkům: ${existingWords.take(40).join(', ')}.' : ''}
+
+Každé slovíčko musí mít:
+1. "czech": České slovo nebo fráze v základním tvaru (zadání k překladu). Např. "těšit se na", "vytrvalost", "vzdát se".
+2. "english": Správný anglický ekvivalent. Např. "look forward to", "perseverance", "give up".
+3. "exampleSentence": Příkladová anglická věta s českým překladem a vysvětlením. Např. "I look forward to seeing you. (Těším se, až tě uvidím - vazba se slovesem v -ing)."
+
+Vrať VÝHRADNĚ validní JSON pole objektů bez formátování:
+[
+  {
+    "czech": "těšit se na",
+    "english": "look forward to",
+    "exampleSentence": "I look forward to seeing you. (Těším se, až tě uvidím.)"
+  }
+]''';
+
+      final responseText = await geminiClient.sendMessage(prompt);
+      final cleanJson = responseText
+          .replaceAll(RegExp(r'^```json\s*', multiLine: true), '')
+          .replaceAll(RegExp(r'^```\s*', multiLine: true), '')
+          .trim();
+
+      final dynamic decoded = jsonDecode(cleanJson);
+      if (decoded is! List) {
+        return Result.failure(ApiFailure('Neplatný formát odpovědi od AI.'));
+      }
+
+      int insertedCount = 0;
+      for (var item in decoded) {
+        if (item is Map) {
+          final czech = item['czech']?.toString().trim() ?? '';
+          final english = item['english']?.toString().trim() ?? '';
+          final example = item['exampleSentence']?.toString().trim() ?? '';
+
+          if (czech.isEmpty || english.isEmpty) continue;
+          if (existingWords.contains(english.toLowerCase())) continue;
+
+          await addFlashcard(
+            frontText: czech,
+            backText: english,
+            explanation: example.isNotEmpty ? example : 'Užitečné slovíčko pro úroveň $level',
+            errorType: 'vocabulary',
+          );
+          insertedCount++;
+        }
+      }
+
+      L.i('Úspěšně vygenerováno $insertedCount náhodných slovíček do kartiček.');
+      return Result.success(insertedCount);
+    } catch (e, stack) {
+      L.e('Chyba při generování náhodných slovíček', e, stack);
+      return Result.failure(ApiFailure('Nepodařilo se vygenerovat nová slovíčka: $e'));
     }
   }
 }

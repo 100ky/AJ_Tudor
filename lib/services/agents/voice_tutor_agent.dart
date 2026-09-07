@@ -73,14 +73,15 @@ class VoiceTutorState {
     String? errorMessage,
     int? selectedScenarioId,
     String? scenarioContext,
+    bool clearScenario = false,
   }) {
     return VoiceTutorState(
       status: status ?? this.status,
       currentTranscript: currentTranscript ?? this.currentTranscript,
       messages: messages ?? this.messages,
       errorMessage: errorMessage ?? this.errorMessage,
-      selectedScenarioId: selectedScenarioId ?? this.selectedScenarioId,
-      scenarioContext: scenarioContext ?? this.scenarioContext,
+      selectedScenarioId: clearScenario ? null : (selectedScenarioId ?? this.selectedScenarioId),
+      scenarioContext: clearScenario ? null : (scenarioContext ?? this.scenarioContext),
     );
   }
 }
@@ -199,7 +200,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   /// Nastaví aktivní scénář a jeho roli pro aktuální lekci.
   void selectScenario(int id, String context) {
     if (id == 0 || context.trim().isEmpty) {
-      state = state.copyWith(selectedScenarioId: null, scenarioContext: null);
+      state = state.copyWith(clearScenario: true);
     } else {
       state = state.copyWith(selectedScenarioId: id, scenarioContext: context);
     }
@@ -259,7 +260,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       _currentUserTranscript = '';
 
       // Pokud máme vybraný scénář, označíme ho jako použitý v databázi
-      if (state.selectedScenarioId != null) {
+      if (state.selectedScenarioId != null && state.selectedScenarioId! > 0) {
         await _repo.markScenarioUsed(state.selectedScenarioId!);
       }
 
@@ -274,7 +275,9 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
 
       // Sestavení dynamického promptu s kompletním kontextem z profilu
       final systemPrompt = SystemPromptBuilder.buildTutorPrompt(
-        scenarioContext: state.scenarioContext,
+        scenarioContext: state.scenarioContext == '__free_talk__'
+            ? null
+            : state.scenarioContext,
         targetLevel: targetLevel,
         isImmersive: isImmersive,
         recurringErrors: userProfile?.recurringErrors,
@@ -334,7 +337,9 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
             } catch (_) {}
           }
 
-          if (state.scenarioContext != null) {
+          if (state.scenarioContext == '__free_talk__') {
+            initialPrompt += " Start with a casual and warm greeting as a friend (do NOT introduce yourself, say your name or where you are from). Share a small, natural detail about your day or mood (following your system instructions example) and ask an open question to kick off the chat.";
+          } else if (state.scenarioContext != null) {
             initialPrompt += " Introduce the role-play scenario and immediately start playing your role.";
           } else if (preparedOpener != null && preparedOpener.isNotEmpty) {
             initialPrompt += ' Open the conversation naturally and casually as AJ Tudor using this prepared hook/question: "$preparedOpener". Do NOT introduce yourself or ask generic questions about pets/hobbies.';
@@ -775,8 +780,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         state = state.copyWith(
           status: TutorState.idle,
           currentTranscript: '',
-          selectedScenarioId: null,
-          scenarioContext: null,
+          clearScenario: true,
         );
         L.i('UI resetováno do stavu idle');
       }

@@ -89,6 +89,34 @@ void main() {
     expect(state.scenarioContext, 'Test context');
   });
 
+  test('selectScenario can select and then clear scenario and free talk', () {
+    final agent = container.read(voiceTutorAgentProvider.notifier);
+    
+    // 1. Zvolíme volný režim
+    agent.selectScenario(-1, '__free_talk__');
+    var state = container.read(voiceTutorAgentProvider);
+    expect(state.selectedScenarioId, -1);
+    expect(state.scenarioContext, '__free_talk__');
+
+    // 2. Vynulujeme scénář
+    agent.selectScenario(0, '');
+    state = container.read(voiceTutorAgentProvider);
+    expect(state.selectedScenarioId, isNull);
+    expect(state.scenarioContext, isNull);
+
+    // 3. Zvolíme konkrétní scénář
+    agent.selectScenario(42, 'Roleplay at hotel');
+    state = container.read(voiceTutorAgentProvider);
+    expect(state.selectedScenarioId, 42);
+    expect(state.scenarioContext, 'Roleplay at hotel');
+
+    // 4. Opět vynulujeme
+    agent.selectScenario(0, '');
+    state = container.read(voiceTutorAgentProvider);
+    expect(state.selectedScenarioId, isNull);
+    expect(state.scenarioContext, isNull);
+  });
+
   test('onUserTranscriptReceived correctly concatenates sub-word tokens', () async {
     Function(String)? userTranscriptCallback;
 

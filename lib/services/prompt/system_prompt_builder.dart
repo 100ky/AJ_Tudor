@@ -160,7 +160,11 @@ Přepisy řeči studenta pocházejí ze systému Speech-to-Text, který může o
    - Identifikuj jakákoliv nová osobní fakta, záliby, domácí mazlíčky, profesi, rodinu, zážitky, plány, bydliště, preference nebo informace, které student o sobě v této lekci zmínil.
    - Zahrnuj POUZE fakta o studentovi (co o sobě sám řekl), NIKDY ne o tutorovi.
    - Formuluj fakta stručně v češtině (např. "Má psa jménem Max", "Pracuje jako vývojář", "O víkendech rád jezdí na kole", "Má rád sci-fi filmy", "Byl na dovolené v Norsku").
-   - Neopakuj fakta, která již jsou zřejmá z historického kontextu. Pokud student nic nového o sobě neprozradil, vrať prázdné pole.
+    - Neopakuj fakta, která již jsou zřejmá z historického kontextu. Pokud student nic nového o sobě neprozradil, vrať prázdné pole.
+9. **PŘÍPRAVA KARTIČEK PRO PŘEKLAD (FLASHCARDS):**
+   - Pro každou nalezenou chybu v poli `errors` vygeneruj v `czechTranslation` přirozenou českou větu / výraz (to, co chtěl student říct česky).
+   - Tento text slouží přímo jako české zadání na přední straně kartičky (např. "Je mi 25 let.", "Včera jsem šel do kina.", "Těším se na tebe.").
+   - V `czechTranslation` uveď VÝHRADNĚ čistou českou větu k překladu (žádná angličtina, žádná uvozovky).
 ''';
   }
 
@@ -205,9 +209,13 @@ Přepisy řeči studenta pocházejí ze systému Speech-to-Text, který může o
               'type': {'type': 'string', 'enum': ['grammar', 'vocabulary', 'pronunciation']},
               'userSaid': {'type': 'string'},
               'correctForm': {'type': 'string'},
-              'explanation': {'type': 'string', 'description': 'Stručné české vysvětlení.'}
+              'explanation': {'type': 'string', 'description': 'Stručné české vysvětlení pravidla a proč byla původní věta chybná.'},
+              'czechTranslation': {
+                'type': 'string',
+                'description': 'Přirozený český překlad správné věty / výrazu k překladu do angličtiny na kartičce (VÝHRADNĚ V ČEŠTINĚ, např. "Je mi 25 let.", "Včera jsem byl v práci.").'
+              }
             },
-            'required': ['type', 'userSaid', 'correctForm', 'explanation']
+            'required': ['type', 'userSaid', 'correctForm', 'explanation', 'czechTranslation']
           }
         }
       },
