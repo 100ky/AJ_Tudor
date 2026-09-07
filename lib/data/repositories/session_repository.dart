@@ -5,6 +5,7 @@ import '../../core/error/error_handling.dart';
 import '../../core/utils/result.dart';
 import '../../core/utils/logger.dart';
 import '../../services/gemini/gemini_batch_client.dart';
+import '../models/flashcard_stats.dart';
 
 /// Repozitář pro správu dat souvisejících s výukovými lekcemi (sessions).
 /// 
@@ -669,6 +670,81 @@ class SessionRepository {
         .get();
   }
 
+  /// Sleduje agregované statistiky kartiček a stavu ovládnutí látky (Mastery).
+  Stream<FlashcardStats> watchFlashcardStats() {
+    return watchAllFlashcards().map((cards) {
+      if (cards.isEmpty) return const FlashcardStats.empty();
+
+      final now = DateTime.now();
+      final total = cards.length;
+      int due = 0;
+      int mastered = 0;
+      int learning = 0;
+      int newCards = 0;
+      double totalMastery = 0.0;
+
+      for (final c in cards) {
+        if (c.nextReviewAt.isBefore(now) || c.nextReviewAt.isAtSameMomentAs(now)) {
+          due++;
+        }
+        if (c.masteryScore >= 0.8) {
+          mastered++;
+        } else if (c.masteryScore > 0.0) {
+          learning++;
+        } else {
+          newCards++;
+        }
+        totalMastery += c.masteryScore;
+      }
+
+      return FlashcardStats(
+        totalCards: total,
+        dueCards: due,
+        masteredCards: mastered,
+        learningCards: learning,
+        newCards: newCards,
+        averageMastery: totalMastery / total,
+      );
+    });
+  }
+
+  /// Načte jednorázově agregované statistiky kartiček.
+  Future<FlashcardStats> getFlashcardStats() async {
+    final cards = await getAllFlashcards();
+    if (cards.isEmpty) return const FlashcardStats.empty();
+
+    final now = DateTime.now();
+    final total = cards.length;
+    int due = 0;
+    int mastered = 0;
+    int learning = 0;
+    int newCards = 0;
+    double totalMastery = 0.0;
+
+    for (final c in cards) {
+      if (c.nextReviewAt.isBefore(now) || c.nextReviewAt.isAtSameMomentAs(now)) {
+        due++;
+      }
+      if (c.masteryScore >= 0.8) {
+        mastered++;
+      } else if (c.masteryScore > 0.0) {
+        learning++;
+      } else {
+        newCards++;
+      }
+      totalMastery += c.masteryScore;
+    }
+
+    return FlashcardStats(
+      totalCards: total,
+      dueCards: due,
+      masteredCards: mastered,
+      learningCards: learning,
+      newCards: newCards,
+      averageMastery: totalMastery / total,
+    );
+  }
+
   /// Aktualizuje stav kartičky po studentově procvičení (SRS algoritmus).
   /// 
   /// [rating]:
@@ -787,7 +863,12 @@ class SessionRepository {
     if (text.isEmpty) return true;
     if (text == 'Přeložte do angličtiny správné vyjádření' || text == 'Přeložte do angličtiny') return true;
     if (text.startsWith('Jak ') || text.startsWith('Jak:') || text.startsWith('Přeložte') || text.startsWith('Opravte')) return true;
-    if (text.contains('"') || text.contains('”') || text.contains('“')) return true;
+    // Pokud text obsahuje uvozovky a vnitřek odpovídá backText → legacy šablona s anglickým textem
+    if ((text.contains('"') || text.contains('\u201c') || text.contains('\u201d'))) {
+      final stripped = text.replaceAll(RegExp('[\u201c\u201d"]+'), '').trim();
+      if (backText != null && stripped.toLowerCase() == backText.trim().toLowerCase()) return true;
+      if (sourceSentence != null && stripped.toLowerCase() == sourceSentence.trim().toLowerCase()) return true;
+    }
     if (backText != null && text.toLowerCase() == backText.trim().toLowerCase()) return true;
     if (sourceSentence != null && text.toLowerCase() == sourceSentence.trim().toLowerCase()) return true;
     return false;

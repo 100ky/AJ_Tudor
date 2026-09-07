@@ -15,7 +15,7 @@ import '../../services/agents/topic_preparation_agent.dart';
 import '../../core/app_theme.dart';
 
 /// Notifier pro správu indexu vybrané záložky v dolní navigaci.
-class _SelectedIndexNotifier extends Notifier<int> {
+class MainNavigationNotifier extends Notifier<int> {
   @override
   int build() => 0;
 
@@ -24,9 +24,9 @@ class _SelectedIndexNotifier extends Notifier<int> {
   }
 }
 
-/// Globální provider pro index vybrané stránky.
-final _selectedIndexProvider =
-    NotifierProvider<_SelectedIndexNotifier, int>(_SelectedIndexNotifier.new);
+/// Globální provider pro index vybrané stránky v hlavní navigaci.
+final mainNavigationIndexProvider =
+    NotifierProvider<MainNavigationNotifier, int>(MainNavigationNotifier.new);
 
 /// Hlavní kostra aplikace s čistou 5-položkovou navigací a živým gradient pozadím.
 ///
@@ -77,7 +77,7 @@ class _SkeletonScreenState extends ConsumerState<SkeletonScreen>
 
   @override
   Widget build(BuildContext context) {
-    final currentIndex = ref.watch(_selectedIndexProvider);
+    final currentIndex = ref.watch(mainNavigationIndexProvider);
     final apiKey = ref.watch(apiKeyProvider);
     final isLoaded = ref.watch(isApiKeyLoadedProvider);
     final tutorState = ref.watch(voiceTutorAgentProvider);
@@ -219,7 +219,7 @@ class _SkeletonScreenState extends ConsumerState<SkeletonScreen>
                                 onPressed: () {
                                   HapticFeedback.lightImpact();
                                   ref
-                                      .read(_selectedIndexProvider.notifier)
+                                      .read(mainNavigationIndexProvider.notifier)
                                       .setIndex(3);
                                 },
                                 child: Text(
@@ -285,7 +285,7 @@ class _SkeletonScreenState extends ConsumerState<SkeletonScreen>
                       onDestinationSelected: (index) {
                         HapticFeedback.selectionClick();
                         ref
-                            .read(_selectedIndexProvider.notifier)
+                            .read(mainNavigationIndexProvider.notifier)
                             .setIndex(index);
                       },
                       destinations: const [

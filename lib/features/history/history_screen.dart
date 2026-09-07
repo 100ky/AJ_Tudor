@@ -92,6 +92,14 @@ class SessionCard extends ConsumerWidget {
     final dateFormat = DateFormat('d. MMMM yyyy, HH:mm', 'cs');
     final dateStr = dateFormat.format(session.startedAt);
 
+    String? durationStr;
+    if (session.endedAt != null) {
+      final diff = session.endedAt!.difference(session.startedAt);
+      final minutes = diff.inMinutes;
+      final seconds = diff.inSeconds.remainder(60);
+      durationStr = minutes > 0 ? '$minutes min' : '$seconds s';
+    }
+
     return GlassContainer(
       margin: const EdgeInsets.only(bottom: 14),
       child: InkWell(
@@ -103,13 +111,45 @@ class SessionCard extends ConsumerWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  dateStr,
-                  style: GoogleFonts.plusJakartaSans(
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.primary,
-                    fontSize: 13,
-                  ),
+                Row(
+                  children: [
+                    Text(
+                      dateStr,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.primary,
+                        fontSize: 13,
+                      ),
+                    ),
+                    if (durationStr != null) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primary.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.schedule_rounded,
+                                size: 11,
+                                color: AppTheme.mutedTextColor(context)),
+                            const SizedBox(width: 3),
+                            Text(
+                              durationStr,
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 11,
+                                color: AppTheme.mutedTextColor(context),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
                 if (session.fluencyScore != null)
                   Container(
@@ -151,11 +191,23 @@ class SessionCard extends ConsumerWidget {
             const SizedBox(height: 10),
             Row(
               children: [
-                Icon(Icons.error_outline, size: 15, color: AppTheme.error),
-                const SizedBox(width: 4),
-                Text('${session.totalErrors} chyb',
-                    style: GoogleFonts.plusJakartaSans(
-                        color: AppTheme.mutedTextColor(context), fontSize: 13)),
+                if (session.totalErrors == 0) ...[
+                  Icon(Icons.check_circle_outline_rounded,
+                      size: 15, color: AppTheme.success),
+                  const SizedBox(width: 4),
+                  Text('Bez chyb 🎉',
+                      style: GoogleFonts.plusJakartaSans(
+                          color: AppTheme.success,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13)),
+                ] else ...[
+                  Icon(Icons.error_outline, size: 15, color: AppTheme.error),
+                  const SizedBox(width: 4),
+                  Text('${session.totalErrors} chyb',
+                      style: GoogleFonts.plusJakartaSans(
+                          color: AppTheme.mutedTextColor(context),
+                          fontSize: 13)),
+                ],
                 const Spacer(),
                 Text(
                   'Zobrazit přepis',

@@ -8,6 +8,7 @@ import '../../core/app_theme.dart';
 import '../../core/utils/logger.dart';
 import '../../core/widgets/glass_container.dart';
 import '../../data/database/app_database.dart';
+import '../../data/models/flashcard_stats.dart';
 import '../../data/repositories/session_repository.dart';
 import '../../providers/audio_provider.dart';
 import '../../providers/database_provider.dart';
@@ -453,57 +454,65 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
           ),
         ],
       ),
-      body: StreamBuilder<List<Flashcard>>(
-        stream: repo.watchDueFlashcards(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting &&
-              !snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
+      body: StreamBuilder<FlashcardStats>(
+        stream: repo.watchFlashcardStats(),
+        builder: (context, statsSnapshot) {
+          final stats = statsSnapshot.data ?? const FlashcardStats.empty();
 
-          final dueCards = snapshot.data ?? [];
+          return StreamBuilder<List<Flashcard>>(
+            stream: repo.watchDueFlashcards(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting &&
+                  !snapshot.hasData) {
+                return const Center(child: CircularProgressIndicator());
+              }
 
-          if (dueCards.isEmpty) {
-            return _buildEmptyState(context);
-          }
+              final dueCards = snapshot.data ?? [];
 
-          final safeIndex = _currentIndex.clamp(0, dueCards.length - 1);
-          final currentCard = dueCards[safeIndex];
+              if (dueCards.isEmpty) {
+                return _buildEmptyState(context, stats);
+              }
 
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            child: Column(
-              children: [
-                // Indikátor pokroku
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              final safeIndex = _currentIndex.clamp(0, dueCards.length - 1);
+              final currentCard = dueCards[safeIndex];
+
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                child: Column(
                   children: [
-                    Text(
-                      'Kartička ${safeIndex + 1} z ${dueCards.length}',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.mutedTextColor(context),
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppTheme.primary.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        'K OPAKOVÁNÍ: ${dueCards.length}',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: AppTheme.primary,
+                    // Horní panel ovládnutí látky (Mastery)
+                    _buildMasteryHeader(context, stats),
+
+                    // Indikátor pokroku v dnešní relaci
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Kartička ${safeIndex + 1} z ${dueCards.length}',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.mutedTextColor(context),
+                          ),
                         ),
-                      ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primary.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            'K OPAKOVÁNÍ: ${dueCards.length}',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: AppTheme.primary,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
 
                 const SizedBox(height: 14),
 
@@ -566,6 +575,8 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
                 const SizedBox(height: 12),
               ],
             ),
+              );
+            },
           );
         },
       ),
@@ -717,10 +728,15 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
     }
 
     // 4. Pokud je kartička legacy/anglická a ještě se nepřekládá, spustíme okamžitý on-demand překlad
-    _triggerOnDemandCardTranslation(card);
+    final gemini = ref.read(geminiBatchClientProvider);
+    if (gemini != null) {
+      _triggerOnDemandCardTranslation(card);
+      // 5. Dokud překlad běží, V ŽÁDNÉM PŘÍPADĚ nezobrazujeme angličtinu ani chybnou šablonu!
+      return 'Překládám zadání do češtiny... ⏳';
+    }
 
-    // 5. Dokud překlad běží, V ŽÁDNÉM PŘÍPADĚ nezobrazujeme angličtinu ani chybnou šablonu!
-    return 'Překládám zadání do češtiny... ⏳';
+    // 6. Gemini není k dispozici — zobrazíme surový text (lepší než nekonečný spinner)
+    return raw;
   }
 
   void _triggerOnDemandCardTranslation(Flashcard card) {
@@ -799,7 +815,7 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
               if (_lastPronunciation != null)
                 _buildPronunciationBadge(_lastPronunciation!)
               else
-                Icon(Icons.touch_app_rounded,
+                Icon(Icons.swipe_rounded,
                     size: 20, color: AppTheme.mutedTextColor(context)),
             ],
           ),
@@ -815,16 +831,24 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
                       : Colors.black.withValues(alpha: 0.04),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Text(
-                  'PŘELOŽTE DO ANGLIČTINY',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    color: AppTheme.mutedTextColor(context),
-                    letterSpacing: 1.0,
-                  ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.translate_rounded, size: 13, color: AppTheme.mutedTextColor(context)),
+                    const SizedBox(width: 5),
+                    Text(
+                      'PŘELOŽ DO ANGLIČTINY',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: AppTheme.mutedTextColor(context),
+                        letterSpacing: 1.0,
+                      ),
+                    ),
+                  ],
                 ),
               ),
+              const SizedBox(height: 10),
               Builder(
                 builder: (context) {
                   final frontText = _getDisplayFrontText(card);
@@ -1384,7 +1408,126 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
     );
   }
 
-  Widget _buildEmptyState(BuildContext context) {
+  Widget _buildMasteryHeader(BuildContext context, FlashcardStats stats) {
+    if (stats.totalCards == 0) return const SizedBox.shrink();
+
+    final isDark = AppTheme.isDark(context);
+    final masteredRatio = stats.totalCards > 0 ? stats.masteredCards / stats.totalCards : 0.0;
+    final learningRatio = stats.totalCards > 0 ? stats.learningCards / stats.totalCards : 0.0;
+    final newRatio = stats.totalCards > 0 ? stats.newCards / stats.totalCards : 0.0;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppTheme.glassColor(context),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.glassBorderColor(context)),
+        boxShadow: AppTheme.glassShadowsLight(context),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.workspace_premium_rounded,
+                  size: 16, color: AppTheme.success),
+              const SizedBox(width: 6),
+              Text(
+                'Ovládnutí látky',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.textColor(context),
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppTheme.success.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppTheme.success.withValues(alpha: 0.25)),
+                ),
+                child: Text(
+                  '${stats.masteredPercentage}% zvládnuto',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.success,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // Multi-color segmented progress bar
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: SizedBox(
+              height: 6,
+              child: Row(
+                children: [
+                  if (masteredRatio > 0)
+                    Flexible(
+                      flex: (masteredRatio * 100).toInt().clamp(1, 100),
+                      child: Container(color: AppTheme.success),
+                    ),
+                  if (learningRatio > 0)
+                    Flexible(
+                      flex: (learningRatio * 100).toInt().clamp(1, 100),
+                      child: Container(color: AppTheme.primary),
+                    ),
+                  if (newRatio > 0)
+                    Flexible(
+                      flex: (newRatio * 100).toInt().clamp(1, 100),
+                      child: Container(
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.12)
+                            : Colors.black.withValues(alpha: 0.08),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _buildMiniStatDot(context, '${stats.masteredCards} zvládnuto', AppTheme.success),
+              _buildMiniStatDot(context, '${stats.learningCards} v procesu', AppTheme.primary),
+              _buildMiniStatDot(context, '${stats.dueCards} k procvičení', AppTheme.accent),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMiniStatDot(BuildContext context, String label, Color color) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 6,
+          height: 6,
+          decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+        ),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 10.5,
+            fontWeight: FontWeight.w500,
+            color: AppTheme.mutedTextColor(context),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEmptyState(BuildContext context, FlashcardStats stats) {
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
@@ -1415,9 +1558,15 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
                   color: AppTheme.textColor(context),
                 ),
               ),
+              if (stats.totalCards > 0) ...[
+                const SizedBox(height: 12),
+                _buildMasteryHeader(context, stats),
+              ],
               const SizedBox(height: 8),
               Text(
-                'Všechny kartičky k dnešnímu opakování jsou hotové. Můžeš si automaticky vygenerovat novou sadu ze svých chyb z lekcí nebo si přidat vlastní kartičku.',
+                stats.totalCards > 0
+                    ? 'Všechny kartičky k dnešnímu opakování jsou hotové. Můžeš si automaticky vygenerovat novou sadu ze svých chyb z lekcí nebo si přidat vlastní kartičku.'
+                    : 'Zatím nemáš vytvořené žádné kartičky. Vygeneruj si první sadu z chyb nebo náhodných slovíček níže!',
                 textAlign: TextAlign.center,
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 13,

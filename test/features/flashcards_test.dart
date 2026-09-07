@@ -94,6 +94,38 @@ void main() {
       expect(cards.first.sourceSentence, 'I have 25 years.');
     });
 
+    test('getFlashcardStats computes aggregate mastery metrics correctly', () async {
+      final initialStats = await repo.getFlashcardStats();
+      expect(initialStats.totalCards, 0);
+      expect(initialStats.masteredPercentage, 0);
+
+      // Přidáme kartičku
+      final cardRes = await repo.addFlashcard(
+        frontText: 'Ahoj',
+        backText: 'Hello',
+        explanation: 'Pozdrav',
+        errorType: 'vocabulary',
+      );
+      final cardId = cardRes.getOrThrow();
+
+      final statsAfterAdd = await repo.getFlashcardStats();
+      expect(statsAfterAdd.totalCards, 1);
+      expect(statsAfterAdd.dueCards, 1);
+      expect(statsAfterAdd.newCards, 1);
+      expect(statsAfterAdd.masteredCards, 0);
+
+      // Ohodnotíme kartičku jako Snadné (3) několikrát pro navýšení mastery
+      await repo.reviewFlashcard(flashcardId: cardId, rating: 3); // mastery +0.25 = 0.25
+      await repo.reviewFlashcard(flashcardId: cardId, rating: 3); // 0.50
+      await repo.reviewFlashcard(flashcardId: cardId, rating: 3); // 0.75
+      await repo.reviewFlashcard(flashcardId: cardId, rating: 3); // 1.0 -> mastered!
+
+      final statsAfterMastery = await repo.getFlashcardStats();
+      expect(statsAfterMastery.masteredCards, 1);
+      expect(statsAfterMastery.masteredPercentage, 100);
+      expect(statsAfterMastery.newCards, 0);
+    });
+
     test('autoMigrateLegacyCardsToCzech translates legacy English questions to Czech', () async {
       // Vložíme starou kartičku s chybnou angličtinou na líci
       await repo.addFlashcard(

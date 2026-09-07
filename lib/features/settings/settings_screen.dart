@@ -1,9 +1,11 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../providers/config_provider.dart';
 import '../../providers/database_provider.dart';
 import '../../providers/profile_provider.dart';
+import '../../services/agents/topic_preparation_agent.dart';
 import '../../core/constants/gemini_models.dart';
 import '../../services/system/backup_service.dart';
 import 'package:flutter/services.dart';
@@ -514,11 +516,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
           const SizedBox(height: 24),
 
-          // ── Profil a paměť ────────────────────────────────────────────────
-          _buildSectionLabel('Můj pokrok a paměť', context),
+          // ── Profil a paměť tutora ────────────────────────────────────────
+          _buildSectionLabel('Můj profil a paměť tutora', context),
           Consumer(
             builder: (context, ref, child) {
               final profileAsync = ref.watch(userProfileProvider);
+              final topicState = ref.watch(topicPreparationAgentProvider);
+
               return profileAsync.when(
                 data: (profile) {
                   if (profile == null) {
@@ -528,115 +532,177 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               color: AppTheme.mutedTextColor(context))),
                     );
                   }
-                  return GlassContainer(
-                    child: Column(
-                      children: [
-                        ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: AppTheme.primary.withValues(alpha: 0.08),
-                              borderRadius: BorderRadius.circular(10),
+
+                  List<String> facts = [];
+                  if (profile.userFacts.isNotEmpty) {
+                    try {
+                      final List<dynamic> raw = jsonDecode(profile.userFacts);
+                      facts = raw.map((e) => e.toString()).toList();
+                    } catch (_) {}
+                  }
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      GlassContainer(
+                        child: Column(
+                          children: [
+                            ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.primary.withValues(alpha: 0.08),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Icon(Icons.psychology,
+                                    color: AppTheme.primary, size: 20),
+                              ),
+                              title: Text('Co si Tudor pamatuje',
+                                  style: GoogleFonts.plusJakartaSans(
+                                      fontWeight: FontWeight.w500,
+                                      color: AppTheme.textColor(context))),
+                              subtitle: Text(
+                                profile.memoryBriefing ??
+                                    'Žádný briefing zatím není k dispozici.',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontStyle: FontStyle.italic,
+                                  fontSize: 13,
+                                  color: AppTheme.mutedTextColor(context),
+                                ),
+                              ),
                             ),
-                            child: Icon(Icons.psychology,
-                                color: AppTheme.primary, size: 20),
-                          ),
-                          title: Text('Co si AI pamatuje',
-                              style: GoogleFonts.plusJakartaSans(
-                                  fontWeight: FontWeight.w500,
-                                  color: AppTheme.textColor(context))),
-                          subtitle: Text(
-                            profile.memoryBriefing ??
-                                'Žádný briefing zatím není k dispozici.',
-                            style: GoogleFonts.plusJakartaSans(
-                              fontStyle: FontStyle.italic,
-                              fontSize: 13,
-                              color: AppTheme.mutedTextColor(context),
+                            Divider(color: AppTheme.outlineLightColor(context)),
+                            ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.success.withValues(alpha: 0.08),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Icon(Icons.school,
+                                    color: AppTheme.success, size: 20),
+                              ),
+                              title: Text('Úroveň angličtiny',
+                                  style: GoogleFonts.plusJakartaSans(
+                                      color: AppTheme.textColor(context))),
+                              trailing: DropdownButton<String>(
+                                value: ['A1', 'A2', 'B1', 'B2']
+                                        .contains(profile.targetLevel)
+                                    ? profile.targetLevel
+                                    : 'B1',
+                                underline: const SizedBox(),
+                                style: GoogleFonts.plusJakartaSans(
+                                    fontWeight: FontWeight.w600,
+                                    color: AppTheme.primary,
+                                    fontSize: 16),
+                                onChanged: (String? newLevel) async {
+                                  if (newLevel != null) {
+                                    await ref
+                                        .read(sessionRepositoryProvider)
+                                        .updateTargetLevel(newLevel);
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                            content: Text(
+                                                'Úroveň angličtiny byla změněna na $newLevel! 🎯')),
+                                      );
+                                    }
+                                  }
+                                },
+                                items: const [
+                                  DropdownMenuItem(value: 'A1', child: Text('A1')),
+                                  DropdownMenuItem(value: 'A2', child: Text('A2')),
+                                  DropdownMenuItem(value: 'B1', child: Text('B1')),
+                                  DropdownMenuItem(value: 'B2', child: Text('B2')),
+                                ],
+                              ),
+                            ),
+                            ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.accent.withValues(alpha: 0.08),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Icon(Icons.history,
+                                    color: AppTheme.accent, size: 20),
+                              ),
+                              title: Text('Počet absolvovaných lekcí',
+                                  style: GoogleFonts.plusJakartaSans(
+                                      color: AppTheme.textColor(context))),
+                              trailing: Text(
+                                profile.totalSessions.toString(),
+                                style: GoogleFonts.plusJakartaSans(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 16,
+                                    color: AppTheme.primary),
+                              ),
+                            ),
+                            Divider(color: AppTheme.outlineLightColor(context)),
+                            TextButton.icon(
+                              onPressed: () => _showResetDialog(context),
+                              icon: Icon(Icons.delete_forever,
+                                  color: AppTheme.error, size: 18),
+                              label: Text('Resetovat paměť a pokrok',
+                                  style: GoogleFonts.plusJakartaSans(
+                                      color: AppTheme.error, fontSize: 13)),
+                            ),
+                            const SizedBox(height: 4),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // ── Karta: Připravené téma do hlasu ─────────────────────────
+                      _buildSectionLabel('Připravené téma do hlasu', context),
+                      _buildPreparedTopicCard(context, topicState),
+
+                      const SizedBox(height: 16),
+
+                      // ── Fakta o mně ─────────────────────────────────────────────
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          _buildSectionLabel('Fakta o mně (${facts.length})', context),
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: TextButton.icon(
+                              onPressed: () => _showAddFactDialog(context),
+                              icon: const Icon(Icons.add_rounded, size: 16),
+                              label: const Text('Přidat fakt'),
+                              style: TextButton.styleFrom(
+                                visualDensity: VisualDensity.compact,
+                                foregroundColor: AppTheme.primary,
+                                textStyle: GoogleFonts.plusJakartaSans(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 12.5,
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                        Divider(color: AppTheme.outlineLightColor(context)),
-                        ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: AppTheme.success.withValues(alpha: 0.08),
-                              borderRadius: BorderRadius.circular(10),
+                        ],
+                      ),
+                      if (facts.isEmpty)
+                        GlassContainer(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12.0),
+                            child: Text(
+                              'Zatím zde nejsou žádná fakta.\nTudor si automaticky ukládá informace z konverzací, nebo je můžete přidat ručně tlačítkem výše.',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.plusJakartaSans(
+                                color: AppTheme.mutedTextColor(context),
+                                fontSize: 13,
+                              ),
                             ),
-                            child: Icon(Icons.school,
-                                color: AppTheme.success, size: 20),
                           ),
-                          title: Text('Úroveň angličtiny',
-                              style: GoogleFonts.plusJakartaSans(
-                                  color: AppTheme.textColor(context))),
-                          trailing: DropdownButton<String>(
-                            value: ['A1', 'A2', 'B1', 'B2']
-                                    .contains(profile.targetLevel)
-                                ? profile.targetLevel
-                                : 'B1',
-                            underline: const SizedBox(),
-                            style: GoogleFonts.plusJakartaSans(
-                                fontWeight: FontWeight.w600,
-                                color: AppTheme.primary,
-                                fontSize: 16),
-                            onChanged: (String? newLevel) async {
-                              if (newLevel != null) {
-                                await ref
-                                    .read(sessionRepositoryProvider)
-                                    .updateTargetLevel(newLevel);
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                        content: Text(
-                                            'Úroveň angličtiny byla změněna na $newLevel! 🎯')),
-                                  );
-                                }
-                              }
-                            },
-                            items: const [
-                              DropdownMenuItem(value: 'A1', child: Text('A1')),
-                              DropdownMenuItem(value: 'A2', child: Text('A2')),
-                              DropdownMenuItem(value: 'B1', child: Text('B1')),
-                              DropdownMenuItem(value: 'B2', child: Text('B2')),
-                            ],
-                          ),
-                        ),
-                        ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: AppTheme.accent.withValues(alpha: 0.08),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Icon(Icons.history,
-                                color: AppTheme.accent, size: 20),
-                          ),
-                          title: Text('Počet absolvovaných lekcí',
-                              style: GoogleFonts.plusJakartaSans(
-                                  color: AppTheme.textColor(context))),
-                          trailing: Text(
-                            profile.totalSessions.toString(),
-                            style: GoogleFonts.plusJakartaSans(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 16,
-                                color: AppTheme.primary),
-                          ),
-                        ),
-                        Divider(color: AppTheme.outlineLightColor(context)),
-                        TextButton.icon(
-                          onPressed: () => _showResetDialog(context),
-                          icon: Icon(Icons.delete_forever,
-                              color: AppTheme.error, size: 18),
-                          label: Text('Resetovat paměť a pokrok',
-                              style: GoogleFonts.plusJakartaSans(
-                                  color: AppTheme.error, fontSize: 13)),
-                        ),
-                        const SizedBox(height: 4),
-                      ],
-                    ),
+                        )
+                      else
+                        ...facts.map((fact) => _buildFactTile(context, fact)),
+                    ],
                   );
                 },
                 loading: () =>
@@ -867,6 +933,295 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             },
             child: Text('Resetovat',
                 style: GoogleFonts.plusJakartaSans(color: AppTheme.error)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPreparedTopicCard(
+      BuildContext context, TopicPreparationState topicState) {
+    if (topicState.isLoading) {
+      return GlassContainer(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                'Tudor připravuje nové originální téma z historie...',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 13,
+                  color: AppTheme.mutedTextColor(context),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final topic = topicState.topic;
+    if (topic == null) {
+      return GlassContainer(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Icon(Icons.lightbulb_outline_rounded,
+                color: AppTheme.onSurfaceMuted, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Zatím není připraveno žádné téma.',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 13,
+                  color: AppTheme.mutedTextColor(context),
+                ),
+              ),
+            ),
+            IconButton(
+              tooltip: 'Připravit téma',
+              icon: const Icon(Icons.refresh_rounded, size: 20),
+              onPressed: () {
+                ref
+                    .read(topicPreparationAgentProvider.notifier)
+                    .prepareTopic(force: true);
+              },
+            ),
+          ],
+        ),
+      );
+    }
+
+    return GlassContainer(
+      padding: const EdgeInsets.all(16),
+      color: AppTheme.primary.withValues(alpha: 0.05),
+      border: Border.all(color: AppTheme.primary.withValues(alpha: 0.18)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: AppTheme.accent.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(Icons.auto_awesome_rounded,
+                    color: AppTheme.accent, size: 16),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  topic.title,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                    color: AppTheme.textColor(context),
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Vyměnit téma',
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                color: AppTheme.primary,
+                visualDensity: VisualDensity.compact,
+                onPressed: () {
+                  HapticFeedback.lightImpact();
+                  ref
+                      .read(topicPreparationAgentProvider.notifier)
+                      .prepareTopic(force: true);
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppTheme.backgroundSecondaryColor(context),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.format_quote_rounded,
+                    size: 16, color: AppTheme.primary),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    topic.openerEn,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 13,
+                      fontStyle: FontStyle.italic,
+                      color: AppTheme.textColor(context),
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (topic.rationale.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              topic.rationale,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 11.5,
+                color: AppTheme.mutedTextColor(context),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFactTile(BuildContext context, String fact) {
+    final repo = ref.read(sessionRepositoryProvider);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppTheme.glassColor(context),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.glassBorderColor(context)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppTheme.primary,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              fact,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w500,
+                color: AppTheme.textColor(context),
+              ),
+            ),
+          ),
+          IconButton(
+            icon: Icon(Icons.close_rounded,
+                size: 16, color: AppTheme.onSurfaceMuted),
+            visualDensity: VisualDensity.compact,
+            tooltip: 'Smazat fakt',
+            onPressed: () async {
+              HapticFeedback.selectionClick();
+              await repo.removeUserFact(fact);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Fakt byl odstraněn z paměti.'),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAddFactDialog(BuildContext context) {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: AppTheme.backgroundSecondaryColor(context),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          'Přidat informaci o mně',
+          style: GoogleFonts.plusJakartaSans(
+            fontWeight: FontWeight.w600,
+            fontSize: 17,
+            color: AppTheme.textColor(context),
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Zadej fakt, který by si měl Tudor pamatovat (např. o zálibách, mazlíčcích, práci nebo životě):',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 13,
+                color: AppTheme.mutedTextColor(context),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              maxLines: 2,
+              decoration: InputDecoration(
+                hintText: 'Např. Mám psa labradora jménem Rex',
+                hintStyle: GoogleFonts.plusJakartaSans(
+                  fontSize: 13,
+                  color: AppTheme.onSurfaceMuted,
+                ),
+                filled: true,
+                fillColor: AppTheme.glassLightColor(context),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide:
+                      BorderSide(color: AppTheme.glassBorderColor(context)),
+                ),
+              ),
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 14,
+                color: AppTheme.textColor(context),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: Text(
+              'Zrušit',
+              style: GoogleFonts.plusJakartaSans(
+                  color: AppTheme.mutedTextColor(context)),
+            ),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final text = controller.text.trim();
+              if (text.isNotEmpty) {
+                Navigator.pop(dialogCtx);
+                await ref.read(sessionRepositoryProvider).addUserFact(text);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text('Informace byla úspěšně přidána! ✅')),
+                  );
+                }
+              }
+            },
+            style: FilledButton.styleFrom(
+              backgroundColor: AppTheme.primary,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            child: Text(
+              'Uložit',
+              style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600),
+            ),
           ),
         ],
       ),
