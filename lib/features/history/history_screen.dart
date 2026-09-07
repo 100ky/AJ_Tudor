@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../providers/database_provider.dart';
+import '../../providers/gemini_provider.dart';
+import '../../providers/profile_provider.dart';
 import '../../data/database/app_database.dart';
 import '../../services/agents/memory_manager_agent.dart';
 import '../../services/agents/scenario_planner_agent.dart';
@@ -181,7 +183,7 @@ class SessionCard extends ConsumerWidget {
             Text(
               session.topicSummary ?? 'Lekce angličtiny',
               style: GoogleFonts.plusJakartaSans(
-                fontSize: 16,
+                fontSize: 15,
                 fontWeight: FontWeight.w600,
                 color: AppTheme.textColor(context),
               ),
@@ -266,6 +268,121 @@ class _SessionDetailSheetState extends ConsumerState<_SessionDetailSheet> {
   bool _isAnalyzing = false;
   bool _isDeleting = false;
   bool _isGeneratingCards = false;
+  final _messageController = TextEditingController();
+  bool _isSendingMessage = false;
+  bool _isHeaderExpanded = false;
+
+  @override
+  void dispose() {
+    _messageController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _sendChatMessage(ScrollController scrollController) async {
+    final text = _messageController.text.trim();
+    if (text.isEmpty || _isSendingMessage) return;
+
+    final client = ref.read(geminiBatchClientProvider);
+    if (client == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Chybí Gemini API klíč! Nastavte ho v Profilu.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isSendingMessage = true);
+    _messageController.clear();
+    HapticFeedback.lightImpact();
+
+    try {
+      final repo = ref.read(sessionRepositoryProvider);
+
+      // 1. Uložit zprávu studenta do transkriptů
+      await repo.addTranscript(
+        sessionId: widget.session.id,
+        speaker: 'user',
+        content: text,
+      );
+
+      // Posun dolů
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (scrollController.hasClients) {
+          scrollController.animateTo(
+            scrollController.position.maxScrollExtent + 100,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+        }
+      });
+
+      // 2. Načíst kontext z předchozích zpráv této lekce
+      final allTranscripts = await repo.getTranscripts(widget.session.id);
+      final recent = allTranscripts.length > 10
+          ? allTranscripts.sublist(allTranscripts.length - 10)
+          : allTranscripts;
+
+      final conversationHistory = recent
+          .map((t) =>
+              '${t.speaker == 'user' ? 'Student' : 'Tudor'}: ${t.content}')
+          .join('\n');
+
+      final profile = ref.read(userProfileProvider).value;
+      final targetLevel = profile?.targetLevel ?? 'B1';
+
+      final prompt = '''Jsi AJ Tudor, přátelský a trpělivý rodilý učitel angličtiny pro Čechy.
+Student s tebou právě pokračuje v textovém chatu z této výukové lekce (${widget.session.topicSummary ?? 'Lekce angličtiny'}).
+Úroveň studenta: $targetLevel.
+
+Předchozí kontext konverzace v této lekci:
+$conversationHistory
+
+Nová zpráva od studenta: "$text"
+
+Instrukce pro odpověď:
+1. Reaguj přirozeně a v angličtině na to, co student píše.
+2. Pokud student udělal v angličtině gramatickou nebo slovní chybu, v závěru ho jemně a srozumitelně oprav (česky vysvětli správný tvar).
+3. Pokud se student ptá česky na vysvětlení gramatiky, slovíček nebo překladu, vysvětli mu to srozumitelně česky a uveď anglický příklad.
+4. Odpověď udržuj přiměřeně stručnou (2-4 věty) a na konci polož přesně JEDNU otázku v angličtině, aby konverzace plynula dál.
+''';
+
+      final reply = await client.sendMessage(prompt);
+
+      // 3. Uložit odpověď tutora do transkriptů
+      await repo.addTranscript(
+        sessionId: widget.session.id,
+        speaker: 'tutor',
+        content: reply.trim(),
+      );
+
+      // Posun dolů po doručení odpovědi
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (scrollController.hasClients) {
+          scrollController.animateTo(
+            scrollController.position.maxScrollExtent + 150,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+        }
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Chyba při odesílání: $e'),
+            backgroundColor: AppTheme.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSendingMessage = false);
+      }
+    }
+  }
 
   Future<void> _generateCardsForSession() async {
     if (_isGeneratingCards) return;
@@ -409,11 +526,15 @@ class _SessionDetailSheetState extends ConsumerState<_SessionDetailSheet> {
   Widget build(BuildContext context) {
     final isDark = AppTheme.isDark(context);
 
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
     return DraggableScrollableSheet(
-      initialChildSize: 0.7,
-      maxChildSize: 0.95,
+      initialChildSize: 0.85,
+      maxChildSize: 0.96,
       minChildSize: 0.5,
-      builder: (_, controller) => ClipRRect(
+      builder: (_, controller) => Padding(
+        padding: EdgeInsets.only(bottom: bottomInset),
+        child: ClipRRect(
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
@@ -443,63 +564,165 @@ class _SessionDetailSheetState extends ConsumerState<_SessionDetailSheet> {
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          widget.session.topicSummary ?? 'Detail lekce',
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                            color: AppTheme.textColor(context),
-                          ),
-                          textAlign: TextAlign.left,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: InkWell(
+                    onTap: () {
+                      HapticFeedback.selectionClick();
+                      setState(() => _isHeaderExpanded = !_isHeaderExpanded);
+                    },
+                    borderRadius: BorderRadius.circular(16),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.05)
+                            : Colors.black.withValues(alpha: 0.04),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.1)
+                              : Colors.black.withValues(alpha: 0.06),
                         ),
                       ),
-                      if (widget.session.topicSummary == null ||
-                          widget.session.fluencyScore == null)
-                        _isAnalyzing
-                            ? const SizedBox(
-                                width: 24,
-                                height: 24,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2))
-                            : IconButton(
-                                icon: Icon(Icons.analytics_outlined,
-                                    color: AppTheme.primary),
-                                tooltip: 'Analyzovat lekci manuálně',
-                                onPressed: _analyzeSession,
-                              ),
-                      IconButton(
-                        icon: _isGeneratingCards
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.primary.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Icon(
+                                  Icons.chat_bubble_outline_rounded,
+                                  size: 15,
                                   color: AppTheme.primary,
                                 ),
-                              )
-                            : const Icon(Icons.auto_awesome_rounded),
-                        color: AppTheme.primary,
-                        tooltip: 'Vytvořit kartičky z chyb lekce',
-                        onPressed: _isGeneratingCards
-                            ? null
-                            : _generateCardsForSession,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  widget.session.topicSummary ?? 'Detail lekce',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 14.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppTheme.textColor(context),
+                                  ),
+                                  maxLines: _isHeaderExpanded ? null : 1,
+                                  overflow: _isHeaderExpanded
+                                      ? null
+                                      : TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (!_isHeaderExpanded &&
+                                  widget.session.fluencyScore != null) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.success
+                                        .withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    '${(widget.session.fluencyScore! * 100).toInt()}%',
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppTheme.success,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(width: 4),
+                              Icon(
+                                _isHeaderExpanded
+                                    ? Icons.keyboard_arrow_up_rounded
+                                    : Icons.keyboard_arrow_down_rounded,
+                                size: 20,
+                                color: AppTheme.mutedTextColor(context),
+                              ),
+                            ],
+                          ),
+                          if (_isHeaderExpanded) ...[
+                            const SizedBox(height: 10),
+                            Divider(
+                              height: 1,
+                              color: AppTheme.outlineLightColor(context),
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                if (widget.session.topicSummary == null ||
+                                    widget.session.fluencyScore == null)
+                                  _isAnalyzing
+                                      ? const SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                              strokeWidth: 2))
+                                      : TextButton.icon(
+                                          icon: Icon(Icons.analytics_outlined,
+                                              size: 16,
+                                              color: AppTheme.primary),
+                                          label: const Text('Analyzovat'),
+                                          style: TextButton.styleFrom(
+                                            visualDensity:
+                                                VisualDensity.compact,
+                                            foregroundColor: AppTheme.primary,
+                                            textStyle:
+                                                GoogleFonts.plusJakartaSans(
+                                                    fontSize: 12),
+                                          ),
+                                          onPressed: _analyzeSession,
+                                        ),
+                                TextButton.icon(
+                                  icon: _isGeneratingCards
+                                      ? const SizedBox(
+                                          width: 14,
+                                          height: 14,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: AppTheme.primary,
+                                          ),
+                                        )
+                                      : const Icon(Icons.auto_awesome_rounded,
+                                          size: 15),
+                                  label: const Text('Kartičky z chyb'),
+                                  style: TextButton.styleFrom(
+                                    visualDensity: VisualDensity.compact,
+                                    foregroundColor: AppTheme.primary,
+                                    textStyle: GoogleFonts.plusJakartaSans(
+                                        fontSize: 12),
+                                  ),
+                                  onPressed: _isGeneratingCards
+                                      ? null
+                                      : _generateCardsForSession,
+                                ),
+                                IconButton(
+                                  icon: Icon(Icons.delete_outline,
+                                      size: 18, color: AppTheme.error),
+                                  tooltip: 'Smazat lekci',
+                                  visualDensity: VisualDensity.compact,
+                                  onPressed:
+                                      _isDeleting ? null : _confirmDelete,
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
                       ),
-                      IconButton(
-                        icon: Icon(Icons.delete_outline,
-                            color: AppTheme.error),
-                        tooltip: 'Smazat lekci',
-                        onPressed: _isDeleting ? null : _confirmDelete,
-                      ),
-                    ],
+                    ),
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 8),
                 Expanded(
                   child: StreamBuilder<List<Transcript>>(
                     stream: ref
@@ -847,9 +1070,105 @@ class _SessionDetailSheetState extends ConsumerState<_SessionDetailSheet> {
                   ),
                 ),
 
+                // ── Spodní lišta pro psaní zpráv do historie ───────────────
+                _buildChatInputField(context, controller, isDark),
               ],
             ),
           ),
+        ),
+      ),
+    ),
+  );
+}
+
+  Widget _buildChatInputField(
+      BuildContext context, ScrollController scrollController, bool isDark) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 8, 14, 12),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xF2100C22) : const Color(0xF5F6F4FC),
+        border: Border(
+          top: BorderSide(
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.12)
+                : Colors.black.withValues(alpha: 0.08),
+            width: 1.0,
+          ),
+        ),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          children: [
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.07)
+                      : Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.15)
+                        : Colors.black.withValues(alpha: 0.12),
+                  ),
+                ),
+                child: TextField(
+                  controller: _messageController,
+                  textCapitalization: TextCapitalization.sentences,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 14,
+                    color: AppTheme.textColor(context),
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'Napiš Tudorovi zprávu...',
+                    hintStyle: GoogleFonts.plusJakartaSans(
+                      fontSize: 13,
+                      color: AppTheme.mutedTextColor(context),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 10),
+                    border: InputBorder.none,
+                    isDense: true,
+                  ),
+                  onSubmitted: (_) => _sendChatMessage(scrollController),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  colors: [AppTheme.primary, AppTheme.primaryDark],
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.primary.withValues(alpha: 0.35),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: IconButton(
+                icon: _isSendingMessage
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.send_rounded,
+                        color: Colors.white, size: 18),
+                onPressed: _isSendingMessage
+                    ? null
+                    : () => _sendChatMessage(scrollController),
+                tooltip: 'Odeslat zprávu',
+              ),
+            ),
+          ],
         ),
       ),
     );

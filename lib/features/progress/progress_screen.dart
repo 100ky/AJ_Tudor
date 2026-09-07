@@ -21,6 +21,12 @@ class ProgressScreen extends ConsumerStatefulWidget {
 
 class _ProgressScreenState extends ConsumerState<ProgressScreen> {
   int _selectedTabIndex = 0;
+  bool _isMasteryExpanded = true;
+  bool _isFluencyExpanded = true;
+  bool _isErrorsExpanded = false;
+  bool _isMemoryExpanded = false;
+  bool _isVocabExpanded = false;
+  bool _isRecentErrorsExpanded = false;
 
   @override
   Widget build(BuildContext context) {
@@ -122,57 +128,25 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _buildSummaryGrid(context, profile, sessions),
-          const SizedBox(height: 18),
+          const SizedBox(height: 14),
           _buildMasteryOverviewCard(context, stats),
-          const SizedBox(height: 24),
+          const SizedBox(height: 12),
           if (sessions.isNotEmpty) ...[
             _buildFluencyChart(context, sessions),
-            const SizedBox(height: 24),
+            const SizedBox(height: 12),
           ],
           if (errors.isNotEmpty) ...[
             _buildErrorDistributionChart(context, errors),
-            const SizedBox(height: 24),
+            const SizedBox(height: 12),
           ],
           if (profile?.memoryBriefing != null &&
               profile!.memoryBriefing!.isNotEmpty) ...[
             _buildMemoryCard(context, profile.memoryBriefing!),
-            const SizedBox(height: 24),
+            const SizedBox(height: 12),
           ],
-          _buildSectionTitle('Slovní zásoba', context),
+          _buildVocabularyCard(context, profile?.vocabulary ?? '[]'),
           const SizedBox(height: 12),
-          _buildVocabularyChipCloud(
-              context, profile?.vocabulary ?? '[]'),
-          const SizedBox(height: 24),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _buildSectionTitle('Nedávné chyby (${errors.length})', context),
-              if (errors.isNotEmpty)
-                TextButton(
-                  onPressed: () {
-                    HapticFeedback.selectionClick();
-                    setState(() => _selectedTabIndex = 1);
-                  },
-                  style: TextButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
-                    foregroundColor: AppTheme.primary,
-                    textStyle: GoogleFonts.plusJakartaSans(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  child: const Text('Zobrazit v historii →'),
-                ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          if (errors.isEmpty)
-            _buildEmptyStateCard(context,
-                'Zatím nemáš žádné zaznamenané chyby. Skvělá práce!')
-          else
-            ...errors
-                .take(5)
-                .map((error) => _buildErrorTile(context, error)),
+          _buildRecentErrorsCard(context, errors),
         ],
       ),
     );
@@ -229,20 +203,6 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen> {
     );
   }
 
-  Widget _buildSectionTitle(String title, BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 4),
-      child: Text(
-        title.toUpperCase(),
-        style: GoogleFonts.plusJakartaSans(
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-          color: AppTheme.mutedTextColor(context),
-          letterSpacing: 1.0,
-        ),
-      ),
-    );
-  }
 
   Widget _buildEmptyStateCard(BuildContext context, String message) {
     return GlassContainer(
@@ -364,112 +324,164 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen> {
       spots.add(FlSpot(i.toDouble(), recentSessions[i].fluencyScore! * 100));
     }
 
+    final latestScore = (recentSessions.last.fluencyScore! * 100).toInt();
+
     return GlassContainer(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Vývoj plynulosti',
-            style: GoogleFonts.plusJakartaSans(
-              fontWeight: FontWeight.w600,
-              fontSize: 16,
-              color: AppTheme.textColor(context),
+          InkWell(
+            onTap: () {
+              HapticFeedback.selectionClick();
+              setState(() => _isFluencyExpanded = !_isFluencyExpanded);
+            },
+            borderRadius: BorderRadius.circular(10),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(Icons.show_chart_rounded,
+                      color: AppTheme.primary, size: 18),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Vývoj plynulosti',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                      color: AppTheme.textColor(context),
+                    ),
+                  ),
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '$latestScore% naposledy',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.primary,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Icon(
+                  _isFluencyExpanded
+                      ? Icons.keyboard_arrow_up_rounded
+                      : Icons.keyboard_arrow_down_rounded,
+                  color: AppTheme.mutedTextColor(context),
+                  size: 20,
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 24),
-          SizedBox(
-            height: 200,
-            child: LineChart(
-              LineChartData(
-                gridData: FlGridData(
-                  show: true,
-                  drawVerticalLine: false,
-                  getDrawingHorizontalLine: (value) {
-                    return FlLine(
-                      color: AppTheme.outline.withValues(alpha: 0.3),
-                      strokeWidth: 1,
-                    );
-                  },
-                ),
-                titlesData: FlTitlesData(
-                  bottomTitles:
-                      const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  topTitles:
-                      const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  rightTitles:
-                      const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  leftTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      reservedSize: 40,
-                      getTitlesWidget: (value, meta) {
-                        return Text(
-                          '${value.toInt()}%',
-                          style: GoogleFonts.plusJakartaSans(
-                              fontSize: 10, color: AppTheme.onSurfaceMuted),
-                        );
+          if (_isFluencyExpanded) ...[
+            const SizedBox(height: 18),
+            SizedBox(
+              height: 190,
+              child: LineChart(
+                LineChartData(
+                  gridData: FlGridData(
+                    show: true,
+                    drawVerticalLine: false,
+                    getDrawingHorizontalLine: (value) {
+                      return FlLine(
+                        color: AppTheme.outline.withValues(alpha: 0.3),
+                        strokeWidth: 1,
+                      );
+                    },
+                  ),
+                  titlesData: FlTitlesData(
+                    bottomTitles: const AxisTitles(
+                        sideTitles: SideTitles(showTitles: false)),
+                    topTitles: const AxisTitles(
+                        sideTitles: SideTitles(showTitles: false)),
+                    rightTitles: const AxisTitles(
+                        sideTitles: SideTitles(showTitles: false)),
+                    leftTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 40,
+                        getTitlesWidget: (value, meta) {
+                          return Text(
+                            '${value.toInt()}%',
+                            style: GoogleFonts.plusJakartaSans(
+                                fontSize: 10, color: AppTheme.onSurfaceMuted),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  lineTouchData: LineTouchData(
+                    handleBuiltInTouches: true,
+                    touchTooltipData: LineTouchTooltipData(
+                      getTooltipColor: (_) => AppTheme.onBackground,
+                      getTooltipItems: (touchedSpots) {
+                        return touchedSpots.map((spot) {
+                          return LineTooltipItem(
+                            '${spot.y.toInt()}% plynulost',
+                            GoogleFonts.plusJakartaSans(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
+                            ),
+                          );
+                        }).toList();
                       },
                     ),
                   ),
-                ),
-                lineTouchData: LineTouchData(
-                  handleBuiltInTouches: true,
-                  touchTooltipData: LineTouchTooltipData(
-                    getTooltipColor: (_) => AppTheme.onBackground,
-                    getTooltipItems: (touchedSpots) {
-                      return touchedSpots.map((spot) {
-                        return LineTooltipItem(
-                          '${spot.y.toInt()}% plynulost',
-                          GoogleFonts.plusJakartaSans(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 12,
-                          ),
-                        );
-                      }).toList();
-                    },
-                  ),
-                ),
-                borderData: FlBorderData(show: false),
-                minX: 0,
-                maxX: (recentSessions.length - 1)
-                    .toDouble()
-                    .clamp(0.0, double.infinity),
-                minY: 0,
-                maxY: 100,
-                lineBarsData: [
-                  LineChartBarData(
-                    spots: spots,
-                    isCurved: true,
-                    color: AppTheme.primary,
-                    barWidth: 3,
-                    isStrokeCapRound: true,
-                    dotData: FlDotData(
-                      show: true,
-                      getDotPainter: (spot, percent, barData, index) =>
-                          FlDotCirclePainter(
-                        radius: 4,
-                        color: Colors.white,
-                        strokeWidth: 2,
-                        strokeColor: AppTheme.primary,
+                  borderData: FlBorderData(show: false),
+                  minX: 0,
+                  maxX: (recentSessions.length - 1)
+                      .toDouble()
+                      .clamp(0.0, double.infinity),
+                  minY: 0,
+                  maxY: 100,
+                  lineBarsData: [
+                    LineChartBarData(
+                      spots: spots,
+                      isCurved: true,
+                      color: AppTheme.primary,
+                      barWidth: 3,
+                      isStrokeCapRound: true,
+                      dotData: FlDotData(
+                        show: true,
+                        getDotPainter: (spot, percent, barData, index) =>
+                            FlDotCirclePainter(
+                          radius: 4,
+                          color: Colors.white,
+                          strokeWidth: 2,
+                          strokeColor: AppTheme.primary,
+                        ),
+                      ),
+                      belowBarData: BarAreaData(
+                        show: true,
+                        gradient: LinearGradient(
+                          colors: [
+                            AppTheme.primary.withValues(alpha: 0.3),
+                            AppTheme.primary.withValues(alpha: 0.0),
+                          ],
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                        ),
                       ),
                     ),
-                    belowBarData: BarAreaData(
-                      show: true,
-                      gradient: LinearGradient(
-                        colors: [
-                          AppTheme.primary.withValues(alpha: 0.3),
-                          AppTheme.primary.withValues(alpha: 0.0),
-                        ],
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                      ),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
+          ],
         ],
       ),
     );
@@ -494,102 +506,152 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen> {
     final total = errors.length;
 
     return GlassContainer(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Rozložení chyb',
-            style: GoogleFonts.plusJakartaSans(
-              fontWeight: FontWeight.w600,
-              fontSize: 16,
-              color: AppTheme.textColor(context),
-            ),
-          ),
-          const SizedBox(height: 24),
-          SizedBox(
-            height: 200,
-            child: Stack(
+          InkWell(
+            onTap: () {
+              HapticFeedback.selectionClick();
+              setState(() => _isErrorsExpanded = !_isErrorsExpanded);
+            },
+            borderRadius: BorderRadius.circular(10),
+            child: Row(
               children: [
-                PieChart(
-                  PieChartData(
-                    sectionsSpace: 2,
-                    centerSpaceRadius: 60,
-                    sections: [
-                      if (grammarCount > 0)
-                        PieChartSectionData(
-                          color: AppTheme.grammar,
-                          value: grammarCount.toDouble(),
-                          title: '${((grammarCount / total) * 100).toInt()}%',
-                          radius: 30,
-                          titleStyle: GoogleFonts.plusJakartaSans(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                          ),
-                        ),
-                      if (vocabCount > 0)
-                        PieChartSectionData(
-                          color: AppTheme.vocabulary,
-                          value: vocabCount.toDouble(),
-                          title: '${((vocabCount / total) * 100).toInt()}%',
-                          radius: 30,
-                          titleStyle: GoogleFonts.plusJakartaSans(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                          ),
-                        ),
-                      if (pronunCount > 0)
-                        PieChartSectionData(
-                          color: AppTheme.pronunciation,
-                          value: pronunCount.toDouble(),
-                          title: '${((pronunCount / total) * 100).toInt()}%',
-                          radius: 30,
-                          titleStyle: GoogleFonts.plusJakartaSans(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                          ),
-                        ),
-                    ],
+                Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    color: AppTheme.error.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(Icons.pie_chart_outline_rounded,
+                      color: AppTheme.error, size: 18),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Rozložení chyb',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                      color: AppTheme.textColor(context),
+                    ),
                   ),
                 ),
-                Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        '$total',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 28,
-                          fontWeight: FontWeight.w700,
-                          color: AppTheme.textColor(context),
-                        ),
-                      ),
-                      Text(
-                        'Chyb',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 12,
-                          color: AppTheme.mutedTextColor(context),
-                        ),
-                      ),
-                    ],
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppTheme.error.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
                   ),
+                  child: Text(
+                    'Celkem $total chyb',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.error,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Icon(
+                  _isErrorsExpanded
+                      ? Icons.keyboard_arrow_up_rounded
+                      : Icons.keyboard_arrow_down_rounded,
+                  color: AppTheme.mutedTextColor(context),
+                  size: 20,
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 24),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _buildLegendItem(context, 'Gramatika', AppTheme.grammar),
-              const SizedBox(width: 16),
-              _buildLegendItem(context, 'Slovíčka', AppTheme.vocabulary),
-              const SizedBox(width: 16),
-              _buildLegendItem(context, 'Výslovnost', AppTheme.pronunciation),
-            ],
-          ),
+          if (_isErrorsExpanded) ...[
+            const SizedBox(height: 20),
+            SizedBox(
+              height: 180,
+              child: Stack(
+                children: [
+                  PieChart(
+                    PieChartData(
+                      sectionsSpace: 2,
+                      centerSpaceRadius: 55,
+                      sections: [
+                        if (grammarCount > 0)
+                          PieChartSectionData(
+                            color: AppTheme.grammar,
+                            value: grammarCount.toDouble(),
+                            title: '${((grammarCount / total) * 100).toInt()}%',
+                            radius: 28,
+                            titleStyle: GoogleFonts.plusJakartaSans(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                        if (vocabCount > 0)
+                          PieChartSectionData(
+                            color: AppTheme.vocabulary,
+                            value: vocabCount.toDouble(),
+                            title: '${((vocabCount / total) * 100).toInt()}%',
+                            radius: 28,
+                            titleStyle: GoogleFonts.plusJakartaSans(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                        if (pronunCount > 0)
+                          PieChartSectionData(
+                            color: AppTheme.pronunciation,
+                            value: pronunCount.toDouble(),
+                            title: '${((pronunCount / total) * 100).toInt()}%',
+                            radius: 28,
+                            titleStyle: GoogleFonts.plusJakartaSans(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '$total',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 26,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.textColor(context),
+                          ),
+                        ),
+                        Text(
+                          'Chyb',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 11,
+                            color: AppTheme.mutedTextColor(context),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _buildLegendItem(context, 'Gramatika', AppTheme.grammar),
+                const SizedBox(width: 16),
+                _buildLegendItem(context, 'Slovíčka', AppTheme.vocabulary),
+                const SizedBox(width: 16),
+                _buildLegendItem(context, 'Výslovnost', AppTheme.pronunciation),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -619,40 +681,77 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen> {
     return GlassContainer(
       color: AppTheme.primary.withValues(alpha: 0.05),
       border: Border.all(color: AppTheme.primary.withValues(alpha: 0.15)),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppTheme.primary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
+          InkWell(
+            onTap: () {
+              HapticFeedback.selectionClick();
+              setState(() => _isMemoryExpanded = !_isMemoryExpanded);
+            },
+            borderRadius: BorderRadius.circular(10),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(Icons.psychology_rounded,
+                      color: AppTheme.primary, size: 18),
                 ),
-                child: Icon(Icons.psychology, color: AppTheme.primary, size: 20),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                'Co si tutor pamatuje',
-                style: GoogleFonts.plusJakartaSans(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 15,
-                  color: AppTheme.primary,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Co si tutor pamatuje',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                      color: AppTheme.primary,
+                    ),
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            briefing,
-            style: GoogleFonts.plusJakartaSans(
-              fontStyle: FontStyle.italic,
-              fontSize: 13,
-              color: AppTheme.surfaceTextColor(context),
-              height: 1.5,
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'Aktivní paměť',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.primary,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Icon(
+                  _isMemoryExpanded
+                      ? Icons.keyboard_arrow_up_rounded
+                      : Icons.keyboard_arrow_down_rounded,
+                  color: AppTheme.mutedTextColor(context),
+                  size: 20,
+                ),
+              ],
             ),
           ),
+          if (_isMemoryExpanded) ...[
+            const SizedBox(height: 12),
+            Text(
+              briefing,
+              style: GoogleFonts.plusJakartaSans(
+                fontStyle: FontStyle.italic,
+                fontSize: 13,
+                color: AppTheme.surfaceTextColor(context),
+                height: 1.5,
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -779,131 +878,329 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen> {
 
   Widget _buildMasteryOverviewCard(BuildContext context, FlashcardStats stats) {
     return GlassContainer(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppTheme.primary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(Icons.style_rounded,
-                    color: AppTheme.primary, size: 20),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Stav cvičebny & kartiček',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 15,
-                        color: AppTheme.textColor(context),
-                      ),
-                    ),
-                    Text(
-                      stats.totalCards > 0
-                          ? '${stats.masteredCards} z ${stats.totalCards} kartiček zvládnuto'
-                          : 'Zatím žádné vytvořené kartičky',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 12,
-                        color: AppTheme.mutedTextColor(context),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (stats.totalCards > 0)
+          InkWell(
+            onTap: () {
+              HapticFeedback.selectionClick();
+              setState(() => _isMasteryExpanded = !_isMasteryExpanded);
+            },
+            borderRadius: BorderRadius.circular(10),
+            child: Row(
+              children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.all(7),
                   decoration: BoxDecoration(
-                    color: AppTheme.success.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppTheme.success.withValues(alpha: 0.25)),
+                    color: AppTheme.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(Icons.style_rounded,
+                      color: AppTheme.primary, size: 18),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Stav cvičebny & kartiček',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15,
+                          color: AppTheme.textColor(context),
+                        ),
+                      ),
+                      Text(
+                        stats.totalCards > 0
+                            ? '${stats.masteredCards} z ${stats.totalCards} kartiček zvládnuto'
+                            : 'Zatím žádné vytvořené kartičky',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 11.5,
+                          color: AppTheme.mutedTextColor(context),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (stats.totalCards > 0)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppTheme.success.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                          color: AppTheme.success.withValues(alpha: 0.25)),
+                    ),
+                    child: Text(
+                      '${stats.masteredPercentage}% hotovo',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.success,
+                      ),
+                    ),
+                  ),
+                const SizedBox(width: 6),
+                Icon(
+                  _isMasteryExpanded
+                      ? Icons.keyboard_arrow_up_rounded
+                      : Icons.keyboard_arrow_down_rounded,
+                  color: AppTheme.mutedTextColor(context),
+                  size: 20,
+                ),
+              ],
+            ),
+          ),
+          if (_isMasteryExpanded) ...[
+            if (stats.totalCards > 0) ...[
+              const SizedBox(height: 14),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: SizedBox(
+                  height: 8,
+                  child: Row(
+                    children: [
+                      if (stats.masteredCards > 0)
+                        Flexible(
+                          flex: (stats.masteredCards * 100 ~/ stats.totalCards)
+                              .clamp(1, 100),
+                          child: Container(color: AppTheme.success),
+                        ),
+                      if (stats.learningCards > 0)
+                        Flexible(
+                          flex: (stats.learningCards * 100 ~/ stats.totalCards)
+                              .clamp(1, 100),
+                          child: Container(color: AppTheme.primary),
+                        ),
+                      if (stats.newCards > 0)
+                        Flexible(
+                          flex: (stats.newCards * 100 ~/ stats.totalCards)
+                              .clamp(1, 100),
+                          child: Container(
+                            color: AppTheme.outlineColor(context)
+                                .withValues(alpha: 0.3),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _buildCardMiniLegend(
+                      context, '${stats.masteredCards} zvládnuto', AppTheme.success),
+                  _buildCardMiniLegend(
+                      context, '${stats.learningCards} v procesu', AppTheme.primary),
+                  _buildCardMiniLegend(
+                      context, '${stats.dueCards} k opakování', AppTheme.accent),
+                ],
+              ),
+            ],
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () {
+                  HapticFeedback.lightImpact();
+                  ref.read(mainNavigationIndexProvider.notifier).setIndex(1);
+                },
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppTheme.primary,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                icon: const Icon(Icons.fitness_center_rounded, size: 16),
+                label: Text(
+                  stats.dueCards > 0
+                      ? 'Procvičit kartičky (${stats.dueCards} dnes čeká) →'
+                      : 'Otevřít Cvičebnu →',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVocabularyCard(BuildContext context, String vocabJson) {
+    int vocabCount = 0;
+    try {
+      final List<dynamic> words = jsonDecode(vocabJson);
+      vocabCount = words.length;
+    } catch (_) {}
+
+    return GlassContainer(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: () {
+              HapticFeedback.selectionClick();
+              setState(() => _isVocabExpanded = !_isVocabExpanded);
+            },
+            borderRadius: BorderRadius.circular(10),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    color: AppTheme.success.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(Icons.menu_book_rounded,
+                      color: AppTheme.success, size: 18),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Slovní zásoba',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                      color: AppTheme.textColor(context),
+                    ),
+                  ),
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppTheme.success.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    '${stats.masteredPercentage}% hotovo',
+                    '$vocabCount slov',
                     style: GoogleFonts.plusJakartaSans(
-                      fontSize: 12,
+                      fontSize: 11,
                       fontWeight: FontWeight.w700,
                       color: AppTheme.success,
                     ),
                   ),
                 ),
-            ],
-          ),
-          if (stats.totalCards > 0) ...[
-            const SizedBox(height: 14),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: SizedBox(
-                height: 8,
-                child: Row(
-                  children: [
-                    if (stats.masteredCards > 0)
-                      Flexible(
-                        flex: (stats.masteredCards * 100 ~/ stats.totalCards).clamp(1, 100),
-                        child: Container(color: AppTheme.success),
-                      ),
-                    if (stats.learningCards > 0)
-                      Flexible(
-                        flex: (stats.learningCards * 100 ~/ stats.totalCards).clamp(1, 100),
-                        child: Container(color: AppTheme.primary),
-                      ),
-                    if (stats.newCards > 0)
-                      Flexible(
-                        flex: (stats.newCards * 100 ~/ stats.totalCards).clamp(1, 100),
-                        child: Container(
-                          color: AppTheme.outlineColor(context).withValues(alpha: 0.3),
-                        ),
-                      ),
-                  ],
+                const SizedBox(width: 6),
+                Icon(
+                  _isVocabExpanded
+                      ? Icons.keyboard_arrow_up_rounded
+                      : Icons.keyboard_arrow_down_rounded,
+                  color: AppTheme.mutedTextColor(context),
+                  size: 20,
                 ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _buildCardMiniLegend(context, '${stats.masteredCards} zvládnuto', AppTheme.success),
-                _buildCardMiniLegend(context, '${stats.learningCards} v procesu', AppTheme.primary),
-                _buildCardMiniLegend(context, '${stats.dueCards} k opakování', AppTheme.accent),
               ],
             ),
+          ),
+          if (_isVocabExpanded) ...[
+            const SizedBox(height: 14),
+            _buildVocabularyChipCloud(context, vocabJson),
           ],
-          const SizedBox(height: 14),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: () {
-                HapticFeedback.lightImpact();
-                ref.read(mainNavigationIndexProvider.notifier).setIndex(1);
-              },
-              style: FilledButton.styleFrom(
-                backgroundColor: AppTheme.primary,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRecentErrorsCard(BuildContext context, List<ErrorLog> errors) {
+    return GlassContainer(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: () {
+              HapticFeedback.selectionClick();
+              setState(() => _isRecentErrorsExpanded = !_isRecentErrorsExpanded);
+            },
+            borderRadius: BorderRadius.circular(10),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    color: AppTheme.error.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(Icons.warning_amber_rounded,
+                      color: AppTheme.error, size: 18),
                 ),
-              ),
-              icon: const Icon(Icons.fitness_center_rounded, size: 16),
-              label: Text(
-                stats.dueCards > 0
-                    ? 'Procvičit kartičky (${stats.dueCards} dnes čeká) →'
-                    : 'Otevřít Cvičebnu →',
-                style: GoogleFonts.plusJakartaSans(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Nedávné chyby',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                      color: AppTheme.textColor(context),
+                    ),
+                  ),
                 ),
-              ),
+                if (errors.isNotEmpty) ...[
+                  GestureDetector(
+                    onTap: () {
+                      HapticFeedback.selectionClick();
+                      setState(() => _selectedTabIndex = 1);
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Text(
+                        'Historie →',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.primary,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                ],
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppTheme.error.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '${errors.length}',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.error,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Icon(
+                  _isRecentErrorsExpanded
+                      ? Icons.keyboard_arrow_up_rounded
+                      : Icons.keyboard_arrow_down_rounded,
+                  color: AppTheme.mutedTextColor(context),
+                  size: 20,
+                ),
+              ],
             ),
           ),
+          if (_isRecentErrorsExpanded) ...[
+            const SizedBox(height: 14),
+            if (errors.isEmpty)
+              _buildEmptyStateCard(context,
+                  'Zatím nemáš žádné zaznamenané chyby. Skvělá práce!')
+            else
+              ...errors
+                  .take(5)
+                  .map((error) => _buildErrorTile(context, error)),
+          ],
         ],
       ),
     );
