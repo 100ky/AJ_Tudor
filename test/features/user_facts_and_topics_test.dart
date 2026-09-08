@@ -123,6 +123,17 @@ void main() {
       expect((schema['required'] as List).contains('rationale'), true);
     });
 
+    test('buildTopicPreparationPrompt correctly embeds avoidTopics block', () {
+      final prompt = SystemPromptBuilder.buildTopicPreparationPrompt(
+        targetLevel: 'B1',
+        avoidTopics: ['Hudba z dětství', 'Oblíbené filmy'],
+      );
+
+      expect(prompt.contains('PŘÍSNĚ ZAKÁZANÁ TÉMATA'), true);
+      expect(prompt.contains('Hudba z dětství'), true);
+      expect(prompt.contains('Oblíbené filmy'), true);
+    });
+
     test('buildFactExtractionFromHistoryPrompt and schema is valid', () {
       final prompt = SystemPromptBuilder.buildFactExtractionFromHistoryPrompt();
       expect(prompt.contains('Domácí mazlíčky'), true);

@@ -46,6 +46,7 @@ class GeminiBatchClient {
     String text, {
     Map<String, dynamic>? responseSchema,
     String? systemPrompt,
+    double? temperature,
   }) async {
     // Definice pořadí zkoušených modelů (waterfall).
     // Začínáme primárně vybraným modelem a v případě selhání pokračujeme na záložní.
@@ -80,6 +81,7 @@ class GeminiBatchClient {
           text: text,
           responseSchema: responseSchema,
           systemPromptOverride: systemPrompt,
+          temperature: temperature,
         );
 
         _batchModelCooldowns.remove(modelName);
@@ -129,6 +131,7 @@ class GeminiBatchClient {
     required String text,
     Map<String, dynamic>? responseSchema,
     String? systemPromptOverride,
+    double? temperature,
   }) async {
     final url = '$_baseUrl/$modelName:generateContent?key=$apiKey';
 
@@ -151,10 +154,13 @@ class GeminiBatchClient {
           ]
         }
       ],
-      if (responseSchema != null)
+      if (responseSchema != null || temperature != null)
         'generationConfig': {
-          'responseMimeType': 'application/json',
-          'responseSchema': responseSchema,
+          if (responseSchema != null) ...{
+            'responseMimeType': 'application/json',
+            'responseSchema': responseSchema,
+          },
+          if (temperature != null) 'temperature': temperature,
         },
     };
 

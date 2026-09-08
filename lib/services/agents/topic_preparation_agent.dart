@@ -67,6 +67,8 @@ class TopicPreparationState {
 /// analyzuje historii minulých konverzací a profil studenta ("O mně")
 /// a připravuje svěží konverzační téma s úvodním háčkem pro Voice Tutora.
 class TopicPreparationAgent extends Notifier<TopicPreparationState> {
+  final List<String> _recentlyProposedTitles = [];
+
   @override
   TopicPreparationState build() {
     // Asynchronní načtení již uloženého tématu z databáze při inicializaci
@@ -76,7 +78,11 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
         final user = await repo.getUserProfile();
         if (user?.preparedTopic != null && user!.preparedTopic!.isNotEmpty) {
           final data = jsonDecode(user.preparedTopic!);
-          state = state.copyWith(topic: PreparedTopic.fromJson(data));
+          final loadedTopic = PreparedTopic.fromJson(data);
+          if (loadedTopic.title.isNotEmpty && !_recentlyProposedTitles.contains(loadedTopic.title)) {
+            _recentlyProposedTitles.add(loadedTopic.title);
+          }
+          state = state.copyWith(topic: loadedTopic);
         }
       } catch (e) {
         L.w('Chyba při načítání uloženého připraveného tématu: $e');
@@ -145,6 +151,13 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
           .cast<String>()
           .join('; ');
 
+      // Shromáždíme témata k vynechání (stávající téma i nedávno navržená témata)
+      final currentTitle = state.topic?.title;
+      final avoidTopics = <String>{
+        ..._recentlyProposedTitles,
+        if (currentTitle != null && currentTitle.isNotEmpty) currentTitle,
+      }.toList();
+
       final prompt = SystemPromptBuilder.buildTopicPreparationPrompt(
         targetLevel: profile?.targetLevel ?? 'B1',
         userFacts: profile?.userFacts,
@@ -153,12 +166,18 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
             : profile?.topicPreferences,
         recentTranscriptsSnippet: recentTranscriptsSnippet,
         memoryBriefing: profile?.memoryBriefing,
+        avoidTopics: avoidTopics,
       );
 
+      final userMessage = avoidTopics.isNotEmpty
+          ? 'Navrhni 1 nové, svěží konverzační téma a úvodní háček ze života studenta. ZCELA SE VYHNI dříve navrženým tématům: ${avoidTopics.map((t) => '"$t"').join(', ')}.'
+          : 'Navrhni 1 smysluplné, přirozené konverzační téma a úvodní háček, které logicky navazuje na historii a profil studenta.';
+
       final result = await gemini.sendMessage(
-        'Navrhni 1 smysluplné, přirozené konverzační téma a úvodní háček, které logicky navazuje na historii a profil studenta.',
+        userMessage,
         systemPrompt: prompt,
         responseSchema: SystemPromptBuilder.getTopicPreparationResponseSchema(),
+        temperature: 0.85,
       );
 
       final data = jsonDecode(result);
@@ -169,6 +188,11 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
         rationale: data['rationale']?.toString() ?? '',
         preparedAt: DateTime.now(),
       );
+
+      _recentlyProposedTitles.add(prepared.title);
+      if (_recentlyProposedTitles.length > 8) {
+        _recentlyProposedTitles.removeAt(0);
+      }
 
       await repo.savePreparedTopic(jsonEncode(prepared.toJson()));
       state = state.copyWith(isLoading: false, topic: prepared);

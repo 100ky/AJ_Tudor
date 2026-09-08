@@ -305,6 +305,7 @@ class _FakeGeminiBatchClient extends GeminiBatchClient {
     String text, {
     Map<String, dynamic>? responseSchema,
     String? systemPrompt,
+    double? temperature,
   }) async {
     return onSendMessage(text);
   }

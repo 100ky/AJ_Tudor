@@ -288,7 +288,16 @@ POŽADAVKY NA SCÉNÁŘE:
     String? recentTopics,
     String? recentTranscriptsSnippet,
     String? memoryBriefing,
+    List<String>? avoidTopics,
   }) {
+    final avoidBlock = avoidTopics != null && avoidTopics.isNotEmpty
+        ? '''
+PŘÍSNĚ ZAKÁZANÁ TÉMATA (uživatel si vyžádal jiné téma / tato témata byla nedávno navržena nebo odmítnuta):
+${avoidTopics.map((t) => '- "$t"').join('\n')}
+PŘÍSNÝ ZÁKAZ: Za žádných okolností nenavrhuj téma z tohoto seznamu ani téma z téže oblasti (pokud je v seznamu např. hudba z dětství, ZCELA se vyhni hudbě; zvol raději cestování, jídlo, plány na víkend, práci, technologie, sport, filmy či přírodu)!
+'''
+        : '';
+
     return '''Jsi AJ Tudor – rodilý mluvčí z Anglie žijící v Praze a osobní kamarád studenta.
 Tvým úkolem je na základě reálných dosavadních rozhovorů a profilu studenta navrhnout JEDNO přirozené, logické konverzační téma a úvodní háček (opener) pro příští hlasový hovor.
 
@@ -299,7 +308,7 @@ ${recentTranscriptsSnippet != null && recentTranscriptsSnippet.isNotEmpty ? '''R
 $recentTranscriptsSnippet''' : ''}
 ${recentTopics != null && recentTopics.isNotEmpty && recentTopics != '[]' ? '- Předchozí shrnutí témat: $recentTopics' : ''}
 ${memoryBriefing != null && memoryBriefing.isNotEmpty ? '- Poznámky a doporučení z minula: $memoryBriefing' : ''}
-
+$avoidBlock
 KRITICKÁ PRAVIDLA PRO VOLBU TÉMATU:
 1. PŘIROZENOST A RELEVANCE K ŽIVOTU STUDENTA:
    - Téma MUSÍ mít hlavu a patu a navazovat na skutečného člověka.
