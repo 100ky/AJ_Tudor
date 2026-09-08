@@ -652,11 +652,18 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.lightbulb_rounded,
-                          size: 16, color: AppTheme.accent),
+                      Icon(
+                        topic.isRandomTopic
+                            ? Icons.casino_rounded
+                            : Icons.lightbulb_rounded,
+                        size: 16,
+                        color: AppTheme.accent,
+                      ),
                       const SizedBox(width: 6),
                       Text(
-                        'AKTUÁLNĚ PŘIPRAVENÉ TÉMA:',
+                        topic.isRandomTopic
+                            ? 'DIVOKÁ KARTA (NÁHODNÉ TÉMA):'
+                            : 'AKTUÁLNĚ PŘIPRAVENÉ TÉMA:',
                         style: GoogleFonts.plusJakartaSans(
                           fontSize: 10,
                           fontWeight: FontWeight.w700,

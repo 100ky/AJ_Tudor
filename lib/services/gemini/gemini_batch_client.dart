@@ -160,7 +160,7 @@ class GeminiBatchClient {
             'responseMimeType': 'application/json',
             'responseSchema': responseSchema,
           },
-          if (temperature != null) 'temperature': temperature,
+          'temperature': ?temperature,
         },
     };
 

@@ -1015,18 +1015,41 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   color: AppTheme.accent.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(Icons.auto_awesome_rounded,
-                    color: AppTheme.accent, size: 16),
+                child: Icon(
+                  topic.isRandomTopic
+                      ? Icons.casino_rounded
+                      : Icons.auto_awesome_rounded,
+                  color: AppTheme.accent,
+                  size: 16,
+                ),
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: Text(
-                  topic.title,
-                  style: GoogleFonts.plusJakartaSans(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
-                    color: AppTheme.textColor(context),
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (topic.isRandomTopic)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 2),
+                        child: Text(
+                          'DIVOKÁ KARTA (NÁHODNÉ TÉMA)',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.6,
+                            color: AppTheme.accent,
+                          ),
+                        ),
+                      ),
+                    Text(
+                      topic.title,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                        color: AppTheme.textColor(context),
+                      ),
+                    ),
+                  ],
                 ),
               ),
               IconButton(

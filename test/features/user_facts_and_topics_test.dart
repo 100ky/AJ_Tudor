@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:aj_tudor/data/database/app_database.dart';
 import 'package:aj_tudor/data/repositories/session_repository.dart';
 import 'package:aj_tudor/services/prompt/system_prompt_builder.dart';
+import 'package:aj_tudor/services/agents/topic_preparation_agent.dart';
 
 void main() {
   group('SessionRepository User Facts ("O mně") Tests', () {
@@ -141,6 +142,43 @@ void main() {
 
       final schema = SystemPromptBuilder.getFactExtractionSchema();
       expect((schema['required'] as List).contains('facts'), true);
+    });
+
+    test('buildRandomTopicPreparationPrompt embeds wildcard instructions and avoidTopics', () {
+      final prompt = SystemPromptBuilder.buildRandomTopicPreparationPrompt(
+        targetLevel: 'B2',
+        avoidTopics: ['Cestování vlakem'],
+      );
+
+      expect(prompt.contains('Divokou kartu / Wildcard'), true);
+      expect(prompt.contains('ABSOLUTNÍ IGNOROVÁNÍ HISTORIE'), true);
+      expect(prompt.contains('PŘÍSNĚ ZAKÁZANÁ TÉMATA'), true);
+      expect(prompt.contains('Cestování vlakem'), true);
+      expect(prompt.contains('B2'), true);
+    });
+
+    test('PreparedTopic serialization supports isRandomTopic flag', () {
+      final topic = PreparedTopic(
+        title: 'Cestování v čase',
+        openerEn: 'If you had a time machine, where would you go?',
+        rationale: 'Divoká karta',
+        preparedAt: DateTime.now(),
+        isRandomTopic: true,
+      );
+
+      final json = topic.toJson();
+      expect(json['isRandomTopic'], true);
+
+      final restored = PreparedTopic.fromJson(json);
+      expect(restored.isRandomTopic, true);
+      expect(restored.title, 'Cestování v čase');
+
+      final defaultRestored = PreparedTopic.fromJson({
+        'title': 'Klasické téma',
+        'openerEn': 'Hello!',
+        'rationale': 'Z historie',
+      });
+      expect(defaultRestored.isRandomTopic, false);
     });
   });
 }

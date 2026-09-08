@@ -221,7 +221,7 @@ class MemoryManagerAgent {
       _ref.read(scenarioPlannerAgentProvider).planScenarios();
 
       // 7. Příprava nového konverzačního tématu pro příště z čerstvé historie
-      _ref.read(topicPreparationAgentProvider.notifier).prepareTopic(force: true);
+      _ref.read(topicPreparationAgentProvider.notifier).prepareTopic(force: true, resetCounter: true);
 
     } catch (e, stack) {
       L.e('Chyba při strukturované analýze session', e, stack);

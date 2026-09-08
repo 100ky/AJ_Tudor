@@ -781,22 +781,36 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
       );
     }
 
+    final isRandom = preparedTopic.isRandomTopic;
+
     return GlassContainer(
       key: const ValueKey('history_topic_card'),
       padding: const EdgeInsets.all(16),
       borderRadius: BorderRadius.circular(18),
-      color: AppTheme.primary.withValues(alpha: 0.06),
-      border: Border.all(color: AppTheme.primary.withValues(alpha: 0.22)),
+      color: isRandom
+          ? AppTheme.accent.withValues(alpha: 0.08)
+          : AppTheme.primary.withValues(alpha: 0.06),
+      border: Border.all(
+        color: isRandom
+            ? AppTheme.accent.withValues(alpha: 0.35)
+            : AppTheme.primary.withValues(alpha: 0.22),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(Icons.lightbulb_rounded, size: 16, color: AppTheme.accent),
+              Icon(
+                isRandom ? Icons.casino_rounded : Icons.lightbulb_rounded,
+                size: 16,
+                color: AppTheme.accent,
+              ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'TÉMA NA POKEC Z HISTORIE',
+                  isRandom
+                      ? 'DIVOKÁ KARTA (NÁHODNÉ TÉMA)'
+                      : 'TÉMA NA POKEC Z HISTORIE',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.plusJakartaSans(
