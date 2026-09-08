@@ -396,6 +396,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   void _setupClientCallbacks(GeminiLiveClient client, SessionRepository repo) {
     // Příjem textové části odpovědi AI
     client.onTextReceived = (text) {
+      _thinkingTimer?.cancel();
       _responseSilenceTimer?.cancel();
       _flushUserTranscript();
       _resetWatchdog();
@@ -443,6 +444,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
 
     // Detekce, že začala téct audio data z AI
     client.onAudioReceived = () {
+      _thinkingTimer?.cancel();
       _responseSilenceTimer?.cancel();
       _vadSilenceTimer?.cancel();
       _playbackCompleteTimer?.cancel();
@@ -501,7 +503,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         }
         
         if (isStagnating) {
-           forceTopicChange();
+           forceTopicChange(promptImmediateResponse: false);
            _tutorTextHistory.clear(); // Zabrání okamžitému dalšímu spuštění
         } else {
            _tutorTextHistory.add(finalTutorText);
@@ -887,20 +889,20 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   ///
   /// Slouží k vynucenému řízení témat a prevenci repetice uprostřed běžícího hovoru
   /// přes strukturu BidiGenerateContentClientContent protokolu WebSocket.
-  /// Instrukce se odesílá s `turnComplete: false`, takže model ji absorbuje
-  /// bez spuštění halucinované odpovědi.
-  void injectMidSessionGuidance(String hiddenInstruction) {
+  /// Pokud je [turnComplete] `true`, model tah ihned uzavře a okamžitě odpoví.
+  /// Pokud je `false`, model instrukci absorbuje do kontextu a čeká na další vstup studenta.
+  void injectMidSessionGuidance(String hiddenInstruction, {bool turnComplete = false}) {
     final client = ref.read(geminiLiveClientProvider);
     
     if (client != null && client.isConnected && state.status != TutorState.idle) {
-      L.i('Injektuji systémový mid-session update pro modifikaci pozornosti modelu.');
+      L.i('Injektuji systémový mid-session update pro modifikaci pozornosti modelu (turnComplete: $turnComplete).');
       
       // Posíláme jako 'user' s prefixem, protože Gemini Live API
       // nepodporuje roli 'system' v clientContent po úvodním setupu.
       client.sendClientContent(
         role: 'user',
         text: '[SYSTEM INSTRUCTION - NOT FROM STUDENT] $hiddenInstruction',
-        turnComplete: false, 
+        turnComplete: turnComplete, 
       );
     }
   }
@@ -947,16 +949,73 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
 
   /// Vynucená změna tématu konverzace.
   ///
-  /// Volá se uživatelským tlačítkem "Změnit téma" nebo heuristikou
-  /// detekující nadměrnou sémantickou podobnost posledních tahů.
-  void forceTopicChange() {
+  /// Volá se uživatelským tlačítkem "Změnit téma" ([promptImmediateResponse] = true)
+  /// nebo heuristikou detekující nadměrnou sémantickou podobnost posledních tahů ([promptImmediateResponse] = false).
+  void forceTopicChange({bool promptImmediateResponse = true}) {
     HapticFeedback.lightImpact();
-    injectMidSessionGuidance(
-      "CRITICAL INSTRUCTION: Okamžitě opusti současné téma hovoru, "
-      "protože se konverzace zacyklila. Přestaň klást otázky k dosavadnímu okruhu "
-      "a plynule přejdi na absolutně novou oblast zájmů studenta. Použij přirozený "
-      "oslí můstek. Neupozorňuj nahlas, že měníš téma na příkaz systému."
-    );
+
+    if (promptImmediateResponse) {
+      final client = ref.read(geminiLiveClientProvider);
+      if (client == null ||
+          !client.isConnected ||
+          state.status == TutorState.idle ||
+          state.status == TutorState.error ||
+          state.status == TutorState.connecting ||
+          state.status == TutorState.reconnecting ||
+          state.status == TutorState.thinking) {
+        return;
+      }
+
+      // 1. Zastavíme případné probíhající přehrávání audia z reproduktoru a časovače
+      _playbackCompleteTimer?.cancel();
+      _audio.stopPlayback();
+
+      // 2. Pokud byl rozpracovaný transkript tutora, bezpečně ho uložíme do zpráv i do DB
+      if (state.currentTranscript.isNotEmpty) {
+        final partialText = state.currentTranscript;
+        final newMessages = List<ChatMessage>.from(state.messages)
+          ..add(ChatMessage(partialText, isUser: false));
+        state = state.copyWith(messages: newMessages, currentTranscript: '');
+        if (_currentSessionId != null) {
+          _repo.addTranscript(
+            sessionId: _currentSessionId!,
+            speaker: 'tutor',
+            content: partialText,
+          );
+        }
+      }
+
+      // 3. Flush rozpracovaného transkriptu uživatele
+      _flushUserTranscript();
+
+      // 4. Přepneme stav do thinking – AI ihned začne přemýšlet a generovat nové téma
+      state = state.copyWith(
+        status: TutorState.thinking,
+        currentTranscript: '',
+      );
+      _resetThinkingTimer();
+      _resetWatchdog();
+
+      // 5. Odešleme systémovou instrukci s turnComplete: true pro okamžité převzetí slova modelem
+      injectMidSessionGuidance(
+        "CRITICAL INSTRUCTION: The student just tapped 'Next Topic' / 'Change Topic'. "
+        "Immediately abandon the previous discussion. "
+        "Naturally acknowledge changing the subject in English in one brief, friendly sentence "
+        "(for example: \"Sure, let's switch gears!\" or \"Alright, let's move on to something else!\"), "
+        "smoothly introduce a completely fresh and engaging topic suited to the student's level and interests, "
+        "and ask ONE clear open-ended question to invite the student to speak.",
+        turnComplete: true,
+      );
+    } else {
+      // Pasivní heuristická změna při detekci stagnace v pozadí (přepne se v příštím tahu studenta)
+      injectMidSessionGuidance(
+        "CRITICAL INSTRUCTION: Okamžitě opusti současné téma hovoru, "
+        "protože se konverzace zacyklila. Přestaň klást otázky k dosavadnímu okruhu "
+        "a plynule přejdi na absolutně novou oblast zájmů studenta. Použij přirozený "
+        "oslí můstek. Neupozorňuj nahlas, že měníš téma na příkaz systému.",
+        turnComplete: false,
+      );
+    }
   }
 
   /// Resetuje watchdog časovač aktivity.

@@ -1432,11 +1432,11 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
             _buildSecondaryButton(
               heroTag: 'topic_btn',
               icon: Icons.shuffle_rounded,
-              color: isLiveSession
+              color: (isLiveSession && tutorState.status != TutorState.thinking)
                   ? AppTheme.primary
                   : AppTheme.onSurfaceMuted,
               tooltip: 'Změnit téma',
-              onPressed: isLiveSession
+              onPressed: (isLiveSession && tutorState.status != TutorState.thinking)
                   ? () {
                       HapticFeedback.selectionClick();
                       ref
@@ -1444,7 +1444,7 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
                           .forceTopicChange();
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text('Změna tématu odeslána...'),
+                          content: Text('Měním téma konverzace...'),
                           duration: const Duration(seconds: 2),
                         ),
                       );

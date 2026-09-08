@@ -43,6 +43,11 @@ class AudioSessionController {
     await _playbackService.stop();
   }
 
+  /// Okamžitě zastaví a vyčistí přehrávání audia z reproduktoru.
+  Future<void> stopPlayback() async {
+    await _playbackService.interrupt();
+  }
+
   Stream<double> get captureVolumeStream => _captureService.volumeStream;
   Stream<double> get playbackVolumeStream => _playbackService.volumeStream;
 

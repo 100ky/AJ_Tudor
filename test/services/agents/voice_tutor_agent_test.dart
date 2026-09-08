@@ -50,10 +50,12 @@ void main() {
     
     // Async cleanup methods must return completed futures
     when(() => mockAudio.stop()).thenAnswer((_) async {});
+    when(() => mockAudio.stopPlayback()).thenAnswer((_) async {});
     when(() => mockRepo.closeSession(any())).thenAnswer((_) async => Result.success(null));
     when(() => mockMemory.analyzeSession(any())).thenAnswer((_) async {});
     // disconnect might be called
     when(() => mockClient.disconnect()).thenAnswer((_) {});
+    when(() => mockClient.isConnected).thenReturn(true);
 
     container = ProviderContainer(
       overrides: [
@@ -192,4 +194,36 @@ void main() {
     connectionStatusCallback!(true);
     expect(container.read(voiceTutorAgentProvider).status, TutorState.listening);
   });
+
+  test('forceTopicChange immediately prompts model with turnComplete: true and enters thinking state', () async {
+    when(() => mockRepo.startNewSession()).thenAnswer((_) async => Result.success(123));
+    when(() => mockRepo.getUserProfile()).thenAnswer((_) async => null);
+    when(() => mockAudio.start(onAudioChunk: any(named: 'onAudioChunk'))).thenAnswer((_) async {});
+    when(() => mockClient.connect(
+      modelName: any(named: 'modelName'),
+      systemPrompt: any(named: 'systemPrompt'),
+      voiceName: any(named: 'voiceName'),
+    )).thenAnswer((_) {});
+    when(() => mockClient.sendClientContent(
+      role: any(named: 'role'),
+      text: any(named: 'text'),
+      turnComplete: any(named: 'turnComplete'),
+    )).thenAnswer((_) {});
+
+    final agent = container.read(voiceTutorAgentProvider.notifier);
+    await agent.startSession();
+
+    expect(container.read(voiceTutorAgentProvider).status, TutorState.listening);
+
+    agent.forceTopicChange();
+
+    expect(container.read(voiceTutorAgentProvider).status, TutorState.thinking);
+    verify(() => mockAudio.stopPlayback()).called(1);
+    verify(() => mockClient.sendClientContent(
+      role: 'user',
+      text: any(named: 'text', that: contains('CRITICAL INSTRUCTION')),
+      turnComplete: true,
+    )).called(1);
+  });
 }
+
