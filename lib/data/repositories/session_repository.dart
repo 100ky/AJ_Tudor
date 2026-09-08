@@ -779,16 +779,21 @@ class SessionRepository {
           newRepetition += 1;
           newInterval = (newInterval * 1.2).ceil().clamp(1, 60);
           newMastery = (newMastery + 0.05).clamp(0.0, 1.0);
+          newMastery = (newMastery + 0.10).clamp(0.0, 1.0);
           break;
         case 2: // Good
           newRepetition += 1;
           newInterval = (newInterval * 2.0).ceil().clamp(2, 90);
           newMastery = (newMastery + 0.15).clamp(0.0, 1.0);
+          newMastery = (newMastery + 0.30).clamp(0.0, 1.0);
           break;
         case 3: // Easy
           newRepetition += 1;
           newInterval = (newInterval * 3.0).ceil().clamp(4, 180);
           newMastery = (newMastery + 0.25).clamp(0.0, 1.0);
+          // Hodnocení "Snadné" znamená, že student látku spolehlivě ovládá.
+          // Okamžitě posuneme do "Zvládnuto" (masteryScore >= 0.85), aby se v UI přičetlo.
+          newMastery = newMastery < 0.85 ? 0.85 : (newMastery + 0.15).clamp(0.0, 1.0);
           break;
       }
 

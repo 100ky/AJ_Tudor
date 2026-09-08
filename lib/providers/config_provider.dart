@@ -36,8 +36,11 @@ final isApiKeyLoadedProvider = NotifierProvider<ApiKeyLoadedNotifier, bool>(ApiK
 class ApiKeyNotifier extends Notifier<String?> {
   static const _key = 'gemini_api_key';
 
+  bool _isDisposed = false;
+
   @override
   String? build() {
+    ref.onDispose(() => _isDisposed = true);
     // build() je synchronní, načtení klíče probíhá na pozadí v [_loadKey]
     _loadKey();
     return null;
@@ -55,6 +58,7 @@ class ApiKeyNotifier extends Notifier<String?> {
       // se díky resetOnError: true úložiště vyčistí, ale read může vrátit null/chybu.
       key = null;
     }
+    if (_isDisposed) return;
     
     // Zpětná kompatibilita: Pokud klíč není v secure storage, zkusíme SharedPreferences
     if (key == null) {
@@ -63,10 +67,12 @@ class ApiKeyNotifier extends Notifier<String?> {
       if (oldKey != null) {
         // Migrace klíče do bezpečného úložiště a smazání starého záznamu
         await saveKey(oldKey);
+        if (_isDisposed) return;
         await prefs.remove(_key);
         return;
       }
     }
+    if (_isDisposed) return;
     
     state = key;
     // Označíme, že první načtení je hotovo

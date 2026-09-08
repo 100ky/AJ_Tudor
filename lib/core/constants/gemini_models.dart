@@ -24,7 +24,9 @@ class GeminiModels {
   static const String transcribeLive = 'gemini-3.5-transcribe-live';
 
   /// Model pro syntézu přirozené řeči (Text-to-Speech) s audio tagy pro tempo a intonaci.
-  static const String tts = flash2_0;
+  static const String tts = 'gemini-3.1-flash-tts-preview';
+  static const String ttsFlash2_5 = 'gemini-2.5-flash-tts';
+  static const String ttsPro2_5 = 'gemini-2.5-pro-preview-tts';
 
   // --- Model pro Multimodal Live API (WebSocket / Voice Tutor) ---
   /// Model optimalizovaný pro real-time dialog a voice-first AI aplikace.
@@ -77,6 +79,10 @@ class GeminiModels {
         return 'Gemini 3.5 Transcribe (Přepis)';
       case tts:
         return 'Gemini 3.1 Flash TTS (Výslovnost)';
+      case ttsFlash2_5:
+        return 'Gemini 2.5 Flash TTS';
+      case ttsPro2_5:
+        return 'Gemini 2.5 Pro TTS';
       default:
         return model;
     }

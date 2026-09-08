@@ -126,6 +126,23 @@ void main() {
       expect(statsAfterMastery.newCards, 0);
     });
 
+    test('rating card as Easy (3) immediately marks it as mastered', () async {
+      final cardRes = await repo.addFlashcard(
+        frontText: 'Kočka',
+        backText: 'Cat',
+        explanation: 'Zvíře',
+        errorType: 'vocabulary',
+      );
+      final cardId = cardRes.getOrThrow();
+
+      // Po jednom hodnocení "Snadné" se karta okamžitě započítá do zvládnutých
+      await repo.reviewFlashcard(flashcardId: cardId, rating: 3);
+
+      final stats = await repo.getFlashcardStats();
+      expect(stats.masteredCards, 1);
+      expect(stats.masteredPercentage, 100);
+    });
+
     test('autoMigrateLegacyCardsToCzech translates legacy English questions to Czech', () async {
       // Vložíme starou kartičku s chybnou angličtinou na líci
       await repo.addFlashcard(
