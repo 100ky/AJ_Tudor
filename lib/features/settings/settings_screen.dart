@@ -373,13 +373,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               children: [
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: Row(
+                  title: Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    runSpacing: 4,
                     children: [
-                      Text('Chytré bubliny chatu (Smart Bubbles)',
+                      Text('Chytré bubliny chatu',
                           style: GoogleFonts.plusJakartaSans(
                               fontWeight: FontWeight.w500,
                               color: AppTheme.textColor(context))),
-                      const SizedBox(width: 6),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
