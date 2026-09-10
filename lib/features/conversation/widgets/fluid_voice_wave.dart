@@ -71,8 +71,8 @@ class _FluidVoiceWaveState extends State<FluidVoiceWave>
 
     _pulseController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1800),
-    )..repeat();
+      duration: const Duration(milliseconds: 2400),
+    )..repeat(reverse: true);
 
     _colorController = AnimationController(
       vsync: this,
@@ -161,7 +161,8 @@ class _FluidVoiceWaveState extends State<FluidVoiceWave>
 
             final activeColor = _colorAnimation.value ?? widget.color;
             final phase = _phaseController.value * 2 * math.pi;
-            final pulseProgress = _pulseController.value;
+            final pulseRaw = _pulseController.value;
+            final pulseProgress = Curves.easeInOutCubic.transform(pulseRaw);
 
             return SizedBox(
               height: widget.height,
@@ -261,26 +262,41 @@ class _FluidWavePainter extends CustomPainter {
       stops: const [0.0, 0.12, 0.35, 0.5, 0.65, 0.88, 1.0],
     ).createShader(Rect.fromLTWH(0, 0, width, height));
 
-    // Speciální světelný sweep pro stav 'thinking'
+    // Speciální světelný sweep pro stav 'thinking' – širší, s chromatickým akcentem
     Shader activeShader = waveShader;
     if (isThinking) {
       final sweepCenter = pulseProgress;
+      // Chromatický akcentní tón (lehce posuneme odstín)
+      final hsl = HSLColor.fromColor(color);
+      final accentColor = hsl
+          .withHue((hsl.hue + 35) % 360)
+          .withSaturation((hsl.saturation * 1.15).clamp(0.0, 1.0))
+          .toColor();
+
       activeShader = LinearGradient(
         begin: Alignment.centerLeft,
         end: Alignment.centerRight,
         colors: [
-          color.withValues(alpha: 0.1),
-          color.withValues(alpha: 0.2),
+          color.withValues(alpha: 0.08),
+          color.withValues(alpha: 0.15),
+          accentColor.withValues(alpha: 0.55),
+          Colors.white.withValues(alpha: 0.95),
           Colors.white,
-          color.withValues(alpha: 0.9),
-          color.withValues(alpha: 0.1),
+          Colors.white.withValues(alpha: 0.95),
+          accentColor.withValues(alpha: 0.55),
+          color.withValues(alpha: 0.15),
+          color.withValues(alpha: 0.08),
         ],
         stops: [
-          (sweepCenter - 0.25).clamp(0.0, 1.0),
-          (sweepCenter - 0.10).clamp(0.0, 1.0),
+          (sweepCenter - 0.30).clamp(0.0, 1.0),
+          (sweepCenter - 0.18).clamp(0.0, 1.0),
+          (sweepCenter - 0.08).clamp(0.0, 1.0),
+          (sweepCenter - 0.02).clamp(0.0, 1.0),
           sweepCenter.clamp(0.0, 1.0),
-          (sweepCenter + 0.10).clamp(0.0, 1.0),
-          (sweepCenter + 0.25).clamp(0.0, 1.0),
+          (sweepCenter + 0.02).clamp(0.0, 1.0),
+          (sweepCenter + 0.08).clamp(0.0, 1.0),
+          (sweepCenter + 0.18).clamp(0.0, 1.0),
+          (sweepCenter + 0.30).clamp(0.0, 1.0),
         ],
       ).createShader(Rect.fromLTWH(0, 0, width, height));
     }
@@ -328,28 +344,84 @@ class _FluidWavePainter extends CustomPainter {
       drawCoreHighlight: true,
     );
 
-    // 5. Pokud je aktivní stav 'thinking', vykreslíme zářivý světelný bod (světlušku / energii)
+    // 5. Pokud je aktivní stav 'thinking', vykreslíme zářivý světelný bod s kometovým ohoncem
     if (isThinking) {
-      final pulseX = pulseProgress * width;
       final t = pulseProgress;
       // Hann envelope pro Y pozici bodu
       final window = math.sin(math.pi * t);
+      final pulseX = t * width;
       final pulseY =
           midY + amp1 * window * math.sin(2 * math.pi * 1.8 * t + phase);
 
+      // --- Kometový ohon: 5 oháňkových částic s klesající opacitou a velikostí ---
+      const int trailCount = 5;
+      const double trailSpacing = 0.035; // rozestup v normalizované ose
+      for (int i = trailCount; i >= 1; i--) {
+        final trailT = (t - i * trailSpacing).clamp(0.0, 1.0);
+        final trailWindow = math.sin(math.pi * trailT);
+        final trailX = trailT * width;
+        final trailY = midY +
+            amp1 *
+                trailWindow *
+                math.sin(2 * math.pi * 1.8 * trailT + phase);
+
+        final fade = 1.0 - (i / (trailCount + 1));
+        final trailRadius = (isCompact ? 2.0 : 3.0) * fade;
+
+        final trailPaint = Paint()
+          ..color = Colors.white.withValues(alpha: 0.35 * fade * fade)
+          ..maskFilter = MaskFilter.blur(BlurStyle.normal, 3 + i * 1.5);
+        canvas.drawCircle(Offset(trailX, trailY), trailRadius, trailPaint);
+      }
+
+      // --- Vnější aura hlavní částice ---
+      final auraRadius = isCompact ? 8.0 : 13.0;
+      final particleAura = Paint()
+        ..color = color.withValues(alpha: 0.5)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12);
+      canvas.drawCircle(Offset(pulseX, pulseY), auraRadius, particleAura);
+
+      // --- Barevná střední záře ---
+      final midAura = Paint()
+        ..color = color.withValues(alpha: 0.75)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
+      canvas.drawCircle(
+          Offset(pulseX, pulseY), isCompact ? 4.5 : 7.0, midAura);
+
+      // --- Dýchající hlavní částice (jemná pulsace velikosti) ---
+      final breathe = 1.0 + 0.18 * math.sin(phase * 2.5);
+      final mainRadius = (isCompact ? 2.8 : 4.0) * breathe;
+
       final particlePaint = Paint()
         ..color = Colors.white
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+      canvas.drawCircle(Offset(pulseX, pulseY), mainRadius, particlePaint);
 
+      // --- Ostrý bílý střed (highlight) ---
+      final corePaint = Paint()..color = Colors.white;
       canvas.drawCircle(
-          Offset(pulseX, pulseY), isCompact ? 2.5 : 3.5, particlePaint);
+          Offset(pulseX, pulseY), mainRadius * 0.45, corePaint);
 
-      final particleAura = Paint()
-        ..color = color.withValues(alpha: 0.7)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+      // --- Sekundární duchový bod (fázově posunutý, jemnější) ---
+      final ghostT = (t + 0.15).clamp(0.0, 1.0);
+      final ghostWindow = math.sin(math.pi * ghostT);
+      final ghostX = ghostT * width;
+      final ghostY = midY +
+          amp2 *
+              ghostWindow *
+              math.sin(2 * math.pi * 2.2 * ghostT + phase + 1.0);
 
+      final ghostPaint = Paint()
+        ..color = Colors.white.withValues(alpha: 0.25)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
       canvas.drawCircle(
-          Offset(pulseX, pulseY), isCompact ? 6.0 : 9.0, particleAura);
+          Offset(ghostX, ghostY), isCompact ? 1.8 : 2.5, ghostPaint);
+
+      final ghostAura = Paint()
+        ..color = color.withValues(alpha: 0.2)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
+      canvas.drawCircle(
+          Offset(ghostX, ghostY), isCompact ? 5.0 : 7.0, ghostAura);
     }
   }
 

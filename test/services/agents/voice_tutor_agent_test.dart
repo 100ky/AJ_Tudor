@@ -52,6 +52,11 @@ void main() {
     when(() => mockAudio.stop()).thenAnswer((_) async {});
     when(() => mockAudio.stopPlayback()).thenAnswer((_) async {});
     when(() => mockRepo.closeSession(any())).thenAnswer((_) async => Result.success(null));
+    when(() => mockRepo.addTranscript(
+      sessionId: any(named: 'sessionId'),
+      speaker: any(named: 'speaker'),
+      content: any(named: 'content'),
+    )).thenAnswer((_) async => Result.success(null));
     when(() => mockMemory.analyzeSession(any())).thenAnswer((_) async {});
     // disconnect might be called
     when(() => mockClient.disconnect()).thenAnswer((_) {});
@@ -223,6 +228,62 @@ void main() {
       role: 'user',
       text: any(named: 'text', that: contains('CRITICAL INSTRUCTION')),
       turnComplete: true,
+    )).called(1);
+  });
+
+  test('interruptPlayback stops audio playback and returns state to listening', () async {
+    when(() => mockRepo.startNewSession()).thenAnswer((_) async => Result.success(123));
+    when(() => mockRepo.getUserProfile()).thenAnswer((_) async => null);
+    when(() => mockAudio.start(onAudioChunk: any(named: 'onAudioChunk'))).thenAnswer((_) async {});
+    when(() => mockAudio.isPlaying).thenReturn(true);
+    when(() => mockAudio.stopPlayback()).thenAnswer((_) async {});
+    when(() => mockClient.connect(
+      modelName: any(named: 'modelName'),
+      systemPrompt: any(named: 'systemPrompt'),
+      voiceName: any(named: 'voiceName'),
+      silenceDurationMs: any(named: 'silenceDurationMs'),
+    )).thenAnswer((_) {});
+
+    Function(String)? textCallback;
+    when(() => mockClient.onTextReceived = any()).thenAnswer((invocation) =>
+        textCallback = invocation.positionalArguments[0] as Function(String)?);
+
+    final agent = container.read(voiceTutorAgentProvider.notifier);
+    await agent.startSession();
+
+    // Tutor starts speaking
+    expect(textCallback, isNotNull);
+    textCallback!('Hello there student, let me tell you...');
+    expect(container.read(voiceTutorAgentProvider).status, TutorState.speaking);
+
+    // Student interrupts tutor
+    agent.interruptPlayback();
+
+    verify(() => mockAudio.stopPlayback()).called(1);
+    expect(container.read(voiceTutorAgentProvider).status, TutorState.listening);
+    expect(container.read(voiceTutorAgentProvider).messages.last.text, 'Hello there student, let me tell you...');
+    expect(container.read(voiceTutorAgentProvider).messages.last.isUser, false);
+  });
+
+  test('startSession passes configured silenceDurationMs to client.connect', () async {
+    when(() => mockRepo.startNewSession()).thenAnswer((_) async => Result.success(123));
+    when(() => mockRepo.getUserProfile()).thenAnswer((_) async => null);
+    when(() => mockAudio.start(onAudioChunk: any(named: 'onAudioChunk'))).thenAnswer((_) async {});
+    when(() => mockClient.connect(
+      modelName: any(named: 'modelName'),
+      systemPrompt: any(named: 'systemPrompt'),
+      voiceName: any(named: 'voiceName'),
+      silenceDurationMs: any(named: 'silenceDurationMs'),
+    )).thenAnswer((_) {});
+
+    final agent = container.read(voiceTutorAgentProvider.notifier);
+    await agent.startSession();
+
+    verify(() => mockClient.connect(
+      modelName: any(named: 'modelName'),
+      systemPrompt: any(named: 'systemPrompt'),
+      voiceName: any(named: 'voiceName'),
+      silenceDurationMs: 1500, // default from SpeechPatienceNotifier
     )).called(1);
   });
 }

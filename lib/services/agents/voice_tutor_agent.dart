@@ -288,13 +288,15 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         personalFact: personalFact,
       );
       
+      final speechPatience = ref.read(speechPatienceProvider);
       const liveModelName = 'models/${GeminiModels.defaultLiveModel}';
       
-      // Spuštění WebSocket připojení
+      // Spuštění WebSocket připojení s nastavenou dobou ticha VAD
       client.connect(
         modelName: liveModelName,
         systemPrompt: systemPrompt,
         voiceName: voice,
+        silenceDurationMs: speechPatience,
       );
 
       // Zaregistrování callbacků pro zpracování zpráv z klienta
@@ -369,16 +371,28 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       _currentUserTranscript = '';
       
       // --- DETEKCE FRUSTRACE (Krátké odpovědi) ---
-      final wordCount = userText.split(RegExp(r'\s+')).where((w) => w.length > 1).length;
-      if (wordCount <= 3) {
-        _consecutiveShortAnswers++;
-        if (_consecutiveShortAnswers >= 3) {
-           L.w('Detekována frustrace/nezájem (3x krátká odpověď za sebou). Injektuji afektivní rekalibraci.');
-           injectMidSessionGuidance('STUDENT IS GIVING VERY SHORT ANSWERS. They might be frustrated or tired. STOP asking difficult questions. Validate their effort, be extremely encouraging, and switch to a very easy, fun, and relaxing topic immediately.');
-           _consecutiveShortAnswers = 0; // reset po injekci
+      // Ignorujeme běžná výplňková slova a váhání studenta při přemýšlení (uh, em, um apod.)
+      const fillerWords = {'uh', 'um', 'em', 'ehm', 'er', 'ah', 'hmm', 'hm', 'well'};
+      final cleanTokens = userText
+          .toLowerCase()
+          .replaceAll(RegExp(r'[^\w\s]'), '')
+          .split(RegExp(r'\s+'))
+          .where((w) => w.isNotEmpty)
+          .toList();
+      final isOnlyFillers = cleanTokens.isNotEmpty && cleanTokens.every((w) => fillerWords.contains(w));
+
+      if (!isOnlyFillers) {
+        final wordCount = cleanTokens.where((w) => w.length > 1).length;
+        if (wordCount <= 3) {
+          _consecutiveShortAnswers++;
+          if (_consecutiveShortAnswers >= 3) {
+             L.w('Detekována frustrace/nezájem (3x krátká odpověď za sebou). Injektuji afektivní rekalibraci.');
+             injectMidSessionGuidance('STUDENT IS GIVING VERY SHORT ANSWERS. They might be frustrated or tired. STOP asking difficult questions. Validate their effort, be extremely encouraging, and switch to a very easy, fun, and relaxing topic immediately.');
+             _consecutiveShortAnswers = 0; // reset po injekci
+          }
+        } else {
+          _consecutiveShortAnswers = 0;
         }
-      } else {
-        _consecutiveShortAnswers = 0;
       }
       
       if (sessionId != null) {
@@ -857,6 +871,48 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     _resetWatchdog();
   }
 
+  /// Okamžitě přeruší probíhající řeč tutora a vrátí aplikaci do stavu poslechu (listening).
+  ///
+  /// Slouží pro manuální převzetí slova studentem (např. klepnutím na zvukovou vlnu v UI),
+  /// pokud tutor začal mluvit předčasně nebo student chce pokračovat ve své myšlence.
+  void interruptPlayback() {
+    if (state.status != TutorState.speaking && !_audio.isPlaying) return;
+    
+    L.i('Manuální přerušení řeči tutora studentem (barge-in tap).');
+    HapticFeedback.mediumImpact();
+    
+    _playbackCompleteTimer?.cancel();
+    _stuckTimer?.cancel();
+    _audio.stopPlayback();
+    
+    // Bezpečně uložíme částečný přepis tutora, pokud již dorazil
+    if (state.currentTranscript.isNotEmpty) {
+      final partial = state.currentTranscript;
+      final newMessages = List<ChatMessage>.from(state.messages)
+        ..add(ChatMessage(partial, isUser: false));
+      state = state.copyWith(
+        status: TutorState.listening,
+        currentTranscript: '',
+        messages: newMessages,
+      );
+      if (_currentSessionId != null) {
+        _repo.addTranscript(
+          sessionId: _currentSessionId!,
+          speaker: 'tutor',
+          content: partial,
+        );
+      }
+    } else {
+      state = state.copyWith(
+        status: TutorState.listening,
+        currentTranscript: '',
+      );
+    }
+    
+    _turnCompleteReceived = false;
+    _userSpokeInCurrentTurn = false;
+  }
+
   /// Odešle manuální textovou zprávu namísto mluvení (podpora chat režimu).
   void sendText(String text) {
     if (text.trim().isEmpty) return;
@@ -1097,9 +1153,11 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       _vadSilenceTimer?.cancel();
     } else if (_userSpokeInCurrentTurn) {
       if (_vadSilenceTimer == null || !_vadSilenceTimer!.isActive) {
-        _vadSilenceTimer = Timer(const Duration(milliseconds: 1600), () {
+        final configuredPatience = ref.read(speechPatienceProvider);
+        final vadWaitMs = math.max(1600, configuredPatience + 300);
+        _vadSilenceTimer = Timer(Duration(milliseconds: vadWaitMs), () {
           if (state.status == TutorState.listening && _userSpokeInCurrentTurn) {
-            L.i('🎙️ VAD: Detekován konec řeči studenta (1.6s ticho po domluvení). Popostrkuji model...');
+            L.i('🎙️ VAD: Detekován konec řeči studenta (${vadWaitMs}ms ticho po domluvení). Popostrkuji model...');
             _userSpokeInCurrentTurn = false;
             client.nudgeModel();
             _resetThinkingTimer();
@@ -1112,14 +1170,16 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
 
   /// Spustí hlídání reakce modelu po domluvě studenta.
   /// 
-  /// Pokud uživatel domluví a Gemini do 1.8s neodpoví,
+  /// Pokud uživatel domluví a Gemini neodpoví,
   /// model popostrčíme přes nudgeModel(). Pokud ani po dalších 5s neodpoví,
   /// vyvoláme čistý reconnect s obnovením kontextu.
   void _resetResponseSilenceTimer() {
     _responseSilenceTimer?.cancel();
-    _responseSilenceTimer = Timer(const Duration(milliseconds: 1800), () {
+    final configuredPatience = ref.read(speechPatienceProvider);
+    final responseWaitMs = math.max(1800, configuredPatience + 500);
+    _responseSilenceTimer = Timer(Duration(milliseconds: responseWaitMs), () {
       if (state.status == TutorState.listening) {
-        L.i('Detekováno ticho po přepisu řeči studenta (1.8s bez odpovědi AI). Popostrkuji model...');
+        L.i('Detekováno ticho po přepisu řeči studenta (${responseWaitMs}ms bez odpovědi AI). Popostrkuji model...');
         final client = ref.read(geminiLiveClientProvider);
         if (client != null && client.isConnected) {
           _userSpokeInCurrentTurn = false;
@@ -1128,7 +1188,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
           // Druhý záchranný krok po dalších 5 sekundách:
           _responseSilenceTimer = Timer(const Duration(seconds: 5), () {
             if (state.status == TutorState.listening) {
-              L.w('Model nereaguje ani po popostrčení (6.8s bez odpovědi). Vyvolávám forceReconnect...');
+              L.w('Model nereaguje ani po popostrčení (ticho bez odpovědi). Vyvolávám forceReconnect...');
               state = state.copyWith(status: TutorState.reconnecting);
               client.forceReconnect();
             }

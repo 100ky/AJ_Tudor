@@ -300,3 +300,32 @@ class SmartBubblesNotifier extends Notifier<bool> {
 final smartBubblesEnabledProvider =
     NotifierProvider<SmartBubblesNotifier, bool>(SmartBubblesNotifier.new);
 
+/// Správce nastavení trpělivosti tutora při mluvení (doba ticha v ms, než AI odpoví).
+///
+/// Hodnoty v milisekundách:
+/// - 800: Rychlá reakce
+/// - 1200: Přirozená
+/// - 1500: Trpělivá (výchozí – student má klid na přemýšlení a výplňková slova)
+/// - 2000: Extra trpělivá (pro začátečníky nebo delší pauzy)
+class SpeechPatienceNotifier extends Notifier<int> {
+  static const _key = 'speech_silence_duration_ms';
+  static const defaultDuration = 1500;
+
+  @override
+  int build() {
+    final prefs = ref.watch(sharedPreferencesProvider);
+    return prefs.getInt(_key) ?? defaultDuration;
+  }
+
+  /// Uloží nastavenou dobu ticha v milisekundách.
+  Future<void> savePatience(int durationMs) async {
+    final prefs = ref.read(sharedPreferencesProvider);
+    await prefs.setInt(_key, durationMs);
+    state = durationMs;
+  }
+}
+
+/// Globální provider pro trpělivost tutora (čas na rozmyšlenou v ms).
+final speechPatienceProvider =
+    NotifierProvider<SpeechPatienceNotifier, int>(SpeechPatienceNotifier.new);
+

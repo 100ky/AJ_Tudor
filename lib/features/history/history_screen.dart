@@ -111,49 +111,55 @@ class SessionCard extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Text(
-                      dateStr,
-                      style: GoogleFonts.plusJakartaSans(
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.primary,
-                        fontSize: 13,
-                      ),
-                    ),
-                    if (durationStr != null) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppTheme.primary.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(6),
+                Expanded(
+                  child: Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          dateStr,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.primary,
+                            fontSize: 13,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.schedule_rounded,
-                                size: 11,
-                                color: AppTheme.mutedTextColor(context)),
-                            const SizedBox(width: 3),
-                            Text(
-                              durationStr,
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 11,
-                                color: AppTheme.mutedTextColor(context),
-                                fontWeight: FontWeight.w600,
+                      ),
+                      if (durationStr != null) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primary.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.schedule_rounded,
+                                  size: 11,
+                                  color: AppTheme.mutedTextColor(context)),
+                              const SizedBox(width: 3),
+                              Text(
+                                durationStr,
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 11,
+                                  color: AppTheme.mutedTextColor(context),
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
-                if (session.fluencyScore != null)
+                if (session.fluencyScore != null) ...[
+                  const SizedBox(width: 8),
                   Container(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -177,6 +183,7 @@ class SessionCard extends ConsumerWidget {
                       ),
                     ),
                   ),
+                ],
               ],
             ),
             const SizedBox(height: 8),

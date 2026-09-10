@@ -34,6 +34,7 @@ class GeminiLiveClient {
   String? _lastModelName;
   String? _lastSystemPrompt;
   String _lastVoiceName = 'Puck';
+  int _lastSilenceDurationMs = 1500;
 
   // Pocitadlo po sobe jdoucich ridicich tokenu (ochrana pred zaseknutim v loopu)
   int _consecutiveControlTokens = 0;
@@ -95,11 +96,13 @@ class GeminiLiveClient {
   /// [modelName] definuje použitý model (např. gemini-2.0-flash-exp).
   /// [systemPrompt] předává instrukce pro chování tutora.
   /// [voiceName] určuje hlas pro syntézu řeči.
+  /// [silenceDurationMs] definuje dobu ticha v ms nutnou pro vyhodnocení konce tahu (VAD).
   /// [isReconnect] indikuje, zda jde o pokus o obnovení spadlého spojení.
   void connect({
     required String modelName,
     required String systemPrompt,
     String voiceName = 'Puck',
+    int silenceDurationMs = 1500,
     bool isReconnect = false,
   }) {
     _isManualDisconnect = false;
@@ -110,6 +113,7 @@ class GeminiLiveClient {
     _lastModelName = modelName;
     _lastSystemPrompt = systemPrompt;
     _lastVoiceName = voiceName;
+    _lastSilenceDurationMs = silenceDurationMs;
     
     // Zrušíme jakýkoliv čekající reconnect timer
     _reconnectTimer?.cancel();
@@ -165,7 +169,7 @@ class GeminiLiveClient {
     // Odešleme SETUP zprávu až po plném otevření WebSocket kanálu.
     channel.ready.then((_) {
       if (_channel == channel) {
-        _sendSetupMessage(modelName, systemPrompt, voiceName);
+        _sendSetupMessage(modelName, systemPrompt, voiceName, silenceDurationMs);
       }
     }).catchError((e) {
       L.e('WebSocket se nepodařilo otevřít: $e');
@@ -198,6 +202,7 @@ class GeminiLiveClient {
             modelName: _lastModelName!,
             systemPrompt: _lastSystemPrompt!,
             voiceName: _lastVoiceName,
+            silenceDurationMs: _lastSilenceDurationMs,
             isReconnect: true,
           );
         }
@@ -221,7 +226,7 @@ class GeminiLiveClient {
   }
 
   /// Odešle počáteční SETUP zprávu pro definování modelu, hlasu, promptu a nástrojů (Function Calling).
-  void _sendSetupMessage(String modelName, String systemPrompt, String voiceName) {
+  void _sendSetupMessage(String modelName, String systemPrompt, String voiceName, int silenceDurationMs) {
     final setupMessage = {
       'setup': {
         // Kontrola správného formátu názvu modelu
@@ -248,6 +253,18 @@ class GeminiLiveClient {
         // Povolíme transkripci jak pro vstup, tak pro výstup
         'inputAudioTranscription': {},
         'outputAudioTranscription': {},
+        // Konfigurace detekce hlasové aktivity (VAD):
+        // Nastavuje delší dobu ticha a nižší citlivost na konec řeči,
+        // aby tutor neskákal studentovi do řeči při přemýšlení nebo výplňkových slovech (uh, em).
+        'realtimeInputConfig': {
+          'automaticActivityDetection': {
+            'disabled': false,
+            'startOfSpeechSensitivity': 'START_SENSITIVITY_HIGH',
+            'endOfSpeechSensitivity': 'END_SENSITIVITY_LOW',
+            'prefixPaddingMs': 300,
+            'silenceDurationMs': silenceDurationMs,
+          }
+        },
         // POZNÁMKA: sessionResumptionConfig a tools pro logování odstraněny,
         // aby nedocházelo k zamrzání audio streamu a smyčkám v Live API.
       }
@@ -582,6 +599,7 @@ class GeminiLiveClient {
         modelName: _lastModelName!,
         systemPrompt: _lastSystemPrompt!,
         voiceName: _lastVoiceName,
+        silenceDurationMs: _lastSilenceDurationMs,
         isReconnect: true,
       );
     }

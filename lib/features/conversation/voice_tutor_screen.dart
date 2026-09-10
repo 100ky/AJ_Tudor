@@ -186,7 +186,7 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
       case TutorState.error:
         return 'Chyba spojení';
       case TutorState.idle:
-        return 'Připraven ke startu';
+        return '';
     }
   }
 
@@ -464,22 +464,23 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
             ),
           ),
 
-          const SizedBox(height: 12),
-
-          // Stavový text
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 300),
-            child: Text(
-              _getStatusText(tutorState.status),
-              key: ValueKey(tutorState.status),
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 15,
-                fontWeight: FontWeight.w500,
-                color: AppTheme.onSurfaceMuted,
-                letterSpacing: 0.2,
+          // Stavový text (zobrazen pouze pokud má text, např. chyba)
+          if (_getStatusText(tutorState.status).isNotEmpty) ...[
+            const SizedBox(height: 12),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              child: Text(
+                _getStatusText(tutorState.status),
+                key: ValueKey(tutorState.status),
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                  color: AppTheme.onSurfaceMuted,
+                  letterSpacing: 0.2,
+                ),
               ),
             ),
-          ),
+          ],
 
           // Aktivní scénář / režim chip
           if (tutorState.selectedScenarioId != null) ...[
@@ -535,15 +536,30 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // 1. Světelná zvuková vlna rozprostřená přes CELÝ úzký řádek
+          // 1. Světelná zvuková vlna rozprostřená přes CELÝ úzký řádek (klepnutím lze tutora ztišit)
           Positioned.fill(
-            child: FluidVoiceWave(
-              color: waveColor,
-              stateLabel: stateLabel,
-              volumeStream: activeVolumeStream,
-              height: 52,
-              isCompact: true,
-              showAmbientGlow: true,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {
+                if (tutorState.status == TutorState.speaking) {
+                  ref.read(voiceTutorAgentProvider.notifier).interruptPlayback();
+                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Tutor ztišen – pokračuj v mluvení 🎤'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                }
+              },
+              child: FluidVoiceWave(
+                color: waveColor,
+                stateLabel: stateLabel,
+                volumeStream: activeVolumeStream,
+                height: 52,
+                isCompact: true,
+                showAmbientGlow: true,
+              ),
             ),
           ),
 
@@ -614,42 +630,6 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // ── Úvodní ikona a titulek ──────────────────────────────────────
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppTheme.primary.withValues(alpha: 0.08),
-                border: Border.all(
-                  color: AppTheme.primary.withValues(alpha: 0.15),
-                ),
-              ),
-              child: Icon(
-                Icons.record_voice_over_rounded,
-                size: 28,
-                color: AppTheme.primary,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'Připraven k hlasové lekci',
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: AppTheme.textColor(context),
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Zvol si téma nebo scénář a stiskni mikrofon dole.',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 12.5,
-                color: AppTheme.mutedTextColor(context),
-                height: 1.35,
-              ),
-            ),
-            const SizedBox(height: 16),
 
             // ── Přepínač režimu tématu ──────────────────────────────────────
             SegmentedButton<int>(

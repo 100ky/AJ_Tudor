@@ -472,6 +472,49 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ],
                   ),
                 ),
+                Divider(color: AppTheme.outlineLightColor(context)),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primary.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(Icons.hourglass_top_rounded,
+                        color: AppTheme.primary, size: 20),
+                  ),
+                  title: Text('Trpělivost učitele (čas na rozmyšlenou)',
+                      style: GoogleFonts.plusJakartaSans(
+                          color: AppTheme.textColor(context))),
+                  subtitle: Text('Jak dlouho AI čeká v tichu, než odpoví',
+                      style: GoogleFonts.plusJakartaSans(
+                          fontSize: 12, color: AppTheme.mutedTextColor(context))),
+                  trailing: DropdownButton<int>(
+                    value: ref.watch(speechPatienceProvider),
+                    underline: const SizedBox(),
+                    style: GoogleFonts.plusJakartaSans(
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.primary,
+                        fontSize: 14),
+                    onChanged: (int? newPatience) {
+                      if (newPatience != null) {
+                        ref.read(speechPatienceProvider.notifier).savePatience(newPatience);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                              content: Text(
+                                  'Doba čekání na odpověď nastavena na: $newPatience ms ⏱️')),
+                        );
+                      }
+                    },
+                    items: const [
+                      DropdownMenuItem(value: 800, child: Text('Rychlá (800 ms)')),
+                      DropdownMenuItem(value: 1200, child: Text('Přirozená (1 200 ms)')),
+                      DropdownMenuItem(value: 1500, child: Text('Trpělivá (1 500 ms)')),
+                      DropdownMenuItem(value: 2000, child: Text('Extra trpělivá (2 000 ms)')),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
