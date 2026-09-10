@@ -184,6 +184,19 @@ class SessionCard extends ConsumerWidget {
                     ),
                   ),
                 ],
+                const SizedBox(width: 4),
+                IconButton(
+                  icon: Icon(
+                    Icons.delete_outline,
+                    size: 18,
+                    color: AppTheme.mutedTextColor(context),
+                  ),
+                  tooltip: 'Smazat lekci',
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.all(4),
+                  constraints: const BoxConstraints(),
+                  onPressed: () => _confirmDeleteSession(context, ref, session),
+                ),
               ],
             ),
             const SizedBox(height: 8),
@@ -255,6 +268,67 @@ class SessionCard extends ConsumerWidget {
   }
 }
 
+Future<void> _confirmDeleteSession(
+    BuildContext context, WidgetRef ref, Session session,
+    {VoidCallback? onDeleted}) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text('Smazat lekci?',
+          style: GoogleFonts.plusJakartaSans(
+            fontWeight: FontWeight.w600,
+            color: AppTheme.textColor(context),
+          )),
+      content: Text(
+          'Opravdu chceš smazat tuto lekci z historie? Tato akce je nevratná.',
+          style: GoogleFonts.plusJakartaSans(
+            color: AppTheme.surfaceTextColor(context),
+          )),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: Text('Zrušit',
+              style: GoogleFonts.plusJakartaSans(
+                  color: AppTheme.mutedTextColor(context))),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: Text('Smazat',
+              style: GoogleFonts.plusJakartaSans(color: AppTheme.error)),
+        ),
+      ],
+    ),
+  );
+
+  if (confirmed != true || !context.mounted) return;
+
+  final repo = ref.read(sessionRepositoryProvider);
+  final result = await repo.deleteSession(session.id);
+
+  if (!context.mounted) return;
+
+  result.fold(
+    (_) {
+      ref.read(scenarioPlannerAgentProvider).planScenarios();
+      onDeleted?.call();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Lekce byla smazána. Paměť a scénáře se aktualizují.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    },
+    (failure) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Chyba: ${failure.message}'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    },
+  );
+}
+
 class _SessionDetailSheet extends ConsumerStatefulWidget {
   final Session session;
   final List<Transcript> transcripts;
@@ -273,7 +347,6 @@ class _SessionDetailSheet extends ConsumerStatefulWidget {
 
 class _SessionDetailSheetState extends ConsumerState<_SessionDetailSheet> {
   bool _isAnalyzing = false;
-  bool _isDeleting = false;
   bool _isGeneratingCards = false;
   final _messageController = TextEditingController();
   bool _isSendingMessage = false;
@@ -465,68 +538,16 @@ Instrukce pro odpověď:
   }
 
   void _confirmDelete() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Smazat lekci?',
-            style: GoogleFonts.plusJakartaSans(
-              fontWeight: FontWeight.w600,
-              color: AppTheme.textColor(context),
-            )),
-        content: Text(
-            'Opravdu chceš smazat tuto lekci z historie? Tato akce je nevratná.',
-            style: GoogleFonts.plusJakartaSans(
-              color: AppTheme.surfaceTextColor(context),
-            )),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Zrušit',
-                style: GoogleFonts.plusJakartaSans(
-                    color: AppTheme.mutedTextColor(context))),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _deleteSession();
-            },
-            child: Text('Smazat',
-                style: GoogleFonts.plusJakartaSans(color: AppTheme.error)),
-          ),
-        ],
-      ),
+    _confirmDeleteSession(
+      context,
+      ref,
+      widget.session,
+      onDeleted: () {
+        if (mounted) {
+          Navigator.pop(context);
+        }
+      },
     );
-  }
-
-  void _deleteSession() async {
-    setState(() => _isDeleting = true);
-    try {
-      final repo = ref.read(sessionRepositoryProvider);
-      final result = await repo.deleteSession(widget.session.id);
-
-      if (mounted) {
-        result.fold(
-          (_) {
-            ref.read(scenarioPlannerAgentProvider).planScenarios();
-            Navigator.pop(context);
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                  content: Text(
-                      'Lekce byla smazána. Paměť a scénáře se aktualizují.')),
-            );
-          },
-          (failure) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Chyba: ${failure.message}')),
-            );
-          },
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isDeleting = false);
-      }
-    }
   }
 
   @override
@@ -648,6 +669,19 @@ Instrukce pro odpověď:
                                 ),
                               ],
                               const SizedBox(width: 4),
+                              IconButton(
+                                icon: Icon(
+                                  Icons.delete_outline,
+                                  size: 19,
+                                  color: AppTheme.error,
+                                ),
+                                tooltip: 'Smazat lekci',
+                                visualDensity: VisualDensity.compact,
+                                padding: const EdgeInsets.all(4),
+                                constraints: const BoxConstraints(),
+                                onPressed: _confirmDelete,
+                              ),
+                              const SizedBox(width: 2),
                               Icon(
                                 _isHeaderExpanded
                                     ? Icons.keyboard_arrow_up_rounded
@@ -664,64 +698,79 @@ Instrukce pro odpověď:
                               color: AppTheme.outlineLightColor(context),
                             ),
                             const SizedBox(height: 8),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.end,
-                              children: [
-                                if (widget.session.topicSummary == null ||
-                                    widget.session.fluencyScore == null)
-                                  _isAnalyzing
-                                      ? const SizedBox(
-                                          width: 20,
-                                          height: 20,
-                                          child: CircularProgressIndicator(
-                                              strokeWidth: 2))
-                                      : TextButton.icon(
-                                          icon: Icon(Icons.analytics_outlined,
-                                              size: 16,
-                                              color: AppTheme.primary),
-                                          label: const Text('Analyzovat'),
-                                          style: TextButton.styleFrom(
-                                            visualDensity:
-                                                VisualDensity.compact,
-                                            foregroundColor: AppTheme.primary,
-                                            textStyle:
-                                                GoogleFonts.plusJakartaSans(
-                                                    fontSize: 12),
+                            SizedBox(
+                              width: double.infinity,
+                              child: Wrap(
+                                alignment: WrapAlignment.end,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                spacing: 6,
+                                runSpacing: 6,
+                                children: [
+                                  if (widget.session.topicSummary == null ||
+                                      widget.session.fluencyScore == null)
+                                    _isAnalyzing
+                                        ? const Padding(
+                                            padding: EdgeInsets.symmetric(
+                                                horizontal: 8),
+                                            child: SizedBox(
+                                                width: 18,
+                                                height: 18,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                        strokeWidth: 2)),
+                                          )
+                                        : TextButton.icon(
+                                            icon: Icon(Icons.analytics_outlined,
+                                                size: 15,
+                                                color: AppTheme.primary),
+                                            label: const Text('Analyzovat'),
+                                            style: TextButton.styleFrom(
+                                              visualDensity:
+                                                  VisualDensity.compact,
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 8,
+                                                      vertical: 4),
+                                              tapTargetSize:
+                                                  MaterialTapTargetSize
+                                                      .shrinkWrap,
+                                              foregroundColor:
+                                                  AppTheme.primary,
+                                              textStyle:
+                                                  GoogleFonts.plusJakartaSans(
+                                                      fontSize: 12),
+                                            ),
+                                            onPressed: _analyzeSession,
                                           ),
-                                          onPressed: _analyzeSession,
-                                        ),
-                                TextButton.icon(
-                                  icon: _isGeneratingCards
-                                      ? const SizedBox(
-                                          width: 14,
-                                          height: 14,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            color: AppTheme.primary,
-                                          ),
-                                        )
-                                      : const Icon(Icons.auto_awesome_rounded,
-                                          size: 15),
-                                  label: const Text('Kartičky z chyb'),
-                                  style: TextButton.styleFrom(
-                                    visualDensity: VisualDensity.compact,
-                                    foregroundColor: AppTheme.primary,
-                                    textStyle: GoogleFonts.plusJakartaSans(
-                                        fontSize: 12),
+                                  TextButton.icon(
+                                    icon: _isGeneratingCards
+                                        ? const SizedBox(
+                                            width: 14,
+                                            height: 14,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: AppTheme.primary,
+                                            ),
+                                          )
+                                        : const Icon(Icons.auto_awesome_rounded,
+                                            size: 14),
+                                    label: const Text('Kartičky z chyb'),
+                                    style: TextButton.styleFrom(
+                                      visualDensity: VisualDensity.compact,
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 4),
+                                      tapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
+                                      foregroundColor: AppTheme.primary,
+                                      textStyle: GoogleFonts.plusJakartaSans(
+                                          fontSize: 12),
+                                    ),
+                                    onPressed: _isGeneratingCards
+                                        ? null
+                                        : _generateCardsForSession,
                                   ),
-                                  onPressed: _isGeneratingCards
-                                      ? null
-                                      : _generateCardsForSession,
-                                ),
-                                IconButton(
-                                  icon: Icon(Icons.delete_outline,
-                                      size: 18, color: AppTheme.error),
-                                  tooltip: 'Smazat lekci',
-                                  visualDensity: VisualDensity.compact,
-                                  onPressed:
-                                      _isDeleting ? null : _confirmDelete,
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ],
                         ],
