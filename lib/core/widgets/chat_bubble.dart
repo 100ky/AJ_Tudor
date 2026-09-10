@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../app_theme.dart';
+import 'interactive_tutor_text.dart';
 
 /// Moderní znovupoužitelná bublina zprávy pro chat i hlasové přepisy.
 ///
@@ -161,46 +161,22 @@ class ChatBubble extends StatelessWidget {
                             fontWeight: FontWeight.w500,
                           ),
                         )
-                      : MarkdownBody(
-                          data: text,
-                          selectable: false,
-                          styleSheet: MarkdownStyleSheet(
-                            p: GoogleFonts.plusJakartaSans(
-                              fontSize: 15,
-                              color: tutorTextColor,
-                              height: 1.45,
-                            ),
-                            strong: GoogleFonts.plusJakartaSans(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              color: tutorStrongColor,
-                            ),
-                            em: GoogleFonts.plusJakartaSans(
-                              fontSize: 15,
-                              fontStyle: FontStyle.italic,
-                              color: tutorTextColor,
-                            ),
-                            listBullet: GoogleFonts.plusJakartaSans(
-                              fontSize: 15,
-                              color: AppTheme.primary,
-                            ),
-                            code: GoogleFonts.firaCode(
-                              fontSize: 13,
-                              color: tutorStrongColor,
-                              backgroundColor: AppTheme.primary
-                                  .withValues(alpha: isDark ? 0.2 : 0.08),
-                            ),
-                            blockquoteDecoration: BoxDecoration(
-                              color: AppTheme.primary
-                                  .withValues(alpha: isDark ? 0.15 : 0.06),
-                              borderRadius: BorderRadius.circular(8),
-                              border: const Border(
-                                left: BorderSide(
-                                  color: AppTheme.primary,
-                                  width: 3,
-                                ),
-                              ),
-                            ),
+                      : InteractiveTutorText(
+                          text: text,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 15,
+                            color: tutorTextColor,
+                            height: 1.45,
+                          ),
+                          strongStyle: GoogleFonts.plusJakartaSans(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: tutorStrongColor,
+                          ),
+                          emStyle: GoogleFonts.plusJakartaSans(
+                            fontSize: 15,
+                            fontStyle: FontStyle.italic,
+                            color: tutorTextColor,
                           ),
                         ),
                 ),

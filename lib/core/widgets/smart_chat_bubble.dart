@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../data/models/chat_message.dart';
@@ -9,6 +8,7 @@ import '../../providers/database_provider.dart';
 import '../../providers/gemini_provider.dart';
 import '../../services/gemini/gemini_tts_service.dart';
 import '../app_theme.dart';
+import 'interactive_tutor_text.dart';
 
 /// Chytrá interaktivní bublina zprávy pro chat a hlasové přepisy.
 /// 
@@ -272,35 +272,22 @@ class _SmartChatBubbleState extends ConsumerState<SmartChatBubble> {
                                   fontWeight: FontWeight.w500,
                                 ),
                               )
-                            : MarkdownBody(
-                                data: msg.text,
-                                selectable: false,
-                                styleSheet: MarkdownStyleSheet(
-                                  p: GoogleFonts.plusJakartaSans(
-                                    fontSize: 15,
-                                    color: tutorTextColor,
-                                    height: 1.45,
-                                  ),
-                                  strong: GoogleFonts.plusJakartaSans(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w700,
-                                    color: tutorStrongColor,
-                                  ),
-                                  em: GoogleFonts.plusJakartaSans(
-                                    fontSize: 15,
-                                    fontStyle: FontStyle.italic,
-                                    color: tutorTextColor,
-                                  ),
-                                  listBullet: GoogleFonts.plusJakartaSans(
-                                    fontSize: 15,
-                                    color: AppTheme.primary,
-                                  ),
-                                  code: GoogleFonts.firaCode(
-                                    fontSize: 13,
-                                    color: tutorStrongColor,
-                                    backgroundColor: AppTheme.primary
-                                        .withValues(alpha: isDark ? 0.2 : 0.08),
-                                  ),
+                            : InteractiveTutorText(
+                                text: msg.text,
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 15,
+                                  color: tutorTextColor,
+                                  height: 1.45,
+                                ),
+                                strongStyle: GoogleFonts.plusJakartaSans(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  color: tutorStrongColor,
+                                ),
+                                emStyle: GoogleFonts.plusJakartaSans(
+                                  fontSize: 15,
+                                  fontStyle: FontStyle.italic,
+                                  color: tutorTextColor,
                                 ),
                               ),
                       ),
