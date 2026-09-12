@@ -670,69 +670,33 @@ class SessionRepository {
         .get();
   }
 
-  /// Sleduje agregované statistiky kartiček a stavu ovládnutí látky (Mastery).
-  Stream<FlashcardStats> watchFlashcardStats() {
-    return watchAllFlashcards().map((cards) {
-      if (cards.isEmpty) return const FlashcardStats.empty();
-
-      final now = DateTime.now();
-      final total = cards.length;
-      int due = 0;
-      int mastered = 0;
-      int learning = 0;
-      int newCards = 0;
-      double totalMastery = 0.0;
-
-      for (final c in cards) {
-        if (c.nextReviewAt.isBefore(now) || c.nextReviewAt.isAtSameMomentAs(now)) {
-          due++;
-        }
-        if (c.masteryScore >= 0.8) {
-          mastered++;
-        } else if (c.masteryScore > 0.0) {
-          learning++;
-        } else {
-          newCards++;
-        }
-        totalMastery += c.masteryScore;
-      }
-
-      return FlashcardStats(
-        totalCards: total,
-        dueCards: due,
-        masteredCards: mastered,
-        learningCards: learning,
-        newCards: newCards,
-        averageMastery: totalMastery / total,
-      );
-    });
-  }
-
-  /// Načte jednorázově agregované statistiky kartiček.
-  Future<FlashcardStats> getFlashcardStats() async {
-    final cards = await getAllFlashcards();
-    if (cards.isEmpty) return const FlashcardStats.empty();
+  /// Pomocná metoda pro výpočet agregovaných statistik kartiček z lehkého dotazu.
+  FlashcardStats _computeFlashcardStats(List<TypedResult> rows) {
+    if (rows.isEmpty) return const FlashcardStats.empty();
 
     final now = DateTime.now();
-    final total = cards.length;
+    final total = rows.length;
     int due = 0;
     int mastered = 0;
     int learning = 0;
     int newCards = 0;
     double totalMastery = 0.0;
 
-    for (final c in cards) {
-      if (c.nextReviewAt.isBefore(now) || c.nextReviewAt.isAtSameMomentAs(now)) {
+    for (final row in rows) {
+      final nextReviewAt = row.read(_db.flashcards.nextReviewAt);
+      final masteryScore = row.read(_db.flashcards.masteryScore) ?? 0.0;
+
+      if (nextReviewAt != null && (nextReviewAt.isBefore(now) || nextReviewAt.isAtSameMomentAs(now))) {
         due++;
       }
-      if (c.masteryScore >= 0.8) {
+      if (masteryScore >= 0.8) {
         mastered++;
-      } else if (c.masteryScore > 0.0) {
+      } else if (masteryScore > 0.0) {
         learning++;
       } else {
         newCards++;
       }
-      totalMastery += c.masteryScore;
+      totalMastery += masteryScore;
     }
 
     return FlashcardStats(
@@ -743,6 +707,25 @@ class SessionRepository {
       newCards: newCards,
       averageMastery: totalMastery / total,
     );
+  }
+
+  /// Sleduje agregované statistiky kartiček a stavu ovládnutí látky (Mastery).
+  /// 
+  /// Optimalizováno: vybírá pouze sloupce `masteryScore` a `nextReviewAt` bez řazení a těžkých textových polí.
+  Stream<FlashcardStats> watchFlashcardStats() {
+    final query = _db.selectOnly(_db.flashcards)
+      ..addColumns([_db.flashcards.masteryScore, _db.flashcards.nextReviewAt]);
+    return query.watch().map(_computeFlashcardStats);
+  }
+
+  /// Načte jednorázově agregované statistiky kartiček.
+  /// 
+  /// Optimalizováno: vybírá pouze sloupce `masteryScore` a `nextReviewAt` bez řazení a těžkých textových polí.
+  Future<FlashcardStats> getFlashcardStats() async {
+    final query = _db.selectOnly(_db.flashcards)
+      ..addColumns([_db.flashcards.masteryScore, _db.flashcards.nextReviewAt]);
+    final rows = await query.get();
+    return _computeFlashcardStats(rows);
   }
 
   /// Aktualizuje stav kartičky po studentově procvičení (SRS algoritmus).
@@ -778,14 +761,12 @@ class SessionRepository {
         case 1: // Hard
           newRepetition += 1;
           newInterval = (newInterval * 1.2).ceil().clamp(1, 60);
-          newMastery = (newMastery + 0.05).clamp(0.0, 1.0);
           newMastery = (newMastery + 0.10).clamp(0.0, 1.0);
           break;
         case 2: // Good
           newRepetition += 1;
           newInterval = (newInterval * 2.0).ceil().clamp(2, 90);
-          newMastery = (newMastery + 0.15).clamp(0.0, 1.0);
-          newMastery = (newMastery + 0.30).clamp(0.0, 1.0);
+          newMastery = (newMastery + 0.25).clamp(0.0, 1.0);
           break;
         case 3: // Easy
           newRepetition += 1;

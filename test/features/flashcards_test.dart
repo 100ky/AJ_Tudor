@@ -293,6 +293,76 @@ void main() {
       expect(cards.first.frontText, 'na jeden měsíc');
       expect(cards.first.backText, 'for one month');
     });
+
+    test('reviewFlashcard calculates exact masteryScore progression for all 4 ratings', () async {
+      final insertRes = await repo.addFlashcard(
+        frontText: 'Testovací slovo',
+        backText: 'Test word',
+        explanation: 'Test',
+        errorType: 'vocabulary',
+      );
+      final id = insertRes.getOrThrow();
+
+      // Počáteční stav: mastery = 0.0, repetition = 0, interval = 1
+      var card = (await repo.getAllFlashcards()).first;
+      expect(card.masteryScore, 0.0);
+      expect(card.repetitionCount, 0);
+
+      // 1. Rating 1 (Hard): mastery +0.10 -> 0.10, repetition 1
+      await repo.reviewFlashcard(flashcardId: id, rating: 1);
+      card = (await repo.getAllFlashcards()).first;
+      expect(card.masteryScore, closeTo(0.10, 0.001));
+      expect(card.repetitionCount, 1);
+
+      // 2. Rating 2 (Good): mastery +0.25 -> 0.35, repetition 2
+      await repo.reviewFlashcard(flashcardId: id, rating: 2);
+      card = (await repo.getAllFlashcards()).first;
+      expect(card.masteryScore, closeTo(0.35, 0.001));
+      expect(card.repetitionCount, 2);
+
+      // 3. Rating 0 (Again): mastery -0.20 -> 0.15, repetition reset to 0, interval 1
+      await repo.reviewFlashcard(flashcardId: id, rating: 0);
+      card = (await repo.getAllFlashcards()).first;
+      expect(card.masteryScore, closeTo(0.15, 0.001));
+      expect(card.repetitionCount, 0);
+      expect(card.intervalDays, 1);
+
+      // 4. Rating 3 (Easy): mastery jumps directly to >= 0.85 (mastered)
+      await repo.reviewFlashcard(flashcardId: id, rating: 3);
+      card = (await repo.getAllFlashcards()).first;
+      expect(card.masteryScore, greaterThanOrEqualTo(0.85));
+      expect(card.repetitionCount, 1);
+    });
+
+    test('watchFlashcardStats emits reactive updates without heavy column projection', () async {
+      // Stream by měl reagovat na přidání i na review
+      final statsStream = repo.watchFlashcardStats();
+
+      final initial = await statsStream.first;
+      expect(initial.totalCards, 0);
+
+      final insertRes = await repo.addFlashcard(
+        frontText: 'Jablko',
+        backText: 'Apple',
+        explanation: 'Ovoce',
+        errorType: 'vocabulary',
+      );
+      final id = insertRes.getOrThrow();
+
+      final statsAfterAdd = await repo.getFlashcardStats();
+      expect(statsAfterAdd.totalCards, 1);
+      expect(statsAfterAdd.newCards, 1);
+      expect(statsAfterAdd.masteredCards, 0);
+
+      // Ohodnotíme jako Snadné
+      await repo.reviewFlashcard(flashcardId: id, rating: 3);
+
+      final statsAfterReview = await repo.getFlashcardStats();
+      expect(statsAfterReview.totalCards, 1);
+      expect(statsAfterReview.newCards, 0);
+      expect(statsAfterReview.masteredCards, 1);
+      expect(statsAfterReview.masteredPercentage, 100);
+    });
   });
 }
 

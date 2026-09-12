@@ -1,6 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import '../../core/constants/gemini_models.dart';
 import '../../core/utils/logger.dart';
 import '../../providers/audio_provider.dart';
@@ -19,6 +23,12 @@ class GeminiTtsService {
 
   /// Paměťová mezipaměť vygenerovaných audio bytů pro okamžité opakované přehrávání bez sítě.
   static final Map<String, List<int>> _audioCache = {};
+
+  /// Složka pro trvalou diskovou mezipaměť audia
+  static Directory? _diskCacheDir;
+
+  /// Složka pro trvalou diskovou mezipaměť audia (pro testy lze přepsat)
+  static Directory? diskCacheDirOverride;
 
   /// Naposledy úspěšně použitý model pro okamžité generování dalších nahrávek.
   static String? _preferredWorkingModel;
@@ -44,38 +54,116 @@ class GeminiTtsService {
     _preferredWorkingModel = null;
     _modelCooldowns.clear();
     _audioCache.clear();
+    _diskCacheDir = null;
+    diskCacheDirOverride = null;
   }
 
   /// Aktuálně preferovaný funkční model.
   static String? get preferredWorkingModel => _preferredWorkingModel;
 
-  /// Počet položek v audio mezipaměti.
+  /// Počet položek v paměťové audio mezipaměti.
   static int get cachedAudioCount => _audioCache.length;
+
+  /// Získá nebo vytvoří složku pro diskovou mezipaměť audia.
+  static Future<Directory?> _getCacheDir() async {
+    if (diskCacheDirOverride != null) return diskCacheDirOverride;
+    if (_diskCacheDir != null) return _diskCacheDir;
+    try {
+      final appDir = await getApplicationDocumentsDirectory();
+      final cacheDir = Directory(p.join(appDir.path, 'aj_tudor_tts_cache'));
+      if (!await cacheDir.exists()) {
+        await cacheDir.create(recursive: true);
+      }
+      _diskCacheDir = cacheDir;
+      return cacheDir;
+    } catch (e) {
+      L.w('Gemini TTS: Nepodařilo se získat složku pro diskovou mezipaměť: $e');
+      return null;
+    }
+  }
+
+  /// Vygeneruje bezpečný a unikátní název souboru pro zadaný klíč mezipaměti.
+  static String _generateCacheFileName(String cacheKey) {
+    final sanitized = cacheKey.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+    final prefix = sanitized.length > 30 ? sanitized.substring(0, 30) : sanitized;
+    final hash = cacheKey.hashCode.toUnsigned(32).toRadixString(16).padLeft(8, '0');
+    return '${prefix}_$hash.pcm';
+  }
+
+  /// Přečte nahrávku z trvalé diskové mezipaměti.
+  static Future<List<int>?> _readFromDiskCache(String cacheKey) async {
+    try {
+      final dir = await _getCacheDir();
+      if (dir == null) return null;
+      final file = File(p.join(dir.path, _generateCacheFileName(cacheKey)));
+      if (await file.exists()) {
+        return await file.readAsBytes();
+      }
+    } catch (e) {
+      L.w('Gemini TTS: Chyba při čtení z diskové mezipaměti: $e');
+    }
+    return null;
+  }
+
+  /// Uloží vygenerované audio byty do trvalé diskové mezipaměti.
+  static Future<void> _writeToDiskCache(String cacheKey, List<int> bytes) async {
+    try {
+      final dir = await _getCacheDir();
+      if (dir == null) return;
+      final file = File(p.join(dir.path, _generateCacheFileName(cacheKey)));
+      await file.writeAsBytes(bytes, flush: true);
+    } catch (e) {
+      L.w('Gemini TTS: Chyba při zápisu do diskové mezipaměti: $e');
+    }
+  }
+
+  /// Smaže celou diskovou mezipaměť vygenerovaných nahrávek.
+  static Future<void> clearDiskCache() async {
+    try {
+      final dir = await _getCacheDir();
+      if (dir != null && await dir.exists()) {
+        await dir.delete(recursive: true);
+      }
+      _diskCacheDir = null;
+    } catch (e) {
+      L.w('Gemini TTS: Chyba při mazání diskové mezipaměti: $e');
+    }
+  }
 
   /// Vygeneruje a přehraje výslovnost zadaného textu.
   /// 
   /// [text] je anglický text k vyslovení.
   /// [instruction] volitelná instrukce pro intonaci či přízvuk (např. 'Speak slowly and emphasize past tense.').
   Future<bool> speak(String text, {String? instruction}) async {
-    final apiKey = _ref.read(apiKeyProvider);
-    if (apiKey == null || apiKey.isEmpty) {
-      L.w('Gemini TTS: Chybí API klíč, nelze přehrát výslovnost.');
-      return false;
-    }
+    final cleanText = sanitizeTextForSpeech(text);
+    if (cleanText.isEmpty) return false;
 
     final voiceName = _ref.read(voiceProvider);
     final audioPlayback = _ref.read(audioPlaybackServiceProvider);
-
-    final cleanText = sanitizeTextForSpeech(text);
-    if (cleanText.isEmpty) return false;
 
     // 1. Zkontrolujeme paměťovou mezipaměť – pokud už máme audio vygenerované, přehrajeme ho ihned
     final cacheKey = '$cleanText-$voiceName';
     if (_audioCache.containsKey(cacheKey)) {
       final cachedBytes = _audioCache[cacheKey]!;
-      L.i('Gemini TTS: Přehrávám z mezipaměti pro "$cleanText" (${cachedBytes.length} B).');
+      L.i('Gemini TTS: Přehrávám z paměťové mezipaměti pro "$cleanText" (${cachedBytes.length} B).');
       await audioPlayback.playPcmData(cachedBytes);
       return true;
+    }
+
+    // 2. Zkontrolujeme trvalou diskovou mezipaměť
+    final diskBytes = await _readFromDiskCache(cacheKey);
+    if (diskBytes != null && diskBytes.isNotEmpty) {
+      L.i('Gemini TTS: Přehrávám z diskové mezipaměti pro "$cleanText" (${diskBytes.length} B).');
+      _audioCache[cacheKey] = diskBytes;
+      await audioPlayback.playPcmData(diskBytes);
+      return true;
+    }
+
+    // 3. Pro generování nového audia přes síť potřebujeme platný API klíč
+    final apiKey = _ref.read(apiKeyProvider);
+    if (apiKey == null || apiKey.isEmpty) {
+      L.w('Gemini TTS: Chybí API klíč, nelze přehrát výslovnost.');
+      return false;
     }
 
     try {
@@ -164,11 +252,14 @@ $cleanText''';
                     _preferredWorkingModel = model;
                     _modelCooldowns.remove(model);
 
-                    // Uložíme do mezipaměti (max 100 záznamů)
+                    // Uložíme do mezipaměti (max 100 záznamů v paměti)
                     _audioCache[cacheKey] = bytes;
                     if (_audioCache.length > 100) {
                       _audioCache.remove(_audioCache.keys.first);
                     }
+
+                    // Uložíme do trvalé diskové mezipaměti na pozadí
+                    unawaited(_writeToDiskCache(cacheKey, bytes));
 
                     // Přehrání surových PCM/audio bytů
                     await audioPlayback.playPcmData(bytes);

@@ -1,6 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import '../../core/constants/gemini_models.dart';
 import '../../core/utils/logger.dart';
 import '../../core/utils/result.dart';
@@ -41,11 +45,86 @@ class WordTranslationService {
   /// Dočasná paměťová mezipaměť (anglický výraz + kontext -> český překlad)
   static final Map<String, String> _translationCache = {};
 
+  /// Příznak, zda již byla načtena disková mezipaměť
+  static bool _diskCacheLoaded = false;
+
+  /// Volitelné přepsání souboru mezipaměti (pro testy)
+  static File? diskCacheFileOverride;
+
   WordTranslationService(this._ref)
       : _dio = Dio(BaseOptions(
           connectTimeout: const Duration(seconds: 4),
           receiveTimeout: const Duration(seconds: 6),
         ));
+
+  /// Počet položek v paměťové mezipaměti překladů.
+  static int get cachedCount => _translationCache.length;
+
+  /// Resetuje mezipaměť (pro testování a debug).
+  static void resetState() {
+    _translationCache.clear();
+    _diskCacheLoaded = false;
+    diskCacheFileOverride = null;
+  }
+
+  /// Získá referenci na soubor diskové mezipaměti.
+  static Future<File?> _getCacheFile() async {
+    if (diskCacheFileOverride != null) return diskCacheFileOverride;
+    try {
+      final appDir = await getApplicationDocumentsDirectory();
+      return File(p.join(appDir.path, 'aj_tudor_translations_cache.json'));
+    } catch (e) {
+      L.w('WordTranslationService: Nepodařilo se získat soubor pro diskovou mezipaměť: $e');
+      return null;
+    }
+  }
+
+  /// Načte data z diskové mezipaměti do paměti (pokud ještě nebyla načtena).
+  static Future<void> _ensureDiskCacheLoaded() async {
+    if (_diskCacheLoaded) return;
+    _diskCacheLoaded = true;
+    try {
+      final file = await _getCacheFile();
+      if (file != null && await file.exists()) {
+        final content = await file.readAsString();
+        final Map<String, dynamic> jsonMap = jsonDecode(content);
+        for (final entry in jsonMap.entries) {
+          if (entry.value is String) {
+            _translationCache[entry.key] = entry.value as String;
+          }
+        }
+        L.i('WordTranslationService: Načteno ${_translationCache.length} překladů z diskové mezipaměti.');
+      }
+    } catch (e) {
+      L.w('WordTranslationService: Chyba při načítání diskové mezipaměti překladů: $e');
+    }
+  }
+
+  /// Uloží celou mezipaměť překladů na disk.
+  static Future<void> _saveDiskCache() async {
+    try {
+      final file = await _getCacheFile();
+      if (file == null) return;
+      final jsonString = jsonEncode(_translationCache);
+      await file.writeAsString(jsonString, flush: true);
+    } catch (e) {
+      L.w('WordTranslationService: Chyba při ukládání překladů na disk: $e');
+    }
+  }
+
+  /// Vymaže paměťovou i diskovou mezipaměť překladů.
+  static Future<void> clearCache() async {
+    _translationCache.clear();
+    _diskCacheLoaded = false;
+    try {
+      final file = await _getCacheFile();
+      if (file != null && await file.exists()) {
+        await file.delete();
+      }
+    } catch (e) {
+      L.w('WordTranslationService: Chyba při mazání souboru mezipaměti překladů: $e');
+    }
+  }
 
   /// Vyčistí interpunkci a bílé znaky ze začátku a konce slova/fráze
   static String cleanWord(String input) {
@@ -61,6 +140,8 @@ class WordTranslationService {
   }) async {
     final cleaned = cleanWord(text);
     if (cleaned.isEmpty) return '';
+
+    await _ensureDiskCacheLoaded();
 
     final cacheKey = '${cleaned.toLowerCase()}__${contextSentence?.trim().toLowerCase() ?? ''}';
     if (_translationCache.containsKey(cacheKey)) {
@@ -134,6 +215,7 @@ class WordTranslationService {
 
         if (cleanTranslation.isNotEmpty && !cleanTranslation.startsWith('❌')) {
           _translationCache[cacheKey] = cleanTranslation;
+          unawaited(_saveDiskCache());
           stopwatch.stop();
           L.i('Bleskový překlad "$cleaned" -> "$cleanTranslation" ($modelName, ${stopwatch.elapsedMilliseconds}ms)');
           return cleanTranslation;

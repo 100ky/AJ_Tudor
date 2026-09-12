@@ -10,9 +10,7 @@
 - 🤖 **Multi-agentní systém**:
   - **Voice Tutor Agent**: Řídí živý hlasový dialog, detekci řeči (VAD), skákání do řeči (barge-in), ochranu proti repetici a automatické popostrčení (nudge).
   - **Memory Manager Agent**: Po skončení lekce asynchronně analyzuje transkript pomocí *Structured Outputs (JSON)*, sleduje chyby, slovní zásobu a aplikuje Ebbinghausovu křivku zapomínání.
-  - **Scenario Planner Agent**: Generuje a plánuje situační role-play scénáře (např. v restauraci, na letišti, pracovní pohovor).
-- 🛠️ **Real-time Function Calling**: Tutor během mluvení na pozadí volá nástroj `log_error` pro telemetrii gramatických, slovníkových i výslovnostních chyb.
-- 🎨 **Light Glassmorphism Design**: Moderní a čisté uživatelské rozhraní se skleněnými kartami (`BackdropFilter`), měkkými stíny a dynamickými gradientními bloby pro živý vzhled.
+- 📝 **Inteligentní telemetrie chyb & Memory Pruning**: Po skončení hovoru `MemoryManagerAgent` přes *Structured Outputs (JSON)* provede detailní rozbor chyb, extrahuje nová slovíčka, odnaučuje zvládnuté jevy a automaticky vytváří kartičky (Smart Flashcards) k procvičení.
 - 📊 **Sledování pokroku & Statistika**: Přehledné grafy (`fl_chart`), vývoj plynulosti (fluency score), historie lekcí a kartotéka chyb.
 - 💾 **Lokální offline persistence**: Lokální SQLite databáze přes `Drift`, bezpečné ukládání API klíče přes `flutter_secure_storage`.
 

@@ -1007,7 +1007,7 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen> {
               child: FilledButton.icon(
                 onPressed: () {
                   HapticFeedback.lightImpact();
-                  ref.read(mainNavigationIndexProvider.notifier).setIndex(1);
+                  ref.read(mainNavigationIndexProvider.notifier).setIndex(2);
                 },
                 style: FilledButton.styleFrom(
                   backgroundColor: AppTheme.primary,

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../conversation/voice_tutor_screen.dart';
+import '../conversation/conversation_screen.dart';
 import '../flashcards/flashcards_screen.dart';
 import '../progress/progress_screen.dart';
 import '../settings/settings_screen.dart';
@@ -50,6 +51,7 @@ class _SkeletonScreenState extends ConsumerState<SkeletonScreen>
 
   static const List<Widget> _pages = [
     VoiceTutorScreen(),
+    ConversationScreen(),
     FlashcardsScreen(),
     ProgressScreen(),
     SettingsScreen(),
@@ -176,7 +178,7 @@ class _SkeletonScreenState extends ConsumerState<SkeletonScreen>
           Column(
             children: [
               // Warning banner – chybí API klíč
-              if (isMissingKey && currentIndex != 3)
+              if (isMissingKey && currentIndex != 4)
                 SafeArea(
                   bottom: false,
                   child: Container(
@@ -220,7 +222,7 @@ class _SkeletonScreenState extends ConsumerState<SkeletonScreen>
                                   HapticFeedback.lightImpact();
                                   ref
                                       .read(mainNavigationIndexProvider.notifier)
-                                      .setIndex(3);
+                                      .setIndex(4);
                                 },
                                 child: Text(
                                   'NASTAVIT',
@@ -295,9 +297,14 @@ class _SkeletonScreenState extends ConsumerState<SkeletonScreen>
                           label: 'Hlas',
                         ),
                         NavigationDestination(
-                          icon: Icon(Icons.school_outlined),
-                          selectedIcon: Icon(Icons.school_rounded),
-                          label: 'Cvičebna',
+                          icon: Icon(Icons.edit_note_outlined),
+                          selectedIcon: Icon(Icons.edit_note_rounded),
+                          label: 'Dril',
+                        ),
+                        NavigationDestination(
+                          icon: Icon(Icons.style_outlined),
+                          selectedIcon: Icon(Icons.style_rounded),
+                          label: 'Kartičky',
                         ),
                         NavigationDestination(
                           icon: Icon(Icons.insights_rounded),
