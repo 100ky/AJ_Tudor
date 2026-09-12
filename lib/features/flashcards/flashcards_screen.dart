@@ -33,7 +33,6 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
   bool _isBackVisible = false;
   bool _isPlayingTts = false;
   bool _isGenerating = false;
-  bool _isGeneratingVocab = false;
   bool _migrationStarted = false;
   final Map<int, String> _resolvedCzechFronts = {};
   final Set<int> _translatingCardIds = {};
@@ -123,81 +122,6 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
     } finally {
       if (mounted) {
         setState(() => _isGenerating = false);
-      }
-    }
-  }
-
-  Future<void> _generateRandomVocabulary() async {
-    if (_isGeneratingVocab) return;
-    final gemini = ref.read(geminiBatchClientProvider);
-    if (gemini == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Chybí API klíč pro generování slovíček.'),
-          backgroundColor: AppTheme.warning,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-      return;
-    }
-
-    setState(() => _isGeneratingVocab = true);
-    HapticFeedback.mediumImpact();
-
-    try {
-      final repo = ref.read(sessionRepositoryProvider);
-      final res = await repo.generateRandomVocabularyCards(
-        geminiClient: gemini,
-        count: 5,
-      );
-
-      if (!mounted) return;
-
-      res.fold(
-        (count) {
-          if (count > 0) {
-            setState(() {
-              _sessionQueue = null;
-              _sessionCompleted = false;
-              _sessionIndex = 0;
-            });
-          }
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  const Icon(Icons.casino_rounded, color: Colors.white, size: 20),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      count > 0
-                          ? 'Přidáno $count nových náhodných slovíček! 🎲'
-                          : 'Slovíčka se nepodařilo vygenerovat, zkuste to znovu.',
-                      style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                ],
-              ),
-              backgroundColor: count > 0 ? AppTheme.success : AppTheme.warning,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-          );
-        },
-        (failure) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Chyba: ${failure.message}'),
-              backgroundColor: AppTheme.error,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-          );
-        },
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _isGeneratingVocab = false);
       }
     }
   }
@@ -432,74 +356,9 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        title: FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerLeft,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Smart Flashcards',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: AppTheme.textColor(context),
-                  letterSpacing: -0.3,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: AppTheme.primary.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                    color: AppTheme.primary.withValues(alpha: 0.25),
-                  ),
-                ),
-                child: Text(
-                  'SRS',
-                  style: GoogleFonts.plusJakartaSans(
-                    color: AppTheme.primary,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.8,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          _buildGlassActionButton(
-            context: context,
-            icon: Icons.casino_rounded,
-            tooltip: 'Přidat nová slovíčka 🎲',
-            isLoading: _isGeneratingVocab,
-            iconColor: AppTheme.accent,
-            onPressed: _isGeneratingVocab ? null : _generateRandomVocabulary,
-          ),
-          _buildGlassActionButton(
-            context: context,
-            icon: Icons.auto_awesome_rounded,
-            tooltip: 'Vygenerovat kartičky z chyb ✨',
-            isLoading: _isGenerating,
-            iconColor: AppTheme.primary,
-            onPressed: _isGenerating ? null : _generateFromErrors,
-          ),
-          _buildGlassActionButton(
-            context: context,
-            icon: Icons.add_rounded,
-            tooltip: 'Přidat vlastní kartičku ➕',
-            iconColor: AppTheme.success,
-            onPressed: () => _showAddFlashcardDialog(context),
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: StreamBuilder<FlashcardStats>(
+      body: SafeArea(
+        bottom: false,
+        child: StreamBuilder<FlashcardStats>(
         stream: repo.watchFlashcardStats(),
         builder: (context, statsSnapshot) {
           final stats = statsSnapshot.data ?? const FlashcardStats.empty();
@@ -552,11 +411,8 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                 child: Column(
                   children: [
-                    // Horní panel ovládnutí látky (Mastery)
-                    _buildMasteryHeader(context, stats),
-
-                    // Indikátor pokroku v dnešní relaci s plynulým progress barem
-                    _buildSessionProgressBar(
+                    // Sjednocený indikátor pokroku v dnešní relaci
+                    _buildSessionHeader(
                       context: context,
                       currentIndex: _sessionIndex,
                       totalCards: totalInSession,
@@ -633,154 +489,110 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
           );
         },
       ),
-    );
+    ),
+  );
   }
 
-  Widget _buildGlassActionButton({
-    required BuildContext context,
-    required IconData icon,
-    required String tooltip,
-    required VoidCallback? onPressed,
-    bool isLoading = false,
-    Color? iconColor,
-  }) {
-    final effectiveColor = iconColor ?? AppTheme.textColor(context);
-    return Tooltip(
-      message: tooltip,
-      child: Container(
-        width: 36,
-        height: 36,
-        margin: const EdgeInsets.symmetric(horizontal: 2.5),
-        decoration: BoxDecoration(
-          color: AppTheme.glassColor(context),
-          borderRadius: BorderRadius.circular(11),
-          border: Border.all(color: AppTheme.glassBorderColor(context)),
-          boxShadow: AppTheme.glassShadowsLight(context),
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(11),
-            onTap: isLoading ? null : onPressed,
-            child: Center(
-              child: isLoading
-                  ? SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: effectiveColor,
-                      ),
-                    )
-                  : Icon(
-                      icon,
-                      size: 19,
-                      color: effectiveColor,
-                    ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildModernMiniStat({
-    required BuildContext context,
-    required IconData icon,
-    required String label,
-    required Color color,
-  }) {
-    return FittedBox(
-      fit: BoxFit.scaleDown,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 12, color: color),
-          const SizedBox(width: 3.5),
-          Text(
-            label,
-            style: GoogleFonts.plusJakartaSans(
-              fontSize: 10.5,
-              fontWeight: FontWeight.w600,
-              color: AppTheme.mutedTextColor(context),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSessionProgressBar({
+  Widget _buildSessionHeader({
     required BuildContext context,
     required int currentIndex,
     required int totalCards,
     required int masteredCount,
   }) {
     final double progress = totalCards > 0 ? (currentIndex + 1) / totalCards : 0.0;
+    final percent = (progress * 100).round();
+    final isDark = AppTheme.isDark(context);
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      margin: const EdgeInsets.only(top: 4, bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: AppTheme.glassLightColor(context),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppTheme.glassBorderColor(context)),
+        boxShadow: AppTheme.glassShadowsLight(context),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(
-                    Icons.school_rounded,
-                    size: 14,
-                    color: AppTheme.primary,
+                  Container(
+                    padding: const EdgeInsets.all(5),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.style_rounded,
+                      size: 15,
+                      color: AppTheme.primary,
+                    ),
                   ),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 8),
                   Text(
                     'Kartička ${currentIndex + 1} z $totalCards',
                     style: GoogleFonts.plusJakartaSans(
-                      fontSize: 12.5,
+                      fontSize: 14,
                       fontWeight: FontWeight.w700,
                       color: AppTheme.textColor(context),
+                      letterSpacing: -0.2,
                     ),
                   ),
                 ],
               ),
-              if (masteredCount > 0)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: AppTheme.success.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: AppTheme.success.withValues(alpha: 0.25)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.check_rounded, size: 11, color: AppTheme.success),
-                      const SizedBox(width: 3),
-                      Text(
-                        '$masteredCount v relaci',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w700,
-                          color: AppTheme.success,
-                        ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (masteredCount > 0) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                      decoration: BoxDecoration(
+                        color: AppTheme.success.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(7),
+                        border: Border.all(color: AppTheme.success.withValues(alpha: 0.25)),
                       ),
-                    ],
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.check_rounded, size: 11, color: AppTheme.success),
+                          const SizedBox(width: 3),
+                          Text(
+                            '$masteredCount zvládnuto',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w700,
+                              color: AppTheme.success,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  Text(
+                    '$percent%',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.mutedTextColor(context),
+                    ),
                   ),
-                ),
+                ],
+              ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           ClipRRect(
             borderRadius: BorderRadius.circular(4),
             child: LinearProgressIndicator(
               value: progress.clamp(0.0, 1.0),
-              minHeight: 4.5,
-              backgroundColor: AppTheme.isDark(context)
+              minHeight: 5,
+              backgroundColor: isDark
                   ? Colors.white.withValues(alpha: 0.08)
                   : Colors.black.withValues(alpha: 0.06),
               valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.primary),
@@ -890,11 +702,7 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
                   ],
                 ],
               ),
-              if (stats.totalCards > 0) ...[
-                const SizedBox(height: 16),
-                _buildMasteryHeader(context, stats),
-              ],
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
               if (remainingDueCards.isNotEmpty)
                 FilledButton.icon(
                   onPressed: () {
@@ -918,26 +726,19 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
                   ),
                 )
               else ...[
-                FilledButton.icon(
-                  onPressed: _isGeneratingVocab ? null : _generateRandomVocabulary,
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
-                    backgroundColor: AppTheme.primary,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  ),
-                  icon: _isGeneratingVocab
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                        )
-                      : const Icon(Icons.casino_rounded),
-                  label: Text(
-                    'Přidat náhodná nová slovíčka 🎲',
-                    style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Text(
+                    'Nové kartičky se automaticky tvoří z chyb při konverzaci v hlasovém tutorovi.',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 12.5,
+                      color: AppTheme.mutedTextColor(context),
+                      height: 1.4,
+                    ),
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 14),
                 FilledButton.tonalIcon(
                   onPressed: _isGenerating ? null : _generateFromErrors,
                   style: FilledButton.styleFrom(
@@ -950,10 +751,10 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
                           height: 16,
                           child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.primary),
                         )
-                      : const Icon(Icons.auto_awesome_rounded),
+                      : const Icon(Icons.sync_rounded, size: 18),
                   label: Text(
-                    'Vygenerovat kartičky z chyb',
-                    style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600),
+                    _isGenerating ? 'Kontroluji chyby...' : 'Zkontrolovat chyby z rozhovorů',
+                    style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600, fontSize: 13),
                   ),
                 ),
               ],
@@ -1065,40 +866,6 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
     );
   }
 
-  String _getCategoryLabel(String errorType) {
-    switch (errorType.toLowerCase()) {
-      case 'vocabulary':
-        return 'Nové slovíčko 📚';
-      case 'grammar':
-        return 'Gramatika ✏️';
-      case 'preposition':
-        return 'Předložka 🔗';
-      case 'pronunciation':
-        return 'Výslovnost 🎙️';
-      case 'tense':
-        return 'Časování ⏳';
-      default:
-        return 'Procvičování ✨';
-    }
-  }
-
-  IconData _getCategoryIcon(String errorType) {
-    switch (errorType.toLowerCase()) {
-      case 'vocabulary':
-        return Icons.translate_rounded;
-      case 'grammar':
-        return Icons.edit_note_rounded;
-      case 'preposition':
-        return Icons.link_rounded;
-      case 'pronunciation':
-        return Icons.mic_rounded;
-      case 'tense':
-        return Icons.schedule_rounded;
-      default:
-        return Icons.school_rounded;
-    }
-  }
-
   String _getDisplayFrontText(Flashcard card) {
     // 1. Pokud již máme přeloženo v lokální paměti této obrazovky
     if (_resolvedCzechFronts.containsKey(card.id)) {
@@ -1177,39 +944,8 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
                   children: [
           // Horní lišta líce
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              Flexible(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primary.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                        color: AppTheme.primary.withValues(alpha: 0.25)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(_getCategoryIcon(card.errorType), size: 13, color: AppTheme.primary),
-                      const SizedBox(width: 5),
-                      Flexible(
-                        child: Text(
-                          _getCategoryLabel(card.errorType),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: AppTheme.primary,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
               if (_lastPronunciation != null)
                 _buildPronunciationBadge(_lastPronunciation!)
               else
@@ -1842,144 +1578,9 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
     );
   }
 
-  Widget _buildMasteryHeader(BuildContext context, FlashcardStats stats) {
-    if (stats.totalCards == 0) return const SizedBox.shrink();
-
-    final isDark = AppTheme.isDark(context);
-    final masteredRatio = stats.totalCards > 0 ? stats.masteredCards / stats.totalCards : 0.0;
-    final learningRatio = stats.totalCards > 0 ? stats.learningCards / stats.totalCards : 0.0;
-    final newRatio = stats.totalCards > 0 ? stats.newCards / stats.totalCards : 0.0;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: GlassContainer(
-        borderRadius: BorderRadius.circular(16),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(5),
-                  decoration: BoxDecoration(
-                    color: AppTheme.success.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(
-                    Icons.workspace_premium_rounded,
-                    size: 15,
-                    color: AppTheme.success,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Ovládnutí látky',
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.textColor(context),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppTheme.success.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AppTheme.success.withValues(alpha: 0.25)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.bolt_rounded, size: 12, color: AppTheme.success),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${stats.masteredPercentage}% zvládnuto',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: AppTheme.success,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            // Multi-color segmented progress bar
-            ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: SizedBox(
-                height: 6,
-                child: Row(
-                  children: [
-                    if (masteredRatio > 0)
-                      Flexible(
-                        flex: (masteredRatio * 100).toInt().clamp(1, 100),
-                        child: Container(color: AppTheme.success),
-                      ),
-                    if (learningRatio > 0)
-                      Flexible(
-                        flex: (learningRatio * 100).toInt().clamp(1, 100),
-                        child: Container(color: AppTheme.primary),
-                      ),
-                    if (newRatio > 0)
-                      Flexible(
-                        flex: (newRatio * 100).toInt().clamp(1, 100),
-                        child: Container(
-                          color: isDark
-                              ? Colors.white.withValues(alpha: 0.12)
-                              : Colors.black.withValues(alpha: 0.08),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Flexible(
-                  child: _buildModernMiniStat(
-                    context: context,
-                    icon: Icons.check_circle_rounded,
-                    label: '${stats.masteredCards} zvládnuto',
-                    color: AppTheme.success,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                Flexible(
-                  child: _buildModernMiniStat(
-                    context: context,
-                    icon: Icons.sync_rounded,
-                    label: '${stats.learningCards} v procesu',
-                    color: AppTheme.primary,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                Flexible(
-                  child: _buildModernMiniStat(
-                    context: context,
-                    icon: Icons.schedule_rounded,
-                    label: '${stats.dueCards} k procvičení',
-                    color: AppTheme.accent,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildEmptyState(BuildContext context, FlashcardStats stats) {
+    final hasCards = stats.totalCards > 0;
+
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
@@ -1993,32 +1594,28 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: AppTheme.success.withValues(alpha: 0.12),
+                  color: (hasCards ? AppTheme.success : AppTheme.primary).withValues(alpha: 0.12),
                 ),
-                child: const Icon(
-                  Icons.check_circle_outline_rounded,
+                child: Icon(
+                  hasCards ? Icons.check_circle_outline_rounded : Icons.forum_rounded,
                   size: 44,
-                  color: AppTheme.success,
+                  color: hasCards ? AppTheme.success : AppTheme.primary,
                 ),
               ),
               const SizedBox(height: 16),
               Text(
-                'Máš na dnes splněno! 🎉',
+                hasCards ? 'Máš na dnes splněno! 🎉' : 'Žádné kartičky k procvičení',
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
                   color: AppTheme.textColor(context),
                 ),
               ),
-              if (stats.totalCards > 0) ...[
-                const SizedBox(height: 12),
-                _buildMasteryHeader(context, stats),
-              ],
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
               Text(
-                stats.totalCards > 0
-                    ? 'Všechny kartičky k dnešnímu opakování jsou hotové. Můžeš si automaticky vygenerovat novou sadu ze svých chyb z lekcí nebo si přidat vlastní kartičku.'
-                    : 'Zatím nemáš vytvořené žádné kartičky. Vygeneruj si první sadu z chyb nebo náhodných slovíček níže!',
+                hasCards
+                    ? 'Všechny kartičky k dnešnímu opakování máš hotové.\nNová slovíčka a fráze se ti sem automaticky ukládají z chyb při konverzacích s tutorem.'
+                    : 'Kartičky vznikají automaticky z chyb během rozhovorů v záložce Voice.\nZačni mluvit s tutorem a nová slovíčka se ti sem sama vytvoří!',
                 textAlign: TextAlign.center,
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 13,
@@ -2027,211 +1624,29 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
                 ),
               ),
               const SizedBox(height: 20),
-              // Tlačítko 1: Náhodná slovíčka na míru studentovi
-              FilledButton.icon(
-                onPressed: _isGeneratingVocab ? null : _generateRandomVocabulary,
-                style: FilledButton.styleFrom(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
-                  backgroundColor: AppTheme.primary,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
-                ),
-                icon: _isGeneratingVocab
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Icon(Icons.casino_rounded),
-                label: Text(
-                  _isGeneratingVocab
-                      ? 'Vybírám nová slovíčka...'
-                      : 'Přidat náhodná nová slovíčka 🎲',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              // Tlačítko 2: Vygenerovat z chyb
               FilledButton.tonalIcon(
                 onPressed: _isGenerating ? null : _generateFromErrors,
                 style: FilledButton.styleFrom(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
                 icon: _isGenerating
                     ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: AppTheme.primary,
-                        ),
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.primary),
                       )
-                    : const Icon(Icons.auto_awesome_rounded),
+                    : const Icon(Icons.sync_rounded, size: 18),
                 label: Text(
-                  _isGenerating
-                      ? 'Generuji kartičky...'
-                      : 'Vygenerovat kartičky z chyb',
+                  _isGenerating ? 'Kontroluji chyby...' : 'Zkontrolovat nové chyby z konverzací',
                   style: GoogleFonts.plusJakartaSans(
                     fontWeight: FontWeight.w600,
                     fontSize: 13.5,
                   ),
                 ),
               ),
-              const SizedBox(height: 10),
-              // Tlačítko 3: Vlastní kartička
-              OutlinedButton.icon(
-                onPressed: () => _showAddFlashcardDialog(context),
-                style: OutlinedButton.styleFrom(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
-                ),
-                icon: const Icon(Icons.add_rounded),
-                label: const Text('Vytvořit novou kartičku'),
-              ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  void _showAddFlashcardDialog(BuildContext context) {
-    final frontController = TextEditingController();
-    final backController = TextEditingController();
-    final explanationController = TextEditingController();
-    String errorType = 'grammar';
-
-    showDialog(
-      context: context,
-      builder: (dialogCtx) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          backgroundColor: AppTheme.glassColor(context),
-          title: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: AppTheme.primary.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(Icons.style_rounded, size: 18, color: AppTheme.primary),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                'Nová kartička',
-                style: GoogleFonts.plusJakartaSans(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 18,
-                  color: AppTheme.textColor(context),
-                ),
-              ),
-            ],
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: frontController,
-                  decoration: const InputDecoration(
-                    labelText: 'Otázka / Český text',
-                    hintText: 'např. Včera jsem šel do kina.',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: backController,
-                  decoration: const InputDecoration(
-                    labelText: 'Správné anglické znění',
-                    hintText: 'např. I went to the cinema yesterday.',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: explanationController,
-                  decoration: const InputDecoration(
-                    labelText: 'Vysvětlení / Poznámka',
-                    hintText: 'např. Minulý čas od go je went.',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: errorType,
-                  decoration: const InputDecoration(labelText: 'Kategorie'),
-                  items: const [
-                    DropdownMenuItem(
-                        value: 'grammar', child: Text('Gramatika')),
-                    DropdownMenuItem(
-                        value: 'vocabulary', child: Text('Slovní zásoba')),
-                    DropdownMenuItem(
-                        value: 'preposition', child: Text('Předložka')),
-                    DropdownMenuItem(
-                        value: 'pronunciation', child: Text('Výslovnost')),
-                  ],
-                  onChanged: (val) {
-                    if (val != null) {
-                      setDialogState(() => errorType = val);
-                    }
-                  },
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogCtx),
-              child: Text(
-                'Zrušit',
-                style: GoogleFonts.plusJakartaSans(
-                  color: AppTheme.mutedTextColor(context),
-                ),
-              ),
-            ),
-            FilledButton(
-              onPressed: () async {
-                final front = frontController.text.trim();
-                final back = backController.text.trim();
-                final exp = explanationController.text.trim();
-
-                if (front.isEmpty || back.isEmpty) return;
-
-                final repo = ref.read(sessionRepositoryProvider);
-                await repo.addFlashcard(
-                  frontText: front,
-                  backText: back,
-                  explanation: exp.isEmpty ? 'Vlastní kartička' : exp,
-                  errorType: errorType,
-                );
-
-                if (context.mounted) {
-                  Navigator.pop(dialogCtx);
-                  setState(() {
-                    _sessionQueue = null; // Přenačíst relaci s novou kartičkou
-                  });
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Kartička byla úspěšně přidána'),
-                      backgroundColor: AppTheme.success,
-                    ),
-                  );
-                }
-              },
-              child: const Text('Přidat'),
-            ),
-          ],
         ),
       ),
     );

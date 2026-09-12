@@ -425,93 +425,185 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   },
                 ),
                 Divider(color: AppTheme.outlineLightColor(context)),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppTheme.speaking.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(Icons.record_voice_over,
-                        color: AppTheme.speaking, size: 20),
-                  ),
-                  title: Text('Hlas učitele',
-                      style: GoogleFonts.plusJakartaSans(
-                          color: AppTheme.textColor(context))),
-                  subtitle: Text('Gemini Live Voice',
-                      style: GoogleFonts.plusJakartaSans(
-                          fontSize: 12, color: AppTheme.mutedTextColor(context))),
-                  trailing: DropdownButton<String>(
-                    value: ref.watch(voiceProvider),
-                    underline: const SizedBox(),
-                    style: GoogleFonts.plusJakartaSans(
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.primary,
-                        fontSize: 14),
-                    onChanged: (String? newVoice) {
-                      if (newVoice != null) {
-                        ref.read(voiceProvider.notifier).saveVoice(newVoice);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                              content: Text(
-                                  'Hlas učitele změněn na: $newVoice 🗣️')),
-                        );
-                      }
-                    },
-                    items: const [
-                      DropdownMenuItem(value: 'Puck', child: Text('Puck (Male)')),
-                      DropdownMenuItem(
-                          value: 'Charon', child: Text('Charon (Male)')),
-                      DropdownMenuItem(
-                          value: 'Kore', child: Text('Kore (Female)')),
-                      DropdownMenuItem(
-                          value: 'Fenrir', child: Text('Fenrir (Male)')),
-                      DropdownMenuItem(
-                          value: 'Aoede', child: Text('Aoede (Female)')),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: AppTheme.speaking.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Icon(Icons.record_voice_over,
+                                color: AppTheme.speaking, size: 20),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Hlas učitele',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontWeight: FontWeight.w500,
+                                    color: AppTheme.textColor(context),
+                                  ),
+                                ),
+                                Text(
+                                  'Gemini Live Voice',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 12,
+                                    color: AppTheme.mutedTextColor(context),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppTheme.glassLightColor(context),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: AppTheme.outlineLightColor(context),
+                          ),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            isExpanded: true,
+                            value: ref.watch(voiceProvider),
+                            icon: Icon(Icons.keyboard_arrow_down_rounded,
+                                color: AppTheme.mutedTextColor(context)),
+                            style: GoogleFonts.plusJakartaSans(
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.primary,
+                              fontSize: 14,
+                            ),
+                            dropdownColor: AppTheme.isDark(context)
+                                ? AppTheme.backgroundSecondaryDark
+                                : Colors.white,
+                            borderRadius: BorderRadius.circular(14),
+                            onChanged: (String? newVoice) {
+                              if (newVoice != null) {
+                                ref.read(voiceProvider.notifier).saveVoice(newVoice);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                        'Hlas učitele změněn na: $newVoice 🗣️'),
+                                  ),
+                                );
+                              }
+                            },
+                            items: const [
+                              DropdownMenuItem(value: 'Puck', child: Text('Puck (Male)')),
+                              DropdownMenuItem(
+                                  value: 'Charon', child: Text('Charon (Male)')),
+                              DropdownMenuItem(
+                                  value: 'Kore', child: Text('Kore (Female)')),
+                              DropdownMenuItem(
+                                  value: 'Fenrir', child: Text('Fenrir (Male)')),
+                              DropdownMenuItem(
+                                  value: 'Aoede', child: Text('Aoede (Female)')),
+                            ],
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
                 Divider(color: AppTheme.outlineLightColor(context)),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppTheme.primary.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(Icons.hourglass_top_rounded,
-                        color: AppTheme.primary, size: 20),
-                  ),
-                  title: Text('Trpělivost učitele (čas na rozmyšlenou)',
-                      style: GoogleFonts.plusJakartaSans(
-                          color: AppTheme.textColor(context))),
-                  subtitle: Text('Jak dlouho AI čeká v tichu, než odpoví',
-                      style: GoogleFonts.plusJakartaSans(
-                          fontSize: 12, color: AppTheme.mutedTextColor(context))),
-                  trailing: DropdownButton<int>(
-                    value: ref.watch(speechPatienceProvider),
-                    underline: const SizedBox(),
-                    style: GoogleFonts.plusJakartaSans(
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.primary,
-                        fontSize: 14),
-                    onChanged: (int? newPatience) {
-                      if (newPatience != null) {
-                        ref.read(speechPatienceProvider.notifier).savePatience(newPatience);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                              content: Text(
-                                  'Doba čekání na odpověď nastavena na: $newPatience ms ⏱️')),
-                        );
-                      }
-                    },
-                    items: const [
-                      DropdownMenuItem(value: 800, child: Text('Rychlá (800 ms)')),
-                      DropdownMenuItem(value: 1200, child: Text('Přirozená (1 200 ms)')),
-                      DropdownMenuItem(value: 1500, child: Text('Trpělivá (1 500 ms)')),
-                      DropdownMenuItem(value: 2000, child: Text('Extra trpělivá (2 000 ms)')),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: AppTheme.primary.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Icon(Icons.hourglass_top_rounded,
+                                color: AppTheme.primary, size: 20),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Trpělivost učitele (čas na rozmyšlenou)',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontWeight: FontWeight.w500,
+                                    color: AppTheme.textColor(context),
+                                  ),
+                                ),
+                                Text(
+                                  'Jak dlouho AI čeká v tichu, než odpoví',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 12,
+                                    color: AppTheme.mutedTextColor(context),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppTheme.glassLightColor(context),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: AppTheme.outlineLightColor(context),
+                          ),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<int>(
+                            isExpanded: true,
+                            value: ref.watch(speechPatienceProvider),
+                            icon: Icon(Icons.keyboard_arrow_down_rounded,
+                                color: AppTheme.mutedTextColor(context)),
+                            style: GoogleFonts.plusJakartaSans(
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.primary,
+                              fontSize: 14,
+                            ),
+                            dropdownColor: AppTheme.isDark(context)
+                                ? AppTheme.backgroundSecondaryDark
+                                : Colors.white,
+                            borderRadius: BorderRadius.circular(14),
+                            onChanged: (int? newPatience) {
+                              if (newPatience != null) {
+                                ref.read(speechPatienceProvider.notifier).savePatience(newPatience);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                        'Doba čekání na odpověď nastavena na: $newPatience ms ⏱️'),
+                                  ),
+                                );
+                              }
+                            },
+                            items: const [
+                              DropdownMenuItem(value: 800, child: Text('Rychlá (800 ms)')),
+                              DropdownMenuItem(value: 1200, child: Text('Přirozená (1 200 ms)')),
+                              DropdownMenuItem(value: 1500, child: Text('Trpělivá (1 500 ms)')),
+                              DropdownMenuItem(value: 2000, child: Text('Extra trpělivá (2 000 ms)')),
+                            ],
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),

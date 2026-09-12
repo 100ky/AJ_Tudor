@@ -286,5 +286,80 @@ void main() {
       silenceDurationMs: 1500, // default from SpeechPatienceNotifier
     )).called(1);
   });
+
+  test('long user speech: receiving multiple STT chunks does not trigger premature nudgeModel or forceReconnect', () async {
+    Function(String)? userTranscriptCallback;
+
+    when(() => mockRepo.startNewSession()).thenAnswer((_) async => Result.success(123));
+    when(() => mockRepo.getUserProfile()).thenAnswer((_) async => null);
+    when(() => mockAudio.start(onAudioChunk: any(named: 'onAudioChunk'))).thenAnswer((_) async {});
+    when(() => mockClient.connect(
+      modelName: any(named: 'modelName'),
+      systemPrompt: any(named: 'systemPrompt'),
+      voiceName: any(named: 'voiceName'),
+      silenceDurationMs: any(named: 'silenceDurationMs'),
+    )).thenAnswer((_) {});
+    when(() => mockClient.nudgeModel()).thenAnswer((_) {});
+    when(() => mockClient.forceReconnect()).thenAnswer((_) {});
+
+    when(() => mockClient.onUserTranscriptReceived = any()).thenAnswer((invocation) => 
+        userTranscriptCallback = invocation.positionalArguments[0] as Function(String)?);
+
+    final agent = container.read(voiceTutorAgentProvider.notifier);
+    await agent.startSession();
+
+    expect(userTranscriptCallback, isNotNull);
+
+    // Simulate long continuous monologue stream over time
+    userTranscriptCallback!(' When I was younger');
+    userTranscriptCallback!(', I used to live in a small town');
+    userTranscriptCallback!(' where everybody knew each other');
+    userTranscriptCallback!(' and we played outside until dark.');
+
+    final state = container.read(voiceTutorAgentProvider);
+    expect(state.status, TutorState.listening);
+    expect(state.messages.length, 1);
+    expect(state.messages.first.text, 'When I was younger, I used to live in a small town where everybody knew each other and we played outside until dark.');
+
+    // Crucially: nudgeModel and forceReconnect must NOT be called while user is receiving transcripts!
+    verifyNever(() => mockClient.nudgeModel());
+    verifyNever(() => mockClient.forceReconnect());
+  });
+
+  test('audio chunk in thinking state reverts to listening and streams audio', () async {
+    Function(List<int>)? audioChunkCallback;
+
+    when(() => mockRepo.startNewSession()).thenAnswer((_) async => Result.success(123));
+    when(() => mockRepo.getUserProfile()).thenAnswer((_) async => null);
+    when(() => mockAudio.isPlaying).thenReturn(false);
+    when(() => mockAudio.start(onAudioChunk: any(named: 'onAudioChunk'))).thenAnswer((invocation) async {
+      audioChunkCallback = invocation.namedArguments[const Symbol('onAudioChunk')] as Function(List<int>)?;
+    });
+    when(() => mockClient.connect(
+      modelName: any(named: 'modelName'),
+      systemPrompt: any(named: 'systemPrompt'),
+      voiceName: any(named: 'voiceName'),
+      silenceDurationMs: any(named: 'silenceDurationMs'),
+    )).thenAnswer((_) {});
+    when(() => mockClient.sendAudioChunk(any())).thenAnswer((_) {});
+    when(() => mockClient.sendText(any())).thenAnswer((_) {});
+
+    final agent = container.read(voiceTutorAgentProvider.notifier);
+    await agent.startSession();
+
+    expect(audioChunkCallback, isNotNull);
+
+    // Manually put into thinking state (as if waiting for tutor response)
+    agent.sendText('Thinking test');
+    expect(container.read(voiceTutorAgentProvider).status, TutorState.thinking);
+
+    // User speaks again (generates 16-bit PCM buffer with audible volume)
+    final audioBuffer = List<int>.filled(640, 50); // PCM samples
+    audioChunkCallback!(audioBuffer);
+
+    // State should revert to listening and audio should be streamed to client
+    expect(container.read(voiceTutorAgentProvider).status, TutorState.listening);
+    verify(() => mockClient.sendAudioChunk(audioBuffer)).called(1);
+  });
 }
 
