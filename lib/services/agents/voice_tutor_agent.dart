@@ -1123,11 +1123,13 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         }
 
         // Průběžné oživování watchdogu během aktivního nahrávání z mikrofonu (každých 5s),
-        // aby watchdog po 35s souvislého mluvení nerozpojil spojení.
-        final now = DateTime.now();
-        if (now.difference(_lastAudioWatchdogReset).inSeconds >= 5) {
-          _lastAudioWatchdogReset = now;
-          _resetWatchdog();
+        // pouze pokud jsme ve stavu listening (ne v thinking, aby se watchdog nezablokoval při čekání na AI).
+        if (state.status == TutorState.listening) {
+          final now = DateTime.now();
+          if (now.difference(_lastAudioWatchdogReset).inSeconds >= 5) {
+            _lastAudioWatchdogReset = now;
+            _resetWatchdog();
+          }
         }
 
         client.sendAudioChunk(data);
@@ -1164,7 +1166,16 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     
     const double voiceThreshold = 0.045;
     
+    // Pokud jsme ve stavu thinking (čekáme na odpověď AI), ignorujeme slabé šelesty pod 0.08,
+    // aby ambientní hluk nezrušil probíhající čekání ani časovače.
+    if (state.status == TutorState.thinking && volume < 0.08) {
+      return;
+    }
+
     if (volume >= voiceThreshold) {
+      if (state.status == TutorState.thinking) {
+        state = state.copyWith(status: TutorState.listening);
+      }
       if (!_userSpokeInCurrentTurn) {
         _userSpokeInCurrentTurn = true;
         L.d('🎙️ VAD: Detekována řeč studenta (vol: ${volume.toStringAsFixed(3)})');
@@ -1182,7 +1193,9 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
           if ((state.status == TutorState.listening || state.status == TutorState.thinking) && _userSpokeInCurrentTurn) {
             L.i('🎙️ VAD: Detekován konec řeči studenta (${vadWaitMs}ms ticho po domluvení). Popostrkuji model...');
             _userSpokeInCurrentTurn = false;
-            client.nudgeModel();
+            final userText = _currentUserTranscript.trim();
+            client.nudgeModel(userText.isNotEmpty ? userText : null);
+            state = state.copyWith(status: TutorState.thinking);
             _resetThinkingTimer();
             _resetResponseSilenceTimer();
           }
@@ -1194,9 +1207,9 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   /// Spustí hlídání reakce modelu po domluvě studenta.
   /// 
   /// Pokud uživatel domluví a Gemini delší dobu neodpovídá,
-  /// model po 4.5s zkusíme ještě jednou jemně popostrčit přes nudgeModel().
-  /// Pouze v případě úplného zamrznutí (dalších 12s bez jakéhokoliv audia či textu z AI)
-  /// vyvoláme čistý reconnect s obnovením kontextu.
+  /// model po 4.5s zkusíme ještě jednou popostrčit přes nudgeModel(userText).
+  /// Pouze v případě úplného zamrznutí (dalších 7s bez jakéhokoliv audia či textu z AI,
+  /// celkem 11.5s ticha) vyvoláme čistý reconnect s obnovením kontextu.
   void _resetResponseSilenceTimer() {
     _responseSilenceTimer?.cancel();
     _responseSilenceTimer = Timer(const Duration(milliseconds: 4500), () {
@@ -1204,14 +1217,14 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         L.i('Model ještě nezačal odpovídat (4.5s po konci řeči studenta). Záložní popostrčení...');
         final client = ref.read(geminiLiveClientProvider);
         if (client != null && client.isConnected) {
-          _userSpokeInCurrentTurn = false;
-          client.nudgeModel();
+          final userText = _currentUserTranscript.trim();
+          client.nudgeModel(userText.isNotEmpty ? userText : 'Please continue the conversation.');
           
-          // Druhý záchranný krok: Dáme modelu velkorysý čas (dalších 12 sekund)
-          // na zpracování delšího vstupu. Teprve při celkovém tichu >16s zvážíme reconnect.
-          _responseSilenceTimer = Timer(const Duration(seconds: 12), () {
+          // Druhý záchranný krok: Dáme modelu čas dalších 7 sekund.
+          // Teprve při celkovém tichu >11.5s vyvoláme reconnect.
+          _responseSilenceTimer = Timer(const Duration(seconds: 7), () {
             if ((state.status == TutorState.listening || state.status == TutorState.thinking) && !_userSpokeInCurrentTurn) {
-              L.w('Model nereaguje ani po záložním popostrčení (16s bez odpovědi). Vyvolávám forceReconnect...');
+              L.w('Model nereaguje ani po záložním popostrčení textem (11.5s celkového ticha). Vyvolávám forceReconnect...');
               state = state.copyWith(status: TutorState.reconnecting);
               client.forceReconnect();
             }

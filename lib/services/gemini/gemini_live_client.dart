@@ -305,11 +305,25 @@ class GeminiLiveClient {
   }
 
   /// Popostrčí model k vygenerování odpovědi (pokud VAD na serveru nezareagovalo na konec řeči).
-  void nudgeModel() {
+  ///
+  /// Posílá plnohodnotný turn s požadavkem na odpověď nebo s dosavadním přepisem studenta,
+  /// protože pouhý prázdný signál turnComplete bez parts je Gemini Live preview modelem ignorován.
+  void nudgeModel([String? fallbackText]) {
     if (_channel == null || _isReconnecting) return;
     L.i('Popostrkuji Gemini Live k odpovědi (nudge / turnComplete)...');
+    final promptText = (fallbackText != null && fallbackText.trim().isNotEmpty)
+        ? fallbackText.trim()
+        : '[The student has finished speaking. Please respond naturally now.]';
     final clientContent = {
       'clientContent': {
+        'turns': [
+          {
+            'role': 'user',
+            'parts': [
+              {'text': promptText}
+            ]
+          }
+        ],
         'turnComplete': true
       }
     };

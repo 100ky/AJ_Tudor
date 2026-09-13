@@ -89,6 +89,72 @@ void main() {
 
       expect(selected, 'look forward to');
     });
+
+    testWidgets('drag selection across words joins them into a phrase', (tester) async {
+      String? selected;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 250,
+              child: InteractiveTutorText(
+                text: 'I look forward to meeting you in Prague.',
+                autoOpenTranslationSheet: false,
+                onSelection: (phrase, fullSentence) {
+                  selected = phrase;
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final gesture = await tester.startGesture(tester.getCenter(find.text('look')));
+      await tester.pump();
+      await gesture.moveBy(const Offset(40, 0));
+      await tester.pump();
+      await gesture.moveTo(tester.getCenter(find.text('meeting')));
+      await tester.pump();
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      expect(selected, 'look forward to meeting');
+    });
+
+    testWidgets('multi-line drag selection seamlessly selects words across lines', (tester) async {
+      String? selected;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 130,
+              child: InteractiveTutorText(
+                text: 'First line and second line.',
+                autoOpenTranslationSheet: false,
+                onSelection: (phrase, fullSentence) {
+                  selected = phrase;
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // Start drag on 'First'
+      final gesture = await tester.startGesture(tester.getCenter(find.text('First')));
+      await tester.pump();
+      await gesture.moveBy(const Offset(30, 0));
+      await tester.pump();
+      // Drag down onto 'second' on the next line
+      await gesture.moveTo(tester.getCenter(find.text('second')));
+      await tester.pump();
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      expect(selected, 'First line and second');
+    });
   });
 }
 
