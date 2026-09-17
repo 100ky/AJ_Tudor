@@ -59,12 +59,14 @@ class TopicPreparationState {
   TopicPreparationState copyWith({
     bool? isLoading,
     PreparedTopic? topic,
+    bool clearTopic = false,
     String? errorMessage,
     int? refreshCount,
   }) {
     return TopicPreparationState(
       isLoading: isLoading ?? this.isLoading,
       topic: topic ?? this.topic,
+      topic: clearTopic ? null : (topic ?? this.topic),
       errorMessage: errorMessage,
       refreshCount: refreshCount ?? this.refreshCount,
     );
@@ -332,6 +334,7 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
     final repo = ref.read(sessionRepositoryProvider);
     await repo.clearPreparedTopic();
     state = state.copyWith(topic: null);
+    state = state.copyWith(clearTopic: true);
   }
 }
 

@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -13,8 +14,39 @@ class BackupService {
 
   BackupService(this._ref);
 
+  @visibleForTesting
+  static File? dbFileOverride;
+
+  @visibleForTesting
+  static Directory? tempDirOverride;
+
+  @visibleForTesting
+  static void resetState() {
+    dbFileOverride = null;
+    tempDirOverride = null;
+  }
+
+  /// Ověří, zda pole bajtů obsahuje platnou hlavičku SQLite databáze (prvních 16 bajtů).
+  static bool isValidSqliteHeader(List<int> bytes) {
+    if (bytes.length < 16) return false;
+    final header = String.fromCharCodes(bytes.take(16));
+    return header.startsWith('SQLite format 3');
+  }
+
+  /// Ověří, zda je soubor existující a platnou SQLite databází.
+  static Future<bool> validateSqliteFile(File file) async {
+    if (!await file.exists()) return false;
+    try {
+      final bytes = await file.openRead(0, 16).first;
+      return isValidSqliteHeader(bytes);
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Získá cestu k databázovému souboru aplikace.
   Future<File> _getDatabaseFile() async {
+    if (dbFileOverride != null) return dbFileOverride!;
     final dbFolder = await getApplicationDocumentsDirectory();
     return File(p.join(dbFolder.path, 'db.sqlite'));
   }
@@ -31,6 +63,7 @@ class BackupService {
 
       // Pro jistotu zkopírujeme databázi do dočasného souboru, abychom neblokovali ostrý soubor
       final tempDir = await getTemporaryDirectory();
+      final tempDir = tempDirOverride ?? await getTemporaryDirectory();
       final tempBackupFile = File(p.join(tempDir.path, 'aj_tudor_backup.sqlite'));
 
       // Pokud starý dočasný soubor existuje, smažeme ho
@@ -87,6 +120,8 @@ class BackupService {
       final bytes = await backupFile.openRead(0, 16).first;
       final header = String.fromCharCodes(bytes);
       if (!header.startsWith('SQLite format 3')) {
+      final isValid = await validateSqliteFile(backupFile);
+      if (!isValid) {
         L.w('Vybraný soubor není platná SQLite databáze.');
         return false;
       }

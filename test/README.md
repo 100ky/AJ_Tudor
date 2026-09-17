@@ -16,6 +16,9 @@ test/
 │       ├── chat_bubble_test.dart                 # Konverzační bublina (uživatel vs tutor, clipboard)
 │       ├── smart_chat_bubble_test.dart           # Chytrá bublina (kartička opravy, akordeon, TTS, uložení)
 │       └── word_translation_sheet_test.dart      # Bottom sheet kontextového překladu a rozšiřování frází
+├── data/                                         # Testy datové vrstvy a repozitářů
+│   └── repositories/
+│       └── session_repository_test.dart          # CRUD sessions, kaskádový delete, paměť, SRS, deduplikace
 ├── features/                                     # Testy obrazovek a modulů aplikace
 │   ├── skeleton/
 │   │   └── skeleton_screen_test.dart             # Hlavní shell, navigace (5 tabů), API klíč warning
@@ -39,7 +42,14 @@ test/
 │   └── user_facts_and_topics_test.dart           # Správa faktů a témat uživatele
 ├── services/                                     # Testy aplikačních služeb a agentů
 │   ├── agents/
+│   │   ├── memory_manager_agent_test.dart        # Analýza session, Structured Outputs, memory pruning, fakta
+│   │   ├── scenario_planner_agent_test.dart      # Plánování scénářů, integrace slabých kartiček, custom scénáře
+│   │   ├── topic_preparation_agent_test.dart     # Příprava témat, 12h čerstvost, wildcard, facts bootstrap
 │   │   └── voice_tutor_agent_test.dart           # Stavový automat tutora, VAD, reconnect, nudge
+│   ├── prompt/
+│   │   └── system_prompt_builder_test.dart       # Sestavování promptů (tutor, CEFR, drill, schémata, fakta)
+│   ├── system/
+│   │   └── backup_service_test.dart              # Validace SQLite hlavičky, export/import zálohy databáze
 │   ├── gemini_tts_service_test.dart              # Gemini TTS, audio cache
 │   ├── pronunciation_service_test.dart           # Analýza výslovnosti
 │   └── translation_service_test.dart             # Překladový servis a disková cache
@@ -64,6 +74,9 @@ flutter test test/core/widgets/
 # Pouze testy obrazovek a funkcí (features)
 flutter test test/features/
 
+# Pouze testy datové vrstvy a repozitáře
+flutter test test/data/
+
 # Pouze testy služeb a agentů
 flutter test test/services/
 
@@ -73,12 +86,21 @@ flutter test test/core/
 
 ### 3. Spuštění konkrétního testovacího souboru
 ```bash
+# Obrazovky
 flutter test test/features/conversation/voice_tutor_screen_test.dart
 flutter test test/features/history/history_screen_test.dart
 flutter test test/features/agents/agents_screen_test.dart
 flutter test test/features/progress/progress_screen_test.dart
 flutter test test/features/flashcards/flashcards_screen_test.dart
 flutter test test/features/settings/settings_screen_test.dart
+
+# Repozitáře a backend logika
+flutter test test/data/repositories/session_repository_test.dart
+flutter test test/services/agents/memory_manager_agent_test.dart
+flutter test test/services/agents/scenario_planner_agent_test.dart
+flutter test test/services/agents/topic_preparation_agent_test.dart
+flutter test test/services/prompt/system_prompt_builder_test.dart
+flutter test test/services/system/backup_service_test.dart
 ```
 
 ### 4. Spuštění testů s generováním coverage reportu
