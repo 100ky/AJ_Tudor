@@ -590,6 +590,8 @@ class SessionRepository {
   // ── Smart Flashcards & SRS Repozitář ──────────────────────────────────────
 
   /// Vloží novou kartičku do databáze (např. z chytré bubliny nebo analýzy chyb).
+  /// Pokud kartička se stejným backText nebo errorLogId již existuje, přeskočí vytvoření
+  /// a vrátí ID existující kartičky (zachování SRS pokroku).
   Future<Result<int>> addFlashcard({
     required String frontText,
     required String backText,
@@ -599,6 +601,30 @@ class SessionRepository {
     int? errorLogId,
   }) async {
     try {
+      // ── Kontrola duplicit ─────────────────────────────────────────────
+      // Pokud kartička se stejným errorLogId nebo backText už existuje,
+      // nevytváříme duplikát (zachováme SRS pokrok stávající kartičky).
+      if (errorLogId != null) {
+        final existingByError = await (_db.select(_db.flashcards)
+              ..where((t) => t.errorLogId.equals(errorLogId))
+              ..limit(1))
+            .getSingleOrNull();
+        if (existingByError != null) {
+          L.i('Kartička pro errorLogId=$errorLogId již existuje (#${existingByError.id}), přeskakuji.');
+          return Result.success(existingByError.id);
+        }
+      }
+
+      final existingByText = await (_db.select(_db.flashcards)
+            ..where((t) => t.backText.lower().equals(backText.trim().toLowerCase()))
+            ..limit(1))
+          .getSingleOrNull();
+      if (existingByText != null) {
+        L.i('Kartička s backText="$backText" již existuje (#${existingByText.id}), přeskakuji.');
+        return Result.success(existingByText.id);
+      }
+      // ── Konec kontroly duplicit ────────────────────────────────────────
+
       final now = DateTime.now();
       final id = await _db.into(_db.flashcards).insert(
             FlashcardsCompanion.insert(
@@ -639,19 +665,21 @@ class SessionRepository {
   }
 
   /// Sleduje proud všech kartiček, které jsou připravené k dnešnímu procvičení.
+  /// Kartičky s masteryScore >= 1.0 se považují za plně naučené a nevrací se.
   Stream<List<Flashcard>> watchDueFlashcards() {
     final now = DateTime.now();
     return (_db.select(_db.flashcards)
-          ..where((t) => t.nextReviewAt.isSmallerOrEqualValue(now))
+          ..where((t) => t.nextReviewAt.isSmallerOrEqualValue(now) & t.masteryScore.isSmallerThanValue(1.0))
           ..orderBy([(t) => OrderingTerm.asc(t.nextReviewAt)]))
         .watch();
   }
 
   /// Načte seznam kartiček připravených k procvičení.
+  /// Kartičky s masteryScore >= 1.0 se považují za plně naučené a nevrací se.
   Future<List<Flashcard>> getDueFlashcards() async {
     final now = DateTime.now();
     return await (_db.select(_db.flashcards)
-          ..where((t) => t.nextReviewAt.isSmallerOrEqualValue(now))
+          ..where((t) => t.nextReviewAt.isSmallerOrEqualValue(now) & t.masteryScore.isSmallerThanValue(1.0))
           ..orderBy([(t) => OrderingTerm.asc(t.nextReviewAt)]))
         .get();
   }
@@ -857,6 +885,19 @@ class SessionRepository {
     }
     if (backText != null && text.toLowerCase() == backText.trim().toLowerCase()) return true;
     if (sourceSentence != null && text.toLowerCase() == sourceSentence.trim().toLowerCase()) return true;
+
+    // Detekce nesouladu délky mezi celou větou na líci a pouhou frází na rubu:
+    // Pokud má backText nejvýše 3 slova, ale frontText má 5 a více slov
+    // (např. "Nemůžu běhat protože mě bolí noha" vs "can't run"), jedná se o nekompletní kartičku.
+    // Označíme ji, aby se frontText automaticky srovnal s backText ("can't run" -> "Nemůžu běhat").
+    if (backText != null) {
+      final backWords = backText.trim().split(RegExp(r'\s+')).length;
+      final frontWords = text.split(RegExp(r'\s+')).length;
+      if (backWords <= 3 && frontWords >= 5) {
+        return true;
+      }
+    }
+
     return false;
   }
 
@@ -913,12 +954,13 @@ class SessionRepository {
     GeminiBatchClient? geminiClient,
   }) async {
     try {
-      // 1. Získáme chyby z databáze
+      // 1. Získáme dosud nezpracované chyby z databáze
       var query = _db.select(_db.errorLogs)
+        ..where((t) => t.inFlashcard.equals(false))
         ..orderBy([(t) => OrderingTerm.desc(t.timestamp)]);
       
       if (sessionId != null) {
-        query = query..where((t) => t.sessionId.equals(sessionId));
+        query = query..where((t) => t.sessionId.equals(sessionId) & t.inFlashcard.equals(false));
       }
 
       final allErrors = await query.get();
@@ -940,21 +982,37 @@ class SessionRepository {
 
         final userSaid = err.userSaid.trim();
         final correctForm = err.correctForm.trim();
-        if (userSaid.isEmpty || correctForm.isEmpty) continue;
+        if (userSaid.isEmpty || correctForm.isEmpty) {
+          await (_db.update(_db.errorLogs)..where((t) => t.id.equals(err.id)))
+              .write(const ErrorLogsCompanion(inFlashcard: Value(true)));
+          continue;
+        }
 
         final lowerSaid = userSaid.toLowerCase();
         final lowerCorrect = correctForm.toLowerCase();
+
+        // Filtrování nesmyslných chyb (např. tutorovy monology, systémové hlášky nebo příliš dlouhé texty)
+        if (correctForm.length > 120 ||
+            userSaid.length > 150 ||
+            lowerSaid == lowerCorrect ||
+            lowerSaid.startsWith('hmm') ||
+            lowerSaid.contains('wait a minute') ||
+            lowerSaid.contains('translation task') ||
+            lowerSaid.contains('my friend') ||
+            lowerSaid.contains('as an ai')) {
+          await (_db.update(_db.errorLogs)..where((t) => t.id.equals(err.id)))
+              .write(const ErrorLogsCompanion(inFlashcard: Value(true)));
+          continue;
+        }
 
         // Přeskočit pokud už tato fráze nebo chyba v kartičkách existuje
         if (existingErrorLogIds.contains(err.id) ||
             existingBackTexts.contains(lowerCorrect) ||
             existingSources.contains(lowerSaid) ||
             seenNewPhrases.contains(lowerCorrect)) {
-          // Alespoň synchronizujeme inFlashcard příznak
-          if (!err.inFlashcard) {
-            await (_db.update(_db.errorLogs)..where((t) => t.id.equals(err.id)))
-                .write(const ErrorLogsCompanion(inFlashcard: Value(true)));
-          }
+          // Synchronizujeme inFlashcard příznak
+          await (_db.update(_db.errorLogs)..where((t) => t.id.equals(err.id)))
+              .write(const ErrorLogsCompanion(inFlashcard: Value(true)));
           continue;
         }
 
@@ -991,6 +1049,8 @@ class SessionRepository {
 
         if (cardRes.isSuccess) {
           createdCount++;
+          await (_db.update(_db.errorLogs)..where((t) => t.id.equals(err.id)))
+              .write(const ErrorLogsCompanion(inFlashcard: Value(true)));
         }
       }
 
@@ -1098,6 +1158,47 @@ ${jsonEncode(batchList)}''';
       return migrated;
     } catch (e, stack) {
       L.e('Chyba při migraci kartiček', e, stack);
+      return 0;
+    }
+  }
+
+  /// Odstraní duplicitní kartičky (se stejným backText).
+  /// Z každé skupiny duplicit zachová tu s nejlepším masteryScore (nejvíce pokročilou).
+  /// Volá se jednorázově při migraci databáze.
+  Future<int> removeDuplicateFlashcards() async {
+    try {
+      final allCards = await getAllFlashcards();
+      if (allCards.length <= 1) return 0;
+
+      // Seskupení kartiček podle backText (case-insensitive)
+      final groups = <String, List<Flashcard>>{};
+      for (final card in allCards) {
+        final key = card.backText.trim().toLowerCase();
+        groups.putIfAbsent(key, () => []).add(card);
+      }
+
+      int removedCount = 0;
+      for (final group in groups.values) {
+        if (group.length <= 1) continue;
+
+        // Seřadíme podle masteryScore sestupně — zachováme tu nejlepší
+        group.sort((a, b) => b.masteryScore.compareTo(a.masteryScore));
+        final keep = group.first;
+
+        for (int i = 1; i < group.length; i++) {
+          await (_db.delete(_db.flashcards)..where((t) => t.id.equals(group[i].id))).go();
+          removedCount++;
+        }
+
+        L.i('Deduplikace: zachována kartička #${keep.id} (mastery=${keep.masteryScore}), smazáno ${group.length - 1} duplikátů pro "${keep.backText}".');
+      }
+
+      if (removedCount > 0) {
+        L.i('Celkem odstraněno $removedCount duplicitních kartiček.');
+      }
+      return removedCount;
+    } catch (e, stack) {
+      L.e('Chyba při odstraňování duplicitních kartiček', e, stack);
       return 0;
     }
   }

@@ -84,10 +84,12 @@ class _WordTranslationSheetState extends ConsumerState<WordTranslationSheet> {
   bool _isSaved = false;
   bool _isPlayingTts = false;
   bool _internallyPaused = false;
+  late String _currentEnglishText;
 
   @override
   void initState() {
     super.initState();
+    _currentEnglishText = widget.englishText;
     _checkAndPauseVoice();
     _performTranslationAndSave();
   }
@@ -113,6 +115,88 @@ class _WordTranslationSheetState extends ConsumerState<WordTranslationSheet> {
     super.dispose();
   }
 
+  bool get _canExpandLeft {
+    if (widget.contextSentence == null) return false;
+    final sentence = widget.contextSentence!.toLowerCase();
+    final current = _currentEnglishText.trim().toLowerCase();
+    final idx = sentence.indexOf(current);
+    return idx > 0 && sentence.substring(0, idx).trim().isNotEmpty;
+  }
+
+  bool get _canExpandRight {
+    if (widget.contextSentence == null) return false;
+    final sentence = widget.contextSentence!.toLowerCase();
+    final current = _currentEnglishText.trim().toLowerCase();
+    final idx = sentence.indexOf(current);
+    if (idx < 0) return false;
+    return (idx + current.length) < sentence.length &&
+        sentence.substring(idx + current.length).trim().isNotEmpty;
+  }
+
+  void _expandLeft() async {
+    if (!_canExpandLeft) return;
+    final sentence = widget.contextSentence!;
+    final lowerSentence = sentence.toLowerCase();
+    final lowerCurrent = _currentEnglishText.trim().toLowerCase();
+    final idx = lowerSentence.indexOf(lowerCurrent);
+    if (idx <= 0) return;
+
+    final prefix = sentence.substring(0, idx).trimRight();
+    final prefixWords = prefix.split(RegExp(r'\s+'));
+    if (prefixWords.isEmpty) return;
+
+    final addedWord = prefixWords.last;
+    final startIdx = prefix.lastIndexOf(addedWord);
+    final newText = sentence.substring(startIdx, idx + _currentEnglishText.trim().length).trim();
+
+    await _updatePhrase(newText);
+  }
+
+  void _expandRight() async {
+    if (!_canExpandRight) return;
+    final sentence = widget.contextSentence!;
+    final lowerSentence = sentence.toLowerCase();
+    final lowerCurrent = _currentEnglishText.trim().toLowerCase();
+    final idx = lowerSentence.indexOf(lowerCurrent);
+    if (idx < 0) return;
+
+    final endIdx = idx + _currentEnglishText.trim().length;
+    if (endIdx >= sentence.length) return;
+
+    final suffix = sentence.substring(endIdx).trimLeft();
+    final suffixWords = suffix.split(RegExp(r'\s+'));
+    if (suffixWords.isEmpty) return;
+
+    final addedWord = suffixWords.first;
+    final addedWordEnd = sentence.indexOf(addedWord, endIdx) + addedWord.length;
+    final newText = sentence.substring(idx, addedWordEnd).trim();
+
+    await _updatePhrase(newText);
+  }
+
+  Future<void> _updatePhrase(String newPhrase) async {
+    final clean = WordTranslationService.cleanWord(newPhrase);
+    if (clean.isEmpty || clean.toLowerCase() == _currentEnglishText.toLowerCase()) return;
+
+    HapticFeedback.selectionClick();
+
+    // Pokud už byla předchozí kartička uložena tímto sheetem, smažeme ji před uložením rozšířené
+    if (_isSaved && _flashcardId != null) {
+      final translationService = ref.read(wordTranslationServiceProvider);
+      try {
+        await translationService.removeFromFlashcards(_flashcardId!);
+      } catch (_) {}
+      _isSaved = false;
+      _flashcardId = null;
+    }
+
+    setState(() {
+      _currentEnglishText = clean;
+    });
+
+    await _performTranslationAndSave();
+  }
+
   Future<void> _performTranslationAndSave() async {
     setState(() {
       _isLoading = true;
@@ -123,7 +207,7 @@ class _WordTranslationSheetState extends ConsumerState<WordTranslationSheet> {
 
     try {
       final translation = await translationService.translate(
-        text: widget.englishText,
+        text: _currentEnglishText,
         contextSentence: widget.contextSentence,
       );
 
@@ -144,7 +228,7 @@ class _WordTranslationSheetState extends ConsumerState<WordTranslationSheet> {
 
       // Automaticky uložíme do existujících Flashcards
       final saveResult = await translationService.saveToFlashcards(
-        englishText: widget.englishText,
+        englishText: _currentEnglishText,
         czechText: translation,
         contextSentence: widget.contextSentence,
       );
@@ -182,7 +266,7 @@ class _WordTranslationSheetState extends ConsumerState<WordTranslationSheet> {
     } else if (!_isSaved && _translatedText.isNotEmpty) {
       // Znovu uložení
       final res = await translationService.saveToFlashcards(
-        englishText: widget.englishText,
+        englishText: _currentEnglishText,
         czechText: _translatedText,
         contextSentence: widget.contextSentence,
       );
@@ -202,7 +286,7 @@ class _WordTranslationSheetState extends ConsumerState<WordTranslationSheet> {
 
     try {
       final tts = ref.read(geminiTtsServiceProvider);
-      await tts.speak(widget.englishText);
+      await tts.speak(_currentEnglishText);
     } finally {
       if (mounted) {
         setState(() => _isPlayingTts = false);
@@ -213,7 +297,7 @@ class _WordTranslationSheetState extends ConsumerState<WordTranslationSheet> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cleanEn = WordTranslationService.cleanWord(widget.englishText);
+    final cleanEn = WordTranslationService.cleanWord(_currentEnglishText);
 
     return SafeArea(
       child: Padding(
@@ -316,6 +400,84 @@ class _WordTranslationSheetState extends ConsumerState<WordTranslationSheet> {
                   ),
                 ],
               ),
+
+              // ── Možnost rychlého rozšíření výběru o sousední slova z věty ──────
+              if (widget.contextSentence != null && (_canExpandLeft || _canExpandRight)) ...[
+                const SizedBox(height: 6),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      if (_canExpandLeft)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 6),
+                          child: InkWell(
+                            onTap: _isLoading ? null : _expandLeft,
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primary.withValues(alpha: isDark ? 0.15 : 0.08),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: AppTheme.primary.withValues(alpha: isDark ? 0.3 : 0.2),
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.arrow_back_rounded, size: 12, color: AppTheme.primary),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '+ Slovo vlevo',
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: isDark ? AppTheme.primaryLight : AppTheme.primary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      if (_canExpandRight)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 6),
+                          child: InkWell(
+                            onTap: _isLoading ? null : _expandRight,
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primary.withValues(alpha: isDark ? 0.15 : 0.08),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: AppTheme.primary.withValues(alpha: isDark ? 0.3 : 0.2),
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    '+ Slovo vpravo',
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: isDark ? AppTheme.primaryLight : AppTheme.primary,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  const Icon(Icons.arrow_forward_rounded, size: 12, color: AppTheme.primary),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
 
               const SizedBox(height: 6),
 

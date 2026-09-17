@@ -255,8 +255,8 @@ class _SmartChatBubbleState extends ConsumerState<SmartChatBubble> {
                   children: [
                     // Hlavní text zprávy
                     GestureDetector(
-                      onLongPress: () => _copyToClipboard(context, msg.text),
-                      onTap: widget.onTap,
+                      onLongPress: isUser ? () => _copyToClipboard(context, msg.text) : null,
+                      onTap: isUser ? widget.onTap : null,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 16,

@@ -333,6 +333,66 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
     });
   }
 
+  Future<void> _deleteCurrentCard(Flashcard card) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          'Smazat kartičku?',
+          style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700),
+        ),
+        content: Text(
+          'Opravdu chceš tuto kartičku trvale smazat?\n\n"${card.backText}"',
+          style: GoogleFonts.plusJakartaSans(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Zrušit'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppTheme.error),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Smazat'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    HapticFeedback.mediumImpact();
+    final repo = ref.read(sessionRepositoryProvider);
+    await repo.deleteFlashcard(card.id);
+
+    if (_flipController.isCompleted) {
+      _flipController.reset();
+      setState(() => _isBackVisible = false);
+    }
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Kartička byla smazána.'),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+
+      setState(() {
+        _lastPronunciation = null;
+        _recordedBytes.clear();
+        _isRecording = false;
+        _isEvaluatingSpeech = false;
+        _sessionQueue?.removeWhere((c) => c.id == card.id);
+        if (_sessionQueue != null && _sessionIndex >= _sessionQueue!.length) {
+          _sessionCompleted = true;
+        }
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final repo = ref.watch(sessionRepositoryProvider);
@@ -518,33 +578,40 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(5),
-                    decoration: BoxDecoration(
-                      color: AppTheme.primary.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(8),
+              Expanded(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(5),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primary.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(
+                        Icons.style_rounded,
+                        size: 15,
+                        color: AppTheme.primary,
+                      ),
                     ),
-                    child: const Icon(
-                      Icons.style_rounded,
-                      size: 15,
-                      color: AppTheme.primary,
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        'Kartička ${currentIndex + 1} z $totalCards',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.textColor(context),
+                          letterSpacing: -0.2,
+                        ),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Kartička ${currentIndex + 1} z $totalCards',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.textColor(context),
-                      letterSpacing: -0.2,
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -562,7 +629,7 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
                           const Icon(Icons.check_rounded, size: 11, color: AppTheme.success),
                           const SizedBox(width: 3),
                           Text(
-                            '$masteredCount zvládnuto',
+                            '$masteredCount',
                             style: GoogleFonts.plusJakartaSans(
                               fontSize: 10.5,
                               fontWeight: FontWeight.w700,
@@ -1291,6 +1358,28 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
                         ),
                   onPressed: _isPlayingTts ? null : () => _playAudio(card.backText),
                   tooltip: 'Přehrát rodilou výslovnost (Gemini TTS)',
+                  constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                  padding: EdgeInsets.zero,
+                ),
+              ),
+              const SizedBox(width: 6),
+              // Tlačítko pro trvalé smazání kartičky
+              Container(
+                decoration: BoxDecoration(
+                  color: AppTheme.error.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: AppTheme.error.withValues(alpha: 0.25),
+                  ),
+                ),
+                child: IconButton(
+                  icon: const Icon(
+                    Icons.delete_outline_rounded,
+                    size: 20,
+                    color: AppTheme.error,
+                  ),
+                  onPressed: () => _deleteCurrentCard(card),
+                  tooltip: 'Smazat tuto kartičku',
                   constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
                   padding: EdgeInsets.zero,
                 ),

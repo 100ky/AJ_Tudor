@@ -109,8 +109,8 @@ class ChatBubble extends StatelessWidget {
             // Samotná bublina
             Flexible(
               child: GestureDetector(
-                onLongPress: () => _copyToClipboard(context),
-                onTap: onTap,
+                onLongPress: isUser ? () => _copyToClipboard(context) : null,
+                onTap: isUser ? onTap : null,
                 child: Container(
                   constraints: BoxConstraints(maxWidth: maxBubbleWidth),
                   padding: const EdgeInsets.symmetric(

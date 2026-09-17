@@ -100,6 +100,24 @@ class AppDatabase extends _$AppDatabase {
           } catch (_) {
             // Sloupec již existuje
           }
+
+          // 6. Jednorázová deduplikace kartiček (odstraní duplikáty se stejným back_text,
+          //    zachová kartičku s nejlepším mastery_score)
+          try {
+            await customStatement('''
+              DELETE FROM flashcards
+              WHERE id NOT IN (
+                SELECT MIN(id) FROM (
+                  SELECT id, RANK() OVER (
+                    PARTITION BY LOWER(TRIM(back_text))
+                    ORDER BY mastery_score DESC, interval_days DESC, id ASC
+                  ) AS rnk
+                  FROM flashcards
+                ) ranked
+                WHERE rnk = 1
+              );
+            ''');
+          } catch (_) {}
         },
         onUpgrade: (m, from, to) async {
           // Při vývoji jednoduše vytvoříme všechny chybějící tabulky.

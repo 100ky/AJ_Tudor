@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -27,14 +28,16 @@ class _TextLineGeometry {
   void add(_WordGeometry g) => words.add(g);
 }
 
-/// Vlastní rozpoznávač gest pro výběr textu tahem.
+/// Vlastní rozpoznávač gest pro výběr textu tahem i podržením.
 ///
-/// Umožňuje označování přes více řádků:
-/// 1. Pokud je pohyb primárně svislý a ještě nezačal výběr, odmítne se (`rejected`),
-///    aby mohl rodičovský ListView hladce scrollovat.
-/// 2. Jakmile uživatel pohne prstem po řádku (`dx > 8` nebo přejede na jiné slovo),
-///    rozpoznávač gesto přijme (`accepted`), vyhraje arénu gest a zabrání scrollování chatu.
-/// 3. Následný pohyb může volně pokračovat svisle na 2., 3. a další řádky bez přerušení.
+/// Zajišťuje, že při označování více slov tahem (nebo podržením a tažením)
+/// rodičovský ListView nikdy nescroluje a uživatel může hladce označit celou frázi:
+/// 1. Pokud uživatel podrží prst na slově (200 ms), okamžitě uzamkne arénu gest (accepted)
+///    a zabrání jakémukoliv scrollu chatu.
+/// 2. Pokud uživatel pohne prstem a přejede na jakékoliv jiné slovo (i na jiném řádku),
+///    okamžitě přijme gesto a uzamkne scroll.
+/// 3. Scroll chatu je povolen pouze tehdy, pokud dotyk nezačal na slově nebo se prst
+///    pohybuje čistě svisle ven z textu bez zasažení dalších slov.
 class _TutorTextSelectionGestureRecognizer extends OneSequenceGestureRecognizer {
   _TutorTextSelectionGestureRecognizer();
 
@@ -42,10 +45,13 @@ class _TutorTextSelectionGestureRecognizer extends OneSequenceGestureRecognizer 
   ValueChanged<Offset>? onDragUpdate;
   VoidCallback? onDragEnd;
   VoidCallback? onDragCancel;
+  int? Function(Offset globalPos)? getWordIndex;
 
   Offset? _startPosition;
+  int? _startWordIndex;
   bool _hasResolved = false;
   bool _isSelecting = false;
+  Timer? _longPressTimer;
 
   @override
   void addAllowedPointer(PointerDownEvent event) {
@@ -53,40 +59,95 @@ class _TutorTextSelectionGestureRecognizer extends OneSequenceGestureRecognizer 
     _startPosition = event.position;
     _hasResolved = false;
     _isSelecting = false;
+    _longPressTimer?.cancel();
+
+    _startWordIndex = getWordIndex?.call(event.position);
+
+    // Pokud dotyk začal na slově, spustíme rychlý časovač pro podržení (200 ms).
+    // Pokud uživatel na slově setrvá, okamžitě uzamkneme arénu gest pro výběr a zamezíme scrollu.
+    if (_startWordIndex != null) {
+      _longPressTimer = Timer(const Duration(milliseconds: 200), () {
+        if (!_hasResolved && _startPosition != null) {
+          _hasResolved = true;
+          _isSelecting = true;
+          resolve(GestureDisposition.accepted);
+          HapticFeedback.mediumImpact();
+          onDragStart?.call(_startPosition!);
+        }
+      });
+    }
   }
 
   @override
   void handleEvent(PointerEvent event) {
     if (event is PointerMoveEvent) {
+      if (_isSelecting) {
+        onDragUpdate?.call(event.position);
+        return;
+      }
+
       if (!_hasResolved && _startPosition != null) {
         final dx = (event.position.dx - _startPosition!.dx).abs();
         final dy = (event.position.dy - _startPosition!.dy).abs();
 
-        // Pokud je pohyb primárně svislý bez vodorovného posunu, jedná se o scroll chatu -> odmítnout
-        if (dy > 14 && dy > dx * 1.5) {
-          _hasResolved = true;
-          resolve(GestureDisposition.rejected);
-          return;
+        // Pokud se prst pohnul o více než 8 px, long-press timer zrušíme a vyhodnotíme tah
+        if (dx > 8 || dy > 8) {
+          _longPressTimer?.cancel();
         }
 
-        // Pokud je pohyb do strany po řádku, jedná se o označování -> přijmout a uzamknout scroll
-        if (dx > 8 || (dx > 4 && dy < 8)) {
+        final currentWordIndex = getWordIndex?.call(event.position);
+
+        // 1. ZÁSADNÍ: Pokud prst přejel na jiné slovo v textu (i na dalším řádku),
+        // jedná se 100% o označování fráze -> přijmout a okamžitě zablokovat scroll!
+        if (_startWordIndex != null &&
+            currentWordIndex != null &&
+            currentWordIndex != _startWordIndex) {
           _hasResolved = true;
           _isSelecting = true;
+          _longPressTimer?.cancel();
           resolve(GestureDisposition.accepted);
+          HapticFeedback.selectionClick();
           onDragStart?.call(_startPosition!);
           onDragUpdate?.call(event.position);
           return;
         }
-      } else if (_isSelecting) {
-        onDragUpdate?.call(event.position);
+
+        // 2. Horizontální tah po řádku -> přijmout a uzamknout scroll
+        if (_startWordIndex != null && (dx > 8 || (dx > 4 && dy < 6))) {
+          _hasResolved = true;
+          _isSelecting = true;
+          _longPressTimer?.cancel();
+          resolve(GestureDisposition.accepted);
+          HapticFeedback.selectionClick();
+          onDragStart?.call(_startPosition!);
+          onDragUpdate?.call(event.position);
+          return;
+        }
+
+        // 3. Scroll chatu: pouze pokud dotyk nezačal na slově, nebo pokud uživatel táhne
+        // výrazně svisle ven z textu bez zasažení jakéhokoliv dalšího slova
+        if (_startWordIndex == null && dy > 12) {
+          _hasResolved = true;
+          _longPressTimer?.cancel();
+          resolve(GestureDisposition.rejected);
+          return;
+        }
+
+        if (dy > 25 && dy > dx * 2.0 && currentWordIndex == null) {
+          _hasResolved = true;
+          _longPressTimer?.cancel();
+          resolve(GestureDisposition.rejected);
+          return;
+        }
       }
     } else if (event is PointerUpEvent) {
+      _longPressTimer?.cancel();
       if (_isSelecting) {
         onDragEnd?.call();
       }
       stopTrackingPointer(event.pointer);
     } else if (event is PointerCancelEvent) {
+      _longPressTimer?.cancel();
       if (_isSelecting) {
         onDragCancel?.call();
       }
@@ -99,8 +160,16 @@ class _TutorTextSelectionGestureRecognizer extends OneSequenceGestureRecognizer 
 
   @override
   void didStopTrackingLastPointer(int pointer) {
+    _longPressTimer?.cancel();
     _hasResolved = false;
     _isSelecting = false;
+    _startWordIndex = null;
+  }
+
+  @override
+  void dispose() {
+    _longPressTimer?.cancel();
+    super.dispose();
   }
 }
 
@@ -439,6 +508,7 @@ class _InteractiveTutorTextState extends ConsumerState<InteractiveTutorText> {
           () => _TutorTextSelectionGestureRecognizer(),
           (_TutorTextSelectionGestureRecognizer instance) {
             instance
+              ..getWordIndex = _findWordIndexAtPosition
               ..onDragStart = (pos) {
                 final targetIndex = _findWordIndexAtPosition(pos);
                 if (targetIndex != null) {
