@@ -256,10 +256,11 @@ class GeminiLiveClient {
         // Konfigurace detekce hlasové aktivity (VAD):
         // Nastavuje delší dobu ticha a nižší citlivost na konec řeči,
         // aby tutor neskákal studentovi do řeči při přemýšlení nebo výplňkových slovech (uh, em).
+        // endOfSpeechSensitivity LOW dává studentovi prostor přemýšlet (nevypne hned při pauze),
+        // citlivost na začátek řeči necháváme standardní, aby Gemini spolehlivě zachytilo i tichý hlas.
         'realtimeInputConfig': {
           'automaticActivityDetection': {
             'disabled': false,
-            'startOfSpeechSensitivity': 'START_SENSITIVITY_HIGH',
             'endOfSpeechSensitivity': 'END_SENSITIVITY_LOW',
             'prefixPaddingMs': 300,
             'silenceDurationMs': silenceDurationMs,
@@ -306,24 +307,15 @@ class GeminiLiveClient {
 
   /// Popostrčí model k vygenerování odpovědi (pokud VAD na serveru nezareagovalo na konec řeči).
   ///
-  /// Posílá plnohodnotný turn s požadavkem na odpověď nebo s dosavadním přepisem studenta,
-  /// protože pouhý prázdný signál turnComplete bez parts je Gemini Live preview modelem ignorován.
+  /// Popostrčí model k vygenerování odpovědi uzavřením tahu (turnComplete: true).
+  ///
+  /// Posílá čistý signál turnComplete bez falešného textu,
+  /// aby model reagoval výhradně na přijatý audio proud ze sendAudioChunk.
   void nudgeModel([String? fallbackText]) {
     if (_channel == null || _isReconnecting) return;
-    L.i('Popostrkuji Gemini Live k odpovědi (nudge / turnComplete)...');
-    final promptText = (fallbackText != null && fallbackText.trim().isNotEmpty)
-        ? fallbackText.trim()
-        : '[The student has finished speaking. Please respond naturally now.]';
+    L.vad('Popostrkuji Gemini Live k dokončení tahu (turnComplete: true)');
     final clientContent = {
       'clientContent': {
-        'turns': [
-          {
-            'role': 'user',
-            'parts': [
-              {'text': promptText}
-            ]
-          }
-        ],
         'turnComplete': true
       }
     };
@@ -396,6 +388,12 @@ class GeminiLiveClient {
         }
       }
 
+      // Detekce voiceActivity ze strany Gemini Live serveru
+      final voiceActivity = data['voiceActivity'] ?? data['voice_activity'];
+      if (voiceActivity != null) {
+        L.vad('Gemini server VAD detekoval hlasovou aktivitu: $voiceActivity');
+      }
+
       // Detekce dokončení úvodního SETUPu
       if (data.containsKey('setupComplete') || data.containsKey('setup_complete')) {
         L.i('✅ Gemini Live Setup úspěšně dokončen (setupComplete).');
@@ -435,6 +433,7 @@ class GeminiLiveClient {
           final text = inputTranscription['text'];
           if (text != null) {
             L.i('STT (Uživatel): $text');
+            L.i('🗣️ [STT Uživatel]: "$text"');
             if (onUserTranscriptReceived != null) onUserTranscriptReceived!(text);
           }
         }
@@ -445,6 +444,7 @@ class GeminiLiveClient {
           final text = outputTranscription['text'];
           if (text != null) {
             L.d('STT (Tutor kousek): $text');
+            L.d('🤖 [STT Tutor]: "$text"');
             final cleanText = _processTextAndDetectStuck(text);
             if (cleanText.isNotEmpty && onTextReceived != null) {
               onTextReceived!(cleanText);

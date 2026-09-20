@@ -228,9 +228,8 @@ void main() {
       await tester.pumpWidget(
         buildTestWidget(
           child: Navigator(
-            onPopPage: (route, result) {
+            onDidRemovePage: (page) {
               popped = true;
-              return route.didPop(result);
             },
             pages: [
               MaterialPage(
@@ -255,6 +254,60 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(popped, isTrue);
+    });
+
+    testWidgets('when selecting full sentence, does NOT auto-save sentence and displays word chips',
+        (WidgetTester tester) async {
+      when(() => mockTranslationService.translate(
+            text: 'Running clears my head',
+            contextSentence: any(named: 'contextSentence'),
+          )).thenAnswer((_) async => 'Běhání mi čistí hlavu');
+
+      when(() => mockTranslationService.translate(
+            text: 'head',
+            contextSentence: any(named: 'contextSentence'),
+          )).thenAnswer((_) async => 'hlava');
+
+      await tester.pumpWidget(
+        buildTestWidget(
+          child: const WordTranslationSheet(
+            englishText: 'Running clears my head',
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // 1. Translated sentence is displayed
+      expect(find.text('Běhání mi čistí hlavu'), findsOneWidget);
+
+      // 2. Whole sentence is NOT auto-saved to flashcards
+      verifyNever(() => mockTranslationService.saveToFlashcards(
+            englishText: 'Running clears my head',
+            czechText: any(named: 'czechText'),
+            contextSentence: any(named: 'contextSentence'),
+          ));
+
+      expect(find.text('Není v kartičkách (vyber slovo výše)'), findsOneWidget);
+      expect(find.text('+ Uložit celou větu'), findsOneWidget);
+
+      // 3. Word chips are displayed
+      expect(find.text('Vyber slovíčko z věty pro kartičku:'), findsOneWidget);
+      expect(find.text('Running'), findsOneWidget);
+      expect(find.text('clears'), findsOneWidget);
+      expect(find.text('head'), findsOneWidget);
+
+      // 4. Tap on chip "head" -> switches to word and saves it
+      await tester.tap(find.text('head'));
+      await tester.pumpAndSettle();
+
+      verify(() => mockTranslationService.saveToFlashcards(
+            englishText: 'head',
+            czechText: 'hlava',
+            contextSentence: 'Running clears my head',
+          )).called(1);
+
+      expect(find.text('Uloženo do Smart Flashcards! 🃏'), findsOneWidget);
     });
   });
 }

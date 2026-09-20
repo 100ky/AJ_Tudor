@@ -93,7 +93,12 @@ class ScenarioPlannerAgent {
         
         // Přepsání starých nepoužitých scénářů v databázi novými personalizovanými scénáři
         await repo.replaceScenarios(newScenarios);
-        L.i('Generování scénářů dokončeno. Uloženy 3 nové možnosti.');
+        
+        // ─── STRUKTUROVANÝ VÝPIS SCÉNÁŘŮ ───
+        final scenarioItems = newScenarios.map((s) => 
+          '${s.title} [${s.difficulty}] — ${L.truncate(s.description, 80)}'
+        ).toList();
+        L.blockList('SCENARIO', 'Vygenerované scénáře (${newScenarios.length})', scenarioItems);
       }
 
     } catch (e, stack) {

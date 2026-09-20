@@ -8,7 +8,6 @@ import 'package:aj_tudor/features/conversation/conversation_screen.dart';
 import 'package:aj_tudor/core/app_theme.dart';
 import 'package:aj_tudor/core/widgets/smart_chat_bubble.dart';
 import 'package:aj_tudor/core/widgets/interactive_tutor_text.dart';
-import 'package:aj_tudor/data/database/app_database.dart';
 import 'package:aj_tudor/data/repositories/session_repository.dart';
 import 'package:aj_tudor/providers/config_provider.dart';
 import 'package:aj_tudor/providers/database_provider.dart';

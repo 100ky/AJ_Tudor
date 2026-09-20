@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -207,8 +206,65 @@ void main() {
       await tester.pumpAndSettle();
 
       // Session should now be completed
-      expect(find.text('Skvělá práce! Relace dokončena 🎉'), findsOneWidget);
+      expect(find.text('Skvělá práce! Relace dokončena'), findsOneWidget);
       expect(find.text('Všechny kartičky z této studijní dávky máš úspěšně procvičené.'), findsOneWidget);
+
+      await drainTimers(tester);
+    });
+
+    testWidgets('session completed state renders without overflow on narrow screen (360dp)',
+        (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final now = DateTime.now();
+      await db.into(db.flashcards).insert(
+            FlashcardsCompanion.insert(
+              frontText: 'Jedna',
+              backText: 'One',
+              explanation: 'Číslovka 1.',
+              nextReviewAt: now.subtract(const Duration(hours: 1)),
+              createdAt: now.subtract(const Duration(days: 1)),
+            ),
+          );
+      await db.into(db.flashcards).insert(
+            FlashcardsCompanion.insert(
+              frontText: 'Dva',
+              backText: 'Two',
+              explanation: 'Číslovka 2.',
+              nextReviewAt: now.subtract(const Duration(hours: 1)),
+              createdAt: now.subtract(const Duration(days: 1)),
+            ),
+          );
+
+      await tester.pumpWidget(buildTestWidget());
+      await tester.pumpAndSettle();
+
+      // First card: flip and rate "Znovu"
+      await tester.tap(find.text('Otočit kartičku (Zobrazit řešení)'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Znovu'));
+      await tester.pumpAndSettle();
+
+      // Second card: flip and rate "Dobré"
+      await tester.tap(find.text('Otočit kartičku (Zobrazit řešení)'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Dobré'));
+      await tester.pumpAndSettle();
+
+      // Re-queued first card: flip and rate "Dobré" to finish session
+      await tester.tap(find.text('Otočit kartičku (Zobrazit řešení)'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Dobré'));
+      await tester.pumpAndSettle();
+
+      // Session completed state should show both badges without RenderFlex overflow
+      expect(find.text('Skvělá práce! Relace dokončena'), findsOneWidget);
+      expect(find.text('2 zvládnuto'), findsOneWidget);
+      expect(find.text('1 zopakováno'), findsOneWidget);
+      expect(tester.takeException(), isNull);
 
       await drainTimers(tester);
     });

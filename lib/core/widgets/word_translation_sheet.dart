@@ -85,11 +85,34 @@ class _WordTranslationSheetState extends ConsumerState<WordTranslationSheet> {
   bool _isPlayingTts = false;
   bool _internallyPaused = false;
   late String _currentEnglishText;
+  late final String _originalSentence;
+
+  bool get _isSentence {
+    final words = _currentEnglishText.trim().split(RegExp(r'\s+'));
+    return words.length > 3;
+  }
+
+  String get _effectiveContextSentence {
+    if (widget.contextSentence != null && widget.contextSentence!.trim().isNotEmpty) {
+      return widget.contextSentence!;
+    }
+    return _originalSentence;
+  }
+
+  List<String> get _sentenceWords {
+    return _currentEnglishText
+        .split(RegExp(r'\s+'))
+        .map((w) => WordTranslationService.cleanWord(w))
+        .where((w) => w.length > 1 || w.toLowerCase() == 'a' || w.toLowerCase() == 'i')
+        .toSet()
+        .toList();
+  }
 
   @override
   void initState() {
     super.initState();
     _currentEnglishText = widget.englishText;
+    _originalSentence = widget.contextSentence ?? widget.englishText;
     _checkAndPauseVoice();
     _performTranslationAndSave();
   }
@@ -116,16 +139,14 @@ class _WordTranslationSheetState extends ConsumerState<WordTranslationSheet> {
   }
 
   bool get _canExpandLeft {
-    if (widget.contextSentence == null) return false;
-    final sentence = widget.contextSentence!.toLowerCase();
+    final sentence = _effectiveContextSentence.toLowerCase();
     final current = _currentEnglishText.trim().toLowerCase();
     final idx = sentence.indexOf(current);
     return idx > 0 && sentence.substring(0, idx).trim().isNotEmpty;
   }
 
   bool get _canExpandRight {
-    if (widget.contextSentence == null) return false;
-    final sentence = widget.contextSentence!.toLowerCase();
+    final sentence = _effectiveContextSentence.toLowerCase();
     final current = _currentEnglishText.trim().toLowerCase();
     final idx = sentence.indexOf(current);
     if (idx < 0) return false;
@@ -135,7 +156,7 @@ class _WordTranslationSheetState extends ConsumerState<WordTranslationSheet> {
 
   void _expandLeft() async {
     if (!_canExpandLeft) return;
-    final sentence = widget.contextSentence!;
+    final sentence = _effectiveContextSentence;
     final lowerSentence = sentence.toLowerCase();
     final lowerCurrent = _currentEnglishText.trim().toLowerCase();
     final idx = lowerSentence.indexOf(lowerCurrent);
@@ -154,7 +175,7 @@ class _WordTranslationSheetState extends ConsumerState<WordTranslationSheet> {
 
   void _expandRight() async {
     if (!_canExpandRight) return;
-    final sentence = widget.contextSentence!;
+    final sentence = _effectiveContextSentence;
     final lowerSentence = sentence.toLowerCase();
     final lowerCurrent = _currentEnglishText.trim().toLowerCase();
     final idx = lowerSentence.indexOf(lowerCurrent);
@@ -208,7 +229,7 @@ class _WordTranslationSheetState extends ConsumerState<WordTranslationSheet> {
     try {
       final translation = await translationService.translate(
         text: _currentEnglishText,
-        contextSentence: widget.contextSentence,
+        contextSentence: _effectiveContextSentence,
       );
 
       if (!mounted) return;
@@ -226,19 +247,34 @@ class _WordTranslationSheetState extends ConsumerState<WordTranslationSheet> {
         _isLoading = false;
       });
 
-      // Automaticky uložíme do existujících Flashcards
-      final saveResult = await translationService.saveToFlashcards(
-        englishText: _currentEnglishText,
-        czechText: translation,
-        contextSentence: widget.contextSentence,
-      );
+      // ZÁSADA ATOMICKÝCH KARTIČEK:
+      // Pokud byla označena celá věta (> 3 slova), automaticky ji do kartiček neukládáme!
+      // Celou větu uživateli přeložíme pro porozumění rozhovoru, ale do kartiček
+      // mu níže nabídneme výběr konkrétního slovíčka s kontextem této věty.
+      if (!_isSentence) {
+        final saveResult = await translationService.saveToFlashcards(
+          englishText: _currentEnglishText,
+          czechText: translation,
+          contextSentence: _effectiveContextSentence,
+        );
 
-      if (!mounted) return;
+        if (!mounted) return;
 
-      if (saveResult.isSuccess) {
+        if (saveResult.isSuccess) {
+          setState(() {
+            _flashcardId = saveResult.valueOrNull;
+            _isSaved = true;
+          });
+        } else {
+          setState(() {
+            _isSaved = false;
+            _flashcardId = null;
+          });
+        }
+      } else {
         setState(() {
-          _flashcardId = saveResult.valueOrNull;
-          _isSaved = true;
+          _isSaved = false;
+          _flashcardId = null;
         });
       }
     } catch (e) {
@@ -268,7 +304,7 @@ class _WordTranslationSheetState extends ConsumerState<WordTranslationSheet> {
       final res = await translationService.saveToFlashcards(
         englishText: _currentEnglishText,
         czechText: _translatedText,
-        contextSentence: widget.contextSentence,
+        contextSentence: _effectiveContextSentence,
       );
       if (mounted && res.isSuccess) {
         setState(() {
@@ -525,9 +561,10 @@ class _WordTranslationSheetState extends ConsumerState<WordTranslationSheet> {
                   ),
                 ),
 
-              // ── Kontext věty (pokud existuje) ──────────────────────────────
+              // ── Kontext věty (pokud existuje a neduplikuje označený text) ────────
               if (widget.contextSentence != null &&
-                  widget.contextSentence!.trim().isNotEmpty) ...[
+                  widget.contextSentence!.trim().isNotEmpty &&
+                  widget.contextSentence!.trim().toLowerCase() != _currentEnglishText.trim().toLowerCase()) ...[
                 const SizedBox(height: 10),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -553,6 +590,50 @@ class _WordTranslationSheetState extends ConsumerState<WordTranslationSheet> {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
+                ),
+              ],
+
+              // ── Výběr slovíčka z věty do kartiček (Zásada atomických kartiček) ──
+              if (_isSentence && !_isLoading && _translatedText.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'Vyber slovíčko z věty pro kartičku:',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? AppTheme.primaryLight : AppTheme.primary,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (final word in _sentenceWords)
+                      InkWell(
+                        onTap: () => _updatePhrase(word),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primary.withValues(alpha: isDark ? 0.18 : 0.08),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: AppTheme.primary.withValues(alpha: isDark ? 0.35 : 0.2),
+                            ),
+                          ),
+                          child: Text(
+                            word,
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.textColor(context),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ],
 
@@ -592,7 +673,9 @@ class _WordTranslationSheetState extends ConsumerState<WordTranslationSheet> {
                       child: Text(
                         _isSaved
                             ? 'Uloženo do Smart Flashcards! 🃏'
-                            : 'Není v kartičkách',
+                            : (_isSentence
+                                ? 'Není v kartičkách (vyber slovo výše)'
+                                : 'Není v kartičkách'),
                         style: GoogleFonts.plusJakartaSans(
                           fontSize: 12.5,
                           fontWeight: FontWeight.w600,
@@ -610,7 +693,9 @@ class _WordTranslationSheetState extends ConsumerState<WordTranslationSheet> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 8, vertical: 4),
                           child: Text(
-                            _isSaved ? 'Vrátit ↩' : '+ Uložit',
+                            _isSaved
+                                ? 'Vrátit ↩'
+                                : (_isSentence ? '+ Uložit celou větu' : '+ Uložit'),
                             style: GoogleFonts.plusJakartaSans(
                               fontSize: 12,
                               fontWeight: FontWeight.w700,

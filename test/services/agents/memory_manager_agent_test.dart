@@ -272,6 +272,65 @@ void main() {
       // Should not throw
       await expectLater(agent.analyzeSession(s), completes);
     });
+
+    test('analyzeSession creates atomic flashcard and filters out leaked tutor messages', () async {
+      final s = (await repo.startNewSession()).getOrThrow();
+      await repo.addTranscript(sessionId: s, speaker: 'tutor', content: 'What do you like doing in your free time?');
+      await repo.addTranscript(sessionId: s, speaker: 'user', content: 'Running cleans my head.');
+      await repo.addTranscript(sessionId: s, speaker: 'tutor', content: 'Zkus se prosím soustředit na naši anglickou konverzaci...');
+      await repo.addTranscript(sessionId: s, speaker: 'user', content: 'Sorry, I got distracted.');
+
+      final mockJson = jsonEncode({
+        "topicSummary": "Běhání a konverzace",
+        "fluencyScore": 0.8,
+        "estimatedLevel": "B1",
+        "totalErrors": 2,
+        "briefing": "Zaměř se na idiomy",
+        "resolvedErrors": [],
+        "vocabulary": [],
+        "newLearnedUserFacts": [],
+        "errors": [
+          // 1. Platná chyba s atomickou kartičkou
+          {
+            "type": "vocabulary",
+            "userSaid": "Running cleans my head.",
+            "targetWordOrPhrase": "clear one's head",
+            "czechCue": "vyčistit si hlavu",
+            "correctForm": "Running clears my head.",
+            "explanation": "Správný anglický idiom je 'clear one's head', nikoliv 'clean'.",
+            "czechTranslation": "vyčistit si hlavu"
+          },
+          // 2. Halucinace / leak tutorovy instrukce (musí být odfiltrována!)
+          {
+            "type": "grammar",
+            "userSaid": "Zkus se prosím soustředit na naši anglickou konverzaci a nepřepínej do překládání úkolů.",
+            "targetWordOrPhrase": "was at my father's house",
+            "czechCue": "byl jsem u táty",
+            "correctForm": "was at my father's house",
+            "explanation": "Chyba",
+            "czechTranslation": "byl jsem u táty"
+          }
+        ]
+      });
+
+      when(() => mockGemini.sendMessage(
+        any(),
+        responseSchema: any(named: 'responseSchema'),
+        systemPrompt: any(named: 'systemPrompt'),
+      )).thenAnswer((_) async => mockJson);
+
+      final agent = container.read(memoryManagerAgentProvider);
+      await agent.analyzeSession(s);
+
+      final flashcards = await repo.getAllFlashcards();
+      // Musí být vytvořena pouze 1 kartička (leak tutorovy zprávy byl zahozen)
+      expect(flashcards.length, 1);
+      final card = flashcards.first;
+      expect(card.frontText, 'vyčistit si hlavu');
+      expect(card.backText, 'clear one\'s head');
+      expect(card.sourceSentence, 'Running clears my head.');
+      expect(card.explanation.contains("clear one's head"), true);
+    });
   });
 }
 

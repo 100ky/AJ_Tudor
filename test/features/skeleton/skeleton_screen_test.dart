@@ -10,7 +10,6 @@ import 'package:aj_tudor/data/database/app_database.dart';
 import 'package:aj_tudor/data/repositories/session_repository.dart';
 import 'package:aj_tudor/providers/config_provider.dart';
 import 'package:aj_tudor/providers/database_provider.dart';
-import 'package:aj_tudor/providers/gemini_provider.dart';
 import 'package:aj_tudor/services/agents/voice_tutor_agent.dart';
 import 'package:aj_tudor/services/agents/topic_preparation_agent.dart';
 import 'package:aj_tudor/services/agents/scenario_planner_agent.dart';

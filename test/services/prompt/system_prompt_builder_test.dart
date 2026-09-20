@@ -91,7 +91,9 @@ void main() {
       expect(promptWithBriefing.contains('MEMORY PRUNING (Zapomínání):'), true);
       expect(promptWithBriefing.contains('SEBE-REFLEXE TUTORA (Self-Correction):'), true);
       expect(promptWithBriefing.contains('EXTRAKCE NOVÝCH OSOBNÍCH FAKTŮ O STUDENTOVI ("O MNĚ")'), true);
-      expect(promptWithBriefing.contains('musí být VŽDY CELÁ opravená anglická věta'), true);
+      expect(promptWithBriefing.contains('Celá správná vzorová anglická věta'), true);
+      expect(promptWithBriefing.contains('ZÁSADA ATOMICKÝCH KARTIČEK'), true);
+      expect(promptWithBriefing.contains('targetWordOrPhrase'), true);
     });
 
     test('getAnalysisResponseSchema provides valid schema structure with all required fields', () {
@@ -116,6 +118,8 @@ void main() {
 
       expect(errorRequired.contains('type'), true);
       expect(errorRequired.contains('userSaid'), true);
+      expect(errorRequired.contains('targetWordOrPhrase'), true);
+      expect(errorRequired.contains('czechCue'), true);
       expect(errorRequired.contains('correctForm'), true);
       expect(errorRequired.contains('explanation'), true);
       expect(errorRequired.contains('czechTranslation'), true);

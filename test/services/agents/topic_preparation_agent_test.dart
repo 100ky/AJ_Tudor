@@ -48,7 +48,7 @@ void main() {
       await repo.savePreparedTopic(jsonEncode(initialTopic.toJson()));
 
       // Read the provider and wait for the initial async microtask to complete
-      final notifier = container.read(topicPreparationAgentProvider.notifier);
+      container.read(topicPreparationAgentProvider.notifier);
       await Future.delayed(const Duration(milliseconds: 50));
 
       final state = container.read(topicPreparationAgentProvider);

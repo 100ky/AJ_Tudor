@@ -65,7 +65,6 @@ class TopicPreparationState {
   }) {
     return TopicPreparationState(
       isLoading: isLoading ?? this.isLoading,
-      topic: topic ?? this.topic,
       topic: clearTopic ? null : (topic ?? this.topic),
       errorMessage: errorMessage,
       refreshCount: refreshCount ?? this.refreshCount,
@@ -205,6 +204,14 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
           refreshCount: _refreshCounter,
         );
         L.i('TopicPreparationAgent: Nové NÁHODNÉ téma připraveno (#$_refreshCounter): "${prepared.title}" (důvod: ${prepared.rationale})');
+        
+        // ─── STRUKTUROVANÝ VÝPIS NÁHODNÉHO TÉMATU ───
+        final topicLines = StringBuffer();
+        topicLines.writeln('Název: ${prepared.title}');
+        topicLines.writeln('Opener: ${prepared.openerEn}');
+        topicLines.writeln('Důvod: ${prepared.rationale}');
+        topicLines.writeln('Typ: Divoká karta (random) 🎲');
+        L.block('TOPIC', 'Připravené NÁHODNÉ téma (#$_refreshCounter)', topicLines.toString());
         return;
       }
 
@@ -281,6 +288,14 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
         refreshCount: _refreshCounter,
       );
       L.i('TopicPreparationAgent: Nové téma připraveno: "${prepared.title}" (důvod: ${prepared.rationale})');
+      
+      // ─── STRUKTUROVANÝ VÝPIS TÉMATU ───
+      final topicLines = StringBuffer();
+      topicLines.writeln('Název: ${prepared.title}');
+      topicLines.writeln('Opener: ${prepared.openerEn}');
+      topicLines.writeln('Důvod: ${prepared.rationale}');
+      topicLines.writeln('Typ: ${prepared.isRandomTopic ? 'Divoká karta (random)' : 'Navazující na historii'}');
+      L.block('TOPIC', 'Připravené konverzační téma (#$_refreshCounter)', topicLines.toString());
     } catch (e, stack) {
       L.e('Chyba při přípravě konverzačního tématu', e, stack);
       state = state.copyWith(

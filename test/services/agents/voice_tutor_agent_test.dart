@@ -361,5 +361,52 @@ void main() {
     expect(container.read(voiceTutorAgentProvider).status, TutorState.listening);
     verify(() => mockClient.sendAudioChunk(audioBuffer)).called(1);
   });
+
+  test('ambient room noise does not trigger false speech detection or cancel silence timer', () async {
+    Function(List<int>)? audioChunkCallback;
+
+    when(() => mockRepo.startNewSession()).thenAnswer((_) async => Result.success(123));
+    when(() => mockRepo.getUserProfile()).thenAnswer((_) async => null);
+    when(() => mockAudio.isPlaying).thenReturn(false);
+    when(() => mockAudio.start(onAudioChunk: any(named: 'onAudioChunk'))).thenAnswer((invocation) async {
+      audioChunkCallback = invocation.namedArguments[const Symbol('onAudioChunk')] as Function(List<int>)?;
+    });
+    when(() => mockClient.connect(
+      modelName: any(named: 'modelName'),
+      systemPrompt: any(named: 'systemPrompt'),
+      voiceName: any(named: 'voiceName'),
+      silenceDurationMs: any(named: 'silenceDurationMs'),
+    )).thenAnswer((_) {});
+    when(() => mockClient.sendAudioChunk(any())).thenAnswer((_) {});
+    when(() => mockClient.sendText(any())).thenAnswer((_) {});
+    when(() => mockClient.nudgeModel(any())).thenAnswer((_) {});
+
+    final agent = container.read(voiceTutorAgentProvider.notifier);
+    await agent.startSession();
+
+    expect(audioChunkCallback, isNotNull);
+
+    // 1. Send 10 chunks of ambient room noise (RMS ~80, volume ~0.049, typical OnePlus noise floor)
+    // 16-bit PCM little endian: byte[0]=80, byte[1]=0 -> sample = 80.
+    final noiseChunk = List<int>.generate(640, (i) => i.isEven ? 80 : 0);
+    for (int i = 0; i < 10; i++) {
+      audioChunkCallback!(noiseChunk);
+    }
+
+    // Agent must stay in listening state without phantom speech detection
+    expect(container.read(voiceTutorAgentProvider).status, TutorState.listening);
+    verifyNever(() => mockClient.nudgeModel(any()));
+
+    // 2. Put into thinking state - ambient noise must NOT revert thinking to listening
+    agent.sendText('Thinking test');
+    expect(container.read(voiceTutorAgentProvider).status, TutorState.thinking);
+
+    for (int i = 0; i < 5; i++) {
+      audioChunkCallback!(noiseChunk);
+    }
+    // Must remain in thinking state despite background noise
+    expect(container.read(voiceTutorAgentProvider).status, TutorState.thinking);
+  });
 }
+
 

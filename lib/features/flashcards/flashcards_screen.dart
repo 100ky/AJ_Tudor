@@ -84,7 +84,7 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        'Vytvořeno $count nových kartiček z tvých chyb! 🎯',
+                        'Vytvořeno $count nových kartiček z tvých chyb!',
                         style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600),
                       ),
                     ),
@@ -99,7 +99,7 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(
-                  'Všechny tvé zaznamenané chyby už v kartičkách máš! 👍',
+                  'Všechny tvé zaznamenané chyby už v kartičkách máš!',
                   style: GoogleFonts.plusJakartaSans(),
                 ),
                 behavior: SnackBarBehavior.floating,
@@ -143,11 +143,13 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
         }
       });
 
-    // Na pozadí zkontrolujeme a automaticky přeložíme staré kartičky s chybnou angličtinou do češtiny
+    // Na pozadí vyčistíme neplatné kartičky (leaky) a automaticky přeložíme staré kartičky s chybnou angličtinou do češtiny
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      final repo = ref.read(sessionRepositoryProvider);
+      repo.cleanupInvalidFlashcards();
       final gemini = ref.read(geminiBatchClientProvider);
       if (gemini != null) {
-        ref.read(sessionRepositoryProvider).autoMigrateLegacyCardsToCzech(gemini);
+        repo.autoMigrateLegacyCardsToCzech(gemini);
       }
     });
   }
@@ -732,7 +734,7 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
               ),
               const SizedBox(height: 14),
               Text(
-                'Skvělá práce! Relace dokončena 🎉',
+                'Skvělá práce! Relace dokončena',
                 textAlign: TextAlign.center,
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 19,
@@ -751,22 +753,22 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
                 ),
               ),
               const SizedBox(height: 14),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 8,
+                runSpacing: 8,
                 children: [
                   _buildStatBadge(
                     icon: Icons.check_circle_rounded,
                     label: '$masteredCount zvládnuto',
                     color: AppTheme.success,
                   ),
-                  if (againCount > 0) ...[
-                    const SizedBox(width: 8),
+                  if (againCount > 0)
                     _buildStatBadge(
                       icon: Icons.replay_rounded,
                       label: '$againCount zopakováno',
                       color: AppTheme.warning,
                     ),
-                  ],
                 ],
               ),
               const SizedBox(height: 20),
@@ -896,7 +898,7 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
         return Tooltip(
           message: (w.phoneticTip != null && w.phoneticTip!.isNotEmpty)
               ? w.phoneticTip!
-              : (isAcc ? 'Správná výslovnost ✅' : 'Nepřesná výslovnost ⚠️'),
+              : (isAcc ? 'Správná výslovnost' : 'Nepřesná výslovnost'),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
@@ -964,7 +966,7 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
     if (gemini != null) {
       _triggerOnDemandCardTranslation(card);
       // 5. Dokud překlad běží, V ŽÁDNÉM PŘÍPADĚ nezobrazujeme angličtinu ani chybnou šablonu!
-      return 'Překládám zadání do češtiny... ⏳';
+      return 'Překládám zadání do češtiny...';
     }
 
     // 6. Gemini není k dispozici — zobrazíme surový text (lepší než nekonečný spinner)
@@ -1018,7 +1020,7 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
               else
                 Tooltip(
                   message: 'Klepnutím otočíte kartičku',
-                  child: Icon(Icons.touch_app_rounded,
+                  child: Icon(Icons.flip_rounded,
                       size: 20, color: AppTheme.mutedTextColor(context)),
                 ),
             ],
@@ -1040,13 +1042,16 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
                   children: [
                     Icon(Icons.translate_rounded, size: 13, color: AppTheme.mutedTextColor(context)),
                     const SizedBox(width: 5),
-                    Text(
-                      'PŘELOŽ DO ANGLIČTINY',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        color: AppTheme.mutedTextColor(context),
-                        letterSpacing: 1.0,
+                    Flexible(
+                      child: Text(
+                        'PŘELOŽ DO ANGLIČTINY',
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          color: AppTheme.mutedTextColor(context),
+                          letterSpacing: 0.8,
+                        ),
                       ),
                     ),
                   ],
@@ -1316,15 +1321,17 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
                     children: [
                       const Icon(Icons.check_circle_rounded, size: 13, color: AppTheme.success),
                       const SizedBox(width: 5),
-                      Text(
-                        'SPRÁVNÉ ŘEŠENÍ',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: AppTheme.success,
-                          letterSpacing: 0.5,
+                      Flexible(
+                        child: Text(
+                          'SPRÁVNÉ ŘEŠENÍ',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.success,
+                            letterSpacing: 0.5,
+                          ),
                         ),
                       ),
                     ],
@@ -1446,13 +1453,16 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
                           const Icon(Icons.lightbulb_outline_rounded,
                               size: 16, color: AppTheme.warning),
                           const SizedBox(width: 6),
-                          Text(
-                            'NÁPOVĚDA A VYSVĚTLENÍ:',
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: AppTheme.warning,
-                              letterSpacing: 0.5,
+                          Expanded(
+                            child: Text(
+                              'NÁPOVĚDA A VYSVĚTLENÍ:',
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: AppTheme.warning,
+                                letterSpacing: 0.5,
+                              ),
                             ),
                           ),
                         ],
@@ -1552,7 +1562,7 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
         // Těžké
         Expanded(
           child: _buildRatingButton(
-            icon: Icons.sentiment_dissatisfied_rounded,
+            icon: Icons.schedule_rounded,
             label: 'Těžké',
             sublabel: '${(card.intervalDays * 1.2).ceil()} d.',
             color: AppTheme.warning,
@@ -1564,7 +1574,7 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
         // Dobré
         Expanded(
           child: _buildRatingButton(
-            icon: Icons.sentiment_satisfied_rounded,
+            icon: Icons.check_rounded,
             label: 'Dobré',
             sublabel: '${(card.intervalDays * 2.0).ceil()} d.',
             color: AppTheme.primary,
@@ -1576,7 +1586,7 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
         // Snadné
         Expanded(
           child: _buildRatingButton(
-            icon: Icons.sentiment_very_satisfied_rounded,
+            icon: Icons.done_all_rounded,
             label: 'Snadné',
             sublabel: '${(card.intervalDays * 3.0).ceil()} d.',
             color: AppTheme.success,
@@ -1693,7 +1703,7 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
               ),
               const SizedBox(height: 16),
               Text(
-                hasCards ? 'Máš na dnes splněno! 🎉' : 'Žádné kartičky k procvičení',
+                hasCards ? 'Máš na dnes splněno!' : 'Žádné kartičky k procvičení',
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 18,
                   fontWeight: FontWeight.w700,

@@ -89,8 +89,40 @@ class MemoryManagerAgent {
         totalErr = int.tryParse(data['totalErrors'].toString()) ?? 0;
       }
 
-      // 3. Uložení globálních výsledků analýzy do databáze
-      L.i('Ukládám výsledky analýzy do databáze...');
+      // ─── STRUKTUROVANÝ VÝPIS VÝSLEDKŮ ANALÝZY ───
+      final analysisLines = StringBuffer();
+      analysisLines.writeln('Plynulost: ${fluency.toStringAsFixed(2)} | Úroveň: ${data['estimatedLevel'] ?? '?'} | Chyby: $totalErr');
+      analysisLines.writeln('Shrnutí: ${data['topicSummary'] ?? 'Bez popisu'}');
+      if (data['briefing'] != null && data['briefing'].toString().isNotEmpty) {
+        analysisLines.writeln('Briefing pro příště: ${L.truncate(data['briefing'].toString(), 300)}');
+      }
+      if (data['tutorFeedback'] != null && data['tutorFeedback'].toString().isNotEmpty) {
+        analysisLines.writeln('⚠️ Tutor Feedback (sebe-reflexe): ${data['tutorFeedback']}');
+      }
+      if (data['resolvedErrors'] != null && (data['resolvedErrors'] as List).isNotEmpty) {
+        analysisLines.writeln('✅ Resolved Errors (Memory Pruning): ${(data['resolvedErrors'] as List).join(', ')}');
+      }
+      if (data['vocabulary'] != null && (data['vocabulary'] as List).isNotEmpty) {
+        analysisLines.writeln('📖 Nová slovíčka: ${(data['vocabulary'] as List).join(', ')}');
+      }
+      if (data['newLearnedUserFacts'] != null && (data['newLearnedUserFacts'] as List).isNotEmpty) {
+        analysisLines.writeln('🧑 Nové fakty o studentovi: ${(data['newLearnedUserFacts'] as List).join(', ')}');
+      }
+      L.block('ANALYSIS', 'Výsledky Gemini analýzy (session $sessionId)', analysisLines.toString());
+
+      // Výpis jednotlivých chyb s kartičkami
+      if (data['errors'] != null && (data['errors'] as List).isNotEmpty) {
+        final errorItems = <String>[];
+        for (var err in data['errors']) {
+          if (err is Map) {
+            final userSaid = err['userSaid']?.toString() ?? '';
+            final correctForm = err['correctForm']?.toString() ?? '';
+            final czechTranslation = err['czechTranslation']?.toString() ?? '';
+            errorItems.add('"$userSaid" → "$correctForm" (CZ: $czechTranslation)');
+          }
+        }
+        L.blockList('ANALYSIS', 'Kartičky z chyb', errorItems);
+      }
       await repo.updateSessionAnalysis(
         sessionId: sessionId,
         topicSummary: data['topicSummary']?.toString() ?? 'Bez popisu',
@@ -175,10 +207,29 @@ class MemoryManagerAgent {
         for (var err in data['errors']) {
           if (err is Map) {
             final type = err['type']?.toString() ?? 'grammar';
-            final userSaid = err['userSaid']?.toString() ?? '';
-            final correctForm = err['correctForm']?.toString() ?? '';
-            final explanation = err['explanation']?.toString() ?? '';
+            final userSaid = err['userSaid']?.toString().trim() ?? '';
+            final correctForm = err['correctForm']?.toString().trim() ?? '';
+            final explanation = err['explanation']?.toString().trim() ?? '';
+            final targetWordOrPhrase = err['targetWordOrPhrase']?.toString().trim();
+            final czechCue = err['czechCue']?.toString().trim();
             
+            // FILTRACE LEAKŮ A SYSTÉMOVÝCH HLÁŠEK:
+            // Tutorovy repliky, instrukce nebo příliš dlouhé texty nesmí proniknout do chyb ani kartiček
+            final lowerSaid = userSaid.toLowerCase();
+            final lowerCorrect = correctForm.toLowerCase();
+            if (userSaid.isEmpty ||
+                correctForm.isEmpty ||
+                userSaid.length > 200 ||
+                lowerSaid.contains('soustředit na naši') ||
+                lowerSaid.contains('nepřepínej') ||
+                lowerSaid.contains('how is your day') ||
+                lowerSaid.contains('as an ai') ||
+                lowerSaid.contains('translation task') ||
+                lowerCorrect.contains('soustředit na naši')) {
+              L.w('Filtrován neplatný záznam chyby (leaked tutor/system message): "$userSaid"');
+              continue;
+            }
+
             final errorLogRes = await repo.addErrorLog(
               sessionId: sessionId,
               errorType: type,
@@ -187,25 +238,37 @@ class MemoryManagerAgent {
               explanation: explanation,
             );
             
-            if (userSaid.isNotEmpty && correctForm.isNotEmpty) {
-              newErrors.add('Řekl: "$userSaid", ale správně je: "$correctForm" ($explanation)');
+            newErrors.add('Řekl: "$userSaid", ale správně je: "$correctForm" ($explanation)');
 
-              final czechTranslation = err['czechTranslation']?.toString().trim();
-              final extracted = SessionRepository.extractCzechFromExplanation(explanation);
-              final frontText = (czechTranslation != null && czechTranslation.isNotEmpty)
-                  ? czechTranslation
-                  : (extracted != null && extracted.isNotEmpty ? extracted : 'Přeložte do angličtiny');
+            final czechTranslation = err['czechTranslation']?.toString().trim();
+            final extracted = SessionRepository.extractCzechFromExplanation(explanation);
+            
+            // Cílové slovíčko pro rub kartičky (atomická jednotka)
+            final cardBack = (targetWordOrPhrase != null && targetWordOrPhrase.isNotEmpty)
+                ? targetWordOrPhrase
+                : correctForm;
 
-              // Automatické vytvoření Smart Flashcard pro studenta v češtině k překladu do angličtiny
-              await repo.addFlashcard(
-                frontText: frontText,
-                backText: correctForm,
-                explanation: explanation,
-                errorType: type,
-                sourceSentence: userSaid,
-                errorLogId: errorLogRes.valueOrNull,
-              );
-            }
+            // České zadání pro líc kartičky (atomická jednotka)
+            final cardFront = (czechCue != null && czechCue.isNotEmpty)
+                ? czechCue
+                : ((czechTranslation != null && czechTranslation.isNotEmpty)
+                    ? czechTranslation
+                    : (extracted != null && extracted.isNotEmpty ? extracted : 'Přeložte do angličtiny'));
+
+            // Celá opravená věta slouží jako příklad a kontext na rubu kartičky
+            final contextExample = (correctForm.isNotEmpty && correctForm.toLowerCase() != cardBack.toLowerCase())
+                ? correctForm
+                : (userSaid.isNotEmpty ? userSaid : null);
+
+            // Automatické vytvoření Smart Flashcard pro studenta v češtině k procvičení
+            await repo.addFlashcard(
+              frontText: cardFront,
+              backText: cardBack,
+              explanation: explanation,
+              errorType: type,
+              sourceSentence: contextExample,
+              errorLogId: errorLogRes.valueOrNull,
+            );
           }
         }
         

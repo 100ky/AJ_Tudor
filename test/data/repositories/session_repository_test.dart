@@ -494,7 +494,7 @@ void main() {
     test('removeDuplicateFlashcards keeps highest masteryScore card', () async {
       // Manually insert 3 cards with same backText but varying mastery
       final now = DateTime.now();
-      final id1 = await db.into(db.flashcards).insert(
+      await db.into(db.flashcards).insert(
         FlashcardsCompanion.insert(
           frontText: 'Pes 1',
           backText: 'Dog',
@@ -516,7 +516,7 @@ void main() {
         ),
       );
 
-      final id3 = await db.into(db.flashcards).insert(
+      await db.into(db.flashcards).insert(
         FlashcardsCompanion.insert(
           frontText: 'Pes 3',
           backText: 'DOG',
@@ -584,6 +584,71 @@ void main() {
       // Error logs should now be marked as inFlashcard = true
       final logs = await repo.getErrorLogs(s);
       expect(logs.every((l) => l.inFlashcard), true);
+    });
+
+    test('generateFlashcardsFromErrors distills atomic target word/phrase from sentence', () async {
+      final s = (await repo.startNewSession()).getOrThrow();
+
+      await repo.addErrorLog(
+        sessionId: s,
+        errorType: 'vocabulary',
+        userSaid: 'Running cleans my head',
+        correctForm: 'Running clears my head regularly',
+        explanation: 'Idiom clear one\'s head',
+      );
+
+      final client = _FakeBatchClient((prompt) {
+        if (prompt.contains('extrahuj VÝHRADNĚ cílové anglické slovíčko')) {
+          return '{"target": "clear one\'s head", "czech": "vyčistit si hlavu"}';
+        }
+        return 'vyčistit si hlavu';
+      });
+
+      final genRes = await repo.generateFlashcardsFromErrors(
+        sessionId: s,
+        geminiClient: client,
+      );
+
+      expect(genRes.isSuccess, true);
+      expect(genRes.getOrThrow(), 1);
+
+      final cards = await repo.getAllFlashcards();
+      final card = cards.firstWhere((c) => c.backText == 'clear one\'s head');
+      expect(card.frontText, 'vyčistit si hlavu');
+      expect(card.sourceSentence, 'Running clears my head regularly');
+    });
+
+    test('cleanupInvalidFlashcards deletes cards with tutor monologue leaks and oversized cards', () async {
+      // 1. Valid card
+      await repo.addFlashcard(
+        frontText: 'vyčistit si hlavu',
+        backText: 'clear one\'s head',
+        explanation: 'Idiom',
+      );
+
+      // 2. Leaked tutor instruction card (like #266)
+      await repo.addFlashcard(
+        frontText: 'Zkus se prosím soustředit na naši anglickou konverzaci a nepřepínej do překládání úkolů.',
+        backText: 'was at my father\'s house',
+        explanation: 'Tutor prompt leak',
+      );
+
+      // 3. Oversized card
+      await repo.addFlashcard(
+        frontText: 'A' * 150,
+        backText: 'B' * 150,
+        explanation: 'Too long',
+      );
+
+      final initialCards = await repo.getAllFlashcards();
+      expect(initialCards.length, 3);
+
+      final deleted = await repo.cleanupInvalidFlashcards();
+      expect(deleted, 2);
+
+      final remaining = await repo.getAllFlashcards();
+      expect(remaining.length, 1);
+      expect(remaining.first.backText, 'clear one\'s head');
     });
   });
 }

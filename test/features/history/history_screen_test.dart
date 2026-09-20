@@ -8,7 +8,6 @@ import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:aj_tudor/features/history/history_screen.dart';
 import 'package:aj_tudor/core/app_theme.dart';
-import 'package:aj_tudor/core/utils/result.dart';
 import 'package:aj_tudor/data/database/app_database.dart';
 import 'package:aj_tudor/data/repositories/session_repository.dart';
 import 'package:aj_tudor/providers/config_provider.dart';

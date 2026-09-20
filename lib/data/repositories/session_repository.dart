@@ -999,6 +999,10 @@ class SessionRepository {
             lowerSaid.contains('wait a minute') ||
             lowerSaid.contains('translation task') ||
             lowerSaid.contains('my friend') ||
+            lowerSaid.contains('soustředit na naši') ||
+            lowerSaid.contains('nepřepínej') ||
+            lowerSaid.contains('how is your day') ||
+            lowerCorrect.contains('soustředit na naši') ||
             lowerSaid.contains('as an ai')) {
           await (_db.update(_db.errorLogs)..where((t) => t.id.equals(err.id)))
               .write(const ErrorLogsCompanion(inFlashcard: Value(true)));
@@ -1018,11 +1022,46 @@ class SessionRepository {
 
         seenNewPhrases.add(lowerCorrect);
 
+        String targetWord = correctForm;
         String frontText = '';
-        if (geminiClient != null) {
+        String? contextExample = (correctForm != userSaid && userSaid.isNotEmpty) ? correctForm : userSaid;
+
+        // ZÁSADA ATOMICKÝCH KARTIČEK:
+        // Pokud je correctForm celá dlouhá věta (> 3 slova), zkusíme z ní vydestilovat
+        // cílové slovíčko nebo kolokaci, a celou větu zachováme jako kontextový příklad na rubu.
+        final wordCount = correctForm.split(RegExp(r'\s+')).length;
+        if (wordCount > 3 && geminiClient != null) {
+          try {
+            final prompt = '''Z této opravené anglické věty z konverzace a chyby studenta extrahuj VÝHRADNĚ cílové anglické slovíčko, frázové sloveso nebo ustálenou kolokaci (1–3 slova), kterou se má student naučit, a její přirozený český překlad.
+Opravená věta: "$correctForm"
+Výrok studenta: "$userSaid"
+Vysvětlení chyby: "${err.explanation}"
+
+Vrať VÝHRADNĚ validní JSON bez markdownu a formátování:
+{"target": "clear one's head", "czech": "vyčistit si hlavu"}''';
+
+            final response = await geminiClient.sendMessage(prompt);
+            final cleanJson = response
+                .replaceAll(RegExp(r'^```json\s*', multiLine: true), '')
+                .replaceAll(RegExp(r'^```\s*', multiLine: true), '')
+                .trim();
+            final dynamic decoded = jsonDecode(cleanJson);
+            if (decoded is Map) {
+              final t = decoded['target']?.toString().trim();
+              final c = decoded['czech']?.toString().trim();
+              if (t != null && t.isNotEmpty && c != null && c.isNotEmpty) {
+                targetWord = t;
+                frontText = c;
+                contextExample = correctForm;
+              }
+            }
+          } catch (_) {}
+        }
+
+        if (frontText.isEmpty && geminiClient != null) {
           try {
             final prompt =
-                'Přelož tuto anglickou větu/frázi do přirozené češtiny (vrať VÝHRADNĚ čistý český překlad bez uvozovek a bez vysvětlení): "$correctForm"';
+                'Přelož tuto anglickou větu/frázi do přirozené češtiny (vrať VÝHRADNĚ čistý český překlad bez uvozovek a bez vysvětlení): "$targetWord"';
             final czech = await geminiClient.sendMessage(prompt);
             final cleanCzech = czech.trim().replaceAll('"', '').replaceAll('\n', ' ');
             if (cleanCzech.isNotEmpty && !cleanCzech.startsWith('❌')) {
@@ -1040,10 +1079,10 @@ class SessionRepository {
 
         final cardRes = await addFlashcard(
           frontText: frontText,
-          backText: correctForm,
+          backText: targetWord,
           explanation: err.explanation.isNotEmpty ? err.explanation : 'Oprava chyby z konverzace',
           errorType: err.errorType,
-          sourceSentence: userSaid,
+          sourceSentence: contextExample,
           errorLogId: err.id,
         );
 
@@ -1162,11 +1201,48 @@ ${jsonEncode(batchList)}''';
     }
   }
 
+  /// Odstraní neplatné kartičky vzniklé z halucinací AI (např. tutorovy monology, instrukce nebo příliš dlouhé texty).
+  Future<int> cleanupInvalidFlashcards() async {
+    try {
+      final allCards = await getAllFlashcards();
+      int deletedCount = 0;
+      for (final card in allCards) {
+        final lowerFront = card.frontText.toLowerCase();
+        final lowerBack = card.backText.toLowerCase();
+        final lowerSource = (card.sourceSentence ?? '').toLowerCase();
+
+        final isInvalid = card.frontText.length > 140 ||
+            card.backText.length > 140 ||
+            lowerFront.contains('soustředit na naši') ||
+            lowerFront.contains('nepřepínej') ||
+            lowerFront.contains('as an ai') ||
+            lowerFront.contains('translation task') ||
+            lowerBack.contains('soustředit na naši') ||
+            lowerBack.contains('how is your day') ||
+            lowerSource.contains('soustředit na naši');
+
+        if (isInvalid) {
+          await deleteFlashcard(card.id);
+          deletedCount++;
+          L.i('Smazána neplatná kartička #${card.id}: "${card.frontText}" -> "${card.backText}"');
+        }
+      }
+      if (deletedCount > 0) {
+        L.i('Celkem vyčištěno $deletedCount neplatných kartiček.');
+      }
+      return deletedCount;
+    } catch (e, stack) {
+      L.e('Chyba při čištění neplatných kartiček', e, stack);
+      return 0;
+    }
+  }
+
   /// Odstraní duplicitní kartičky (se stejným backText).
   /// Z každé skupiny duplicit zachová tu s nejlepším masteryScore (nejvíce pokročilou).
   /// Volá se jednorázově při migraci databáze.
   Future<int> removeDuplicateFlashcards() async {
     try {
+      await cleanupInvalidFlashcards();
       final allCards = await getAllFlashcards();
       if (allCards.length <= 1) return 0;
 

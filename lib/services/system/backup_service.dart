@@ -62,7 +62,6 @@ class BackupService {
       }
 
       // Pro jistotu zkopírujeme databázi do dočasného souboru, abychom neblokovali ostrý soubor
-      final tempDir = await getTemporaryDirectory();
       final tempDir = tempDirOverride ?? await getTemporaryDirectory();
       final tempBackupFile = File(p.join(tempDir.path, 'aj_tudor_backup.sqlite'));
 
@@ -116,10 +115,7 @@ class BackupService {
         return false;
       }
 
-      // Jednoduchá validace hlavičky SQLite souboru (prvních 16 bajtů musí začínat "SQLite format 3\u0000")
-      final bytes = await backupFile.openRead(0, 16).first;
-      final header = String.fromCharCodes(bytes);
-      if (!header.startsWith('SQLite format 3')) {
+      // Validace, že vybraný soubor je platná SQLite databáze
       final isValid = await validateSqliteFile(backupFile);
       if (!isValid) {
         L.w('Vybraný soubor není platná SQLite databáze.');
