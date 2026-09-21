@@ -923,6 +923,9 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     }
   }
 
+  /// Aktuální stav tutora pro bezpečný přístup mimo ref (např. v dispose).
+  TutorState get currentStatus => state.status;
+
   /// Pozastaví probíhající konverzaci.
   /// 
   /// Zastaví mikrofon, ale ponechá WebSocket otevřený pro rychlé obnovení.

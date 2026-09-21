@@ -35,15 +35,18 @@ class WordTranslationService {
 
   /// Bleskové modely optimalizované pro rychlý překlad slov a frází bez prodlev
   static const List<String> _fastModels = [
-    GeminiModels.flash2_5,     // gemini-2.5-flash – ultra rychlý, spolehlivý
-    GeminiModels.flash2_0,     // gemini-2.0-flash
-    GeminiModels.flashLite3_5, // gemini-3.5-flash-lite
+    GeminiModels.flashLite3_5, // gemini-3.5-flash-lite – ultra rychlý a lehký
+    GeminiModels.flashLite3_1, // gemini-3.1-flash-lite – bleskový lehký model
     GeminiModels.flash3_5,     // gemini-3.5-flash
+    GeminiModels.flash3_6,     // gemini-3.6-flash
     GeminiModels.flash3_8,     // gemini-3.8-flash (fallback)
   ];
 
   /// Dočasná paměťová mezipaměť (anglický výraz + kontext -> český překlad)
   static final Map<String, String> _translationCache = {};
+
+  /// Dočasný cooldown pro přetížené modely (503/429/timeout)
+  static final Map<String, DateTime> _modelCooldowns = {};
 
   /// Příznak, zda již byla načtena disková mezipaměť
   static bool _diskCacheLoaded = false;
@@ -53,8 +56,8 @@ class WordTranslationService {
 
   WordTranslationService(this._ref)
       : _dio = Dio(BaseOptions(
-          connectTimeout: const Duration(seconds: 4),
-          receiveTimeout: const Duration(seconds: 6),
+          connectTimeout: const Duration(seconds: 3),
+          receiveTimeout: const Duration(seconds: 4),
         ));
 
   /// Počet položek v paměťové mezipaměti překladů.
@@ -63,6 +66,7 @@ class WordTranslationService {
   /// Resetuje mezipaměť (pro testování a debug).
   static void resetState() {
     _translationCache.clear();
+    _modelCooldowns.clear();
     _diskCacheLoaded = false;
     diskCacheFileOverride = null;
   }
@@ -184,7 +188,17 @@ class WordTranslationService {
       },
     };
 
-    for (final modelName in _fastModels) {
+    final now = DateTime.now();
+    var candidatesToTry = _fastModels.where((m) {
+      final cd = _modelCooldowns[m];
+      return cd == null || now.isAfter(cd);
+    }).toList();
+
+    if (candidatesToTry.isEmpty) {
+      candidatesToTry = _fastModels;
+    }
+
+    for (final modelName in candidatesToTry) {
       try {
         final url = '$_baseUrl/$modelName:generateContent?key=$apiKey';
         final response = await _dio.post<Map<String, dynamic>>(
@@ -214,12 +228,26 @@ class WordTranslationService {
             .trim();
 
         if (cleanTranslation.isNotEmpty && !cleanTranslation.startsWith('❌')) {
+          _modelCooldowns.remove(modelName);
           _translationCache[cacheKey] = cleanTranslation;
           unawaited(_saveDiskCache());
           stopwatch.stop();
           L.i('Bleskový překlad "$cleaned" -> "$cleanTranslation" ($modelName, ${stopwatch.elapsedMilliseconds}ms)');
           return cleanTranslation;
         }
+      } on DioException catch (e) {
+        final statusCode = e.response?.statusCode ?? 0;
+        if (statusCode == 503 ||
+            statusCode == 429 ||
+            statusCode == 500 ||
+            e.type == DioExceptionType.connectionTimeout ||
+            e.type == DioExceptionType.receiveTimeout) {
+          _modelCooldowns[modelName] = DateTime.now().add(const Duration(minutes: 2));
+          L.w('Model $modelName přetížen/timeout ($statusCode). Dávám na 2min cooldown a zkouším další...');
+        } else {
+          L.w('Model $modelName selhal při překladu ($e), zkouším další...');
+        }
+        continue;
       } catch (e) {
         L.w('Model $modelName selhal při překladu ($e), zkouším další...');
         continue;

@@ -117,22 +117,24 @@ class _WordTranslationSheetState extends ConsumerState<WordTranslationSheet> {
     _performTranslationAndSave();
   }
 
+  VoiceTutorAgent? _voiceTutorAgent;
+
   void _checkAndPauseVoice() {
-    final status = ref.read(voiceTutorAgentProvider).status;
+    _voiceTutorAgent = ref.read(voiceTutorAgentProvider.notifier);
+    final status = _voiceTutorAgent?.currentStatus;
     if (status == TutorState.listening ||
         status == TutorState.speaking ||
         status == TutorState.thinking) {
       _internallyPaused = true;
-      ref.read(voiceTutorAgentProvider.notifier).pauseSession();
+      _voiceTutorAgent?.pauseSession();
     }
   }
 
   @override
   void dispose() {
-    if (_internallyPaused) {
-      final status = ref.read(voiceTutorAgentProvider).status;
-      if (status == TutorState.paused) {
-        ref.read(voiceTutorAgentProvider.notifier).resumeSession();
+    if (_internallyPaused && _voiceTutorAgent != null) {
+      if (_voiceTutorAgent!.currentStatus == TutorState.paused) {
+        _voiceTutorAgent!.resumeSession();
       }
     }
     super.dispose();
@@ -544,12 +546,40 @@ class _WordTranslationSheetState extends ConsumerState<WordTranslationSheet> {
                   ),
                 )
               else if (_errorMessage != null)
-                Text(
-                  _errorMessage!,
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 14,
-                    color: AppTheme.error,
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _errorMessage!,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 14,
+                          color: AppTheme.error,
+                        ),
+                      ),
+                    ),
+                    InkWell(
+                      onTap: _performTranslationAndSave,
+                      borderRadius: BorderRadius.circular(8),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.refresh_rounded, size: 14, color: AppTheme.primary),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Zkusit znovu',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: isDark ? AppTheme.primaryLight : AppTheme.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 )
               else
                 Text(
