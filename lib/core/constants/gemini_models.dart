@@ -31,7 +31,8 @@ class GeminiModels {
   // --- Model pro Multimodal Live API (WebSocket / Voice Tutor) ---
   /// Model optimalizovaný pro real-time dialog a voice-first AI aplikace.
   /// Nativní A2A (audio-to-audio) s nízkou latencí a vyšší kvalitou porozumění.
-  static const String liveVoiceModel = 'gemini-3.1-flash-live-preview';
+  static const String liveVoiceModel = 'gemini-3.8-live';
+  static const String liveExtendedVoiceModel = 'gemini-3.8-live-extended-thinking';
   
   /// Výchozí model používaný pro hlasového tutora.
   static const String defaultLiveModel = liveVoiceModel;
@@ -74,7 +75,9 @@ class GeminiModels {
       case pro3_1:
         return 'Gemini 3.1 Pro (Expertní úvahy 🧠)';
       case liveVoiceModel:
-        return 'Gemini 3.1 Flash Live (Hlasový)';
+        return 'Gemini 3.8 Live (Hlasový)';
+      case liveExtendedVoiceModel:
+        return 'Gemini 3.8 Live Extended (Hlasový s úvahami)';
       case transcribe:
         return 'Gemini 3.5 Transcribe (Přepis)';
       case tts:

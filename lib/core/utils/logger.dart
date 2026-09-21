@@ -84,6 +84,12 @@ class L {
     debugPrint('💬 [TOPIC] $message');
   }
 
+  /// Loguje zprávu s tagem [DIRECTOR] — asynchronní režisér a pedagogický supervisor hovoru.
+  static void director(String message) {
+    debugPrint('🎬 [DIRECTOR] $message');
+  }
+
+
   // ─────────────── BLOKOVÝ VÝPIS ───────────────
 
   /// Vykreslí ohraničený blok s nadpisem a obsahem pro snadné vizuální hledání v Logcat.

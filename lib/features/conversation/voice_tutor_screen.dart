@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../services/agents/voice_tutor_agent.dart';
+import '../../services/agents/voice_director_agent.dart';
 import '../../services/audio/audio_session_controller.dart';
+
 import '../../data/models/chat_message.dart';
 import 'package:flutter/services.dart';
 import '../../core/app_theme.dart';
@@ -193,9 +195,11 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
   @override
   Widget build(BuildContext context) {
     final tutorState = ref.watch(voiceTutorAgentProvider);
+    final directorState = ref.watch(voiceDirectorAgentProvider);
     final audioController = ref.watch(audioSessionControllerProvider);
     final stateLabel = _stateToLabel(tutorState.status);
     final waveColor = AppTheme.orbColorForState(stateLabel);
+
 
     final isIdle = tutorState.status == TutorState.idle ||
         tutorState.status == TutorState.error;
@@ -322,9 +326,72 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
                     ),
             ),
 
+            // ── Asistivní vizuální nápověda pro studenta (Voice Director) ─────────
+            if (isActive && directorState.currentTip != null && directorState.currentTip!.isNotEmpty)
+              _buildDirectorTipBanner(directorState.currentTip!),
+
             // ── Spodní ovládací panel ──────────────────────────────────────────
             _buildControls(tutorState, isIdle, isActive),
           ],
+        ),
+      ),
+    );
+  }
+
+  /// Nenápadný nápovědný widget s doporučenou frází / otázkou od Voice Directora.
+  Widget _buildDirectorTipBanner(String tip) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
+        child: GlassContainer(
+          key: ValueKey('director_tip_$tip'),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          borderRadius: BorderRadius.circular(16),
+          color: AppTheme.primary.withValues(alpha: 0.10),
+          border: Border.all(
+            color: AppTheme.primary.withValues(alpha: 0.30),
+            width: 1,
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppTheme.primary.withValues(alpha: 0.18),
+                ),
+                child: Icon(
+                  Icons.lightbulb_outline_rounded,
+                  size: 14,
+                  color: AppTheme.primary,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  tip,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textColor(context),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              GestureDetector(
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  ref.read(voiceDirectorAgentProvider.notifier).dismissTip();
+                },
+                child: Icon(
+                  Icons.close_rounded,
+                  size: 14,
+                  color: AppTheme.onSurfaceMuted,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -52,3 +52,19 @@ final geminiAnalysisClientProvider = Provider<GeminiBatchClient?>((ref) {
     systemPrompt: SystemPromptBuilder.buildAnalysisPrompt(),
   );
 });
+
+/// Specializovaný provider pro Voice Director Agenta (konverzační režisér na pozadí hovoru).
+/// 
+/// Využívá Gemini 3.8 Flash pro rychlou, inteligentní asynchronní analýzu transkriptu
+/// a generování instrukcí a tipů bez narušení audio latence.
+final geminiDirectorClientProvider = Provider<GeminiBatchClient?>((ref) {
+  final apiKey = ref.watch(apiKeyProvider);
+  const modelName = GeminiModels.flash3_8;
+  
+  if (apiKey == null || apiKey.isEmpty) return null;
+  return GeminiBatchClient(
+    apiKey, 
+    modelName,
+  );
+});
+

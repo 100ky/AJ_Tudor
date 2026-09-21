@@ -17,7 +17,9 @@ import 'package:aj_tudor/providers/database_provider.dart';
 import 'package:aj_tudor/services/agents/scenario_planner_agent.dart';
 import 'package:aj_tudor/services/agents/topic_preparation_agent.dart';
 import 'package:aj_tudor/services/agents/voice_tutor_agent.dart';
+import 'package:aj_tudor/services/agents/voice_director_agent.dart';
 import 'package:aj_tudor/services/audio/audio_session_controller.dart';
+
 
 class MockAudioSessionController extends Mock implements AudioSessionController {}
 class MockScenarioPlannerAgent extends Mock implements ScenarioPlannerAgent {}
@@ -83,6 +85,22 @@ class FakeSmartBubblesNotifier extends SmartBubblesNotifier {
   bool build() => initialValue;
 }
 
+class FakeVoiceDirectorAgent extends VoiceDirectorAgent {
+  final VoiceDirectorState initialState;
+  bool dismissTipCalled = false;
+  FakeVoiceDirectorAgent([this.initialState = const VoiceDirectorState()]);
+
+  @override
+  VoiceDirectorState build() => initialState;
+
+  @override
+  void dismissTip() {
+    dismissTipCalled = true;
+    state = state.copyWith(clearTip: true);
+  }
+}
+
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -123,6 +141,7 @@ void main() {
 
   Widget buildTestWidget({
     required FakeVoiceTutorAgent fakeTutorAgent,
+    FakeVoiceDirectorAgent? fakeDirectorAgent,
     TopicPreparationState? topicState,
     bool smartBubbles = true,
   }) {
@@ -135,6 +154,7 @@ void main() {
         scenarioPlannerAgentProvider.overrideWithValue(mockPlanner),
         smartBubblesEnabledProvider.overrideWith(() => FakeSmartBubblesNotifier(smartBubbles)),
         voiceTutorAgentProvider.overrideWith(() => fakeTutorAgent),
+        voiceDirectorAgentProvider.overrideWith(() => fakeDirectorAgent ?? FakeVoiceDirectorAgent()),
         topicPreparationAgentProvider
             .overrideWith(() => FakeTopicPreparationAgent(topicState ?? const TopicPreparationState())),
       ],
@@ -325,6 +345,41 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.text('Nepodařilo se připojit k mikrofonu.'), findsOneWidget);
+
+      await drainTimers(tester);
+    });
+
+    testWidgets('renders director tip banner in active call and dismisses on close tap',
+        (WidgetTester tester) async {
+      configureViewport(tester);
+      final fakeTutor = FakeVoiceTutorAgent(
+        VoiceTutorState(
+          status: TutorState.listening,
+          messages: [
+            ChatMessage('I really enjoy cycling in Prague.', isUser: true),
+            ChatMessage('Prague has wonderful bike trails along the river!', isUser: false),
+          ],
+        ),
+      );
+      final fakeDirector = FakeVoiceDirectorAgent(
+        const VoiceDirectorState(currentTip: 'Ask Tudor: Do you have a pet?'),
+      );
+
+      await tester.pumpWidget(buildTestWidget(
+        fakeTutorAgent: fakeTutor,
+        fakeDirectorAgent: fakeDirector,
+      ));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('Ask Tudor: Do you have a pet?'), findsOneWidget);
+      expect(find.byIcon(Icons.lightbulb_outline_rounded), findsOneWidget);
+
+      final closeButton = find.byIcon(Icons.close_rounded);
+      expect(closeButton, findsOneWidget);
+      await tester.tap(closeButton);
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(fakeDirector.dismissTipCalled, isTrue);
 
       await drainTimers(tester);
     });

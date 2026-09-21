@@ -236,5 +236,34 @@ void main() {
       expect(fact.isNotEmpty, true);
       expect(fact.startsWith('že '), true);
     });
+
+    test('buildDirectorPrompt and getDirectorResponseSchema contain expected directives and fields', () {
+      final prompt = SystemPromptBuilder.buildDirectorPrompt(
+        targetLevel: 'B2',
+        userFacts: '["Má psa jménem Max"]',
+        recentTopics: '["Cestování", "Knihy"]',
+        rollingSummary: 'Student mluvil o výletu do Londýna.',
+      );
+
+      expect(prompt.contains('Jsi konverzační režisér a pedagogický supervisor (Voice Director)'), true);
+      expect(prompt.contains('B2'), true);
+      expect(prompt.contains('Má psa jménem Max'), true);
+      expect(prompt.contains('Cestování'), true);
+      expect(prompt.contains('Student mluvil o výletu do Londýna.'), true);
+      expect(prompt.contains('topicHealth'), true);
+      expect(prompt.contains('whisperToTutor'), true);
+      expect(prompt.contains('studentHint'), true);
+
+      final schema = SystemPromptBuilder.getDirectorResponseSchema();
+      expect(schema['type'], 'object');
+      final required = schema['required'] as List<dynamic>;
+      expect(required.contains('topicHealth'), true);
+      expect(required.contains('needsPivot'), true);
+      expect(required.contains('whisperToTutor'), true);
+      expect(required.contains('studentHint'), true);
+      expect(required.contains('newLearnedFacts'), true);
+      expect(required.contains('incrementalSummary'), true);
+    });
   });
 }
+

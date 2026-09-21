@@ -19,6 +19,8 @@ import '../system/wakelock_service.dart';
 import '../gemini/gemini_live_client.dart';
 
 import 'memory_manager_agent.dart';
+import 'voice_director_agent.dart';
+
 
 /// Výčet stavů, ve kterých se může Voice Tutor nacházet.
 enum TutorState { 
@@ -128,6 +130,11 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   late final AudioSessionController _audio;
   late final SessionRepository _repo;
   late final MemoryManagerAgent _memory;
+  late final VoiceDirectorAgent _director;
+
+  String _targetLevelSnapshot = 'B1';
+  String? _userFactsSnapshot;
+  String? _recentTopicsSnapshot;
 
   @override
   VoiceTutorState build() {
@@ -136,6 +143,8 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     _audio = ref.read(audioSessionControllerProvider);
     _repo = ref.read(sessionRepositoryProvider);
     _memory = ref.read(memoryManagerAgentProvider);
+    _director = ref.read(voiceDirectorAgentProvider.notifier);
+
 
     // Registrace do životního cyklu aplikace (pro detekci pozadí/popředí)
     if (!_isObserverRegistered) {
@@ -287,11 +296,18 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         await _repo.markScenarioUsed(state.selectedScenarioId!);
       }
 
+      // Resetujeme stav režiséra na pozadí pro novou lekci
+      _director.reset();
+
       // 1. Příprava dat a promptu pro AI – načtení KOMPLETNÍHO profilu studenta
       final userProfile = await _repo.getUserProfile();
       final targetLevel = userProfile?.targetLevel ?? 'B1';
+      _targetLevelSnapshot = targetLevel;
+      _userFactsSnapshot = userProfile?.userFacts;
+      _recentTopicsSnapshot = userProfile?.topicPreferences;
       final voice = ref.read(voiceProvider);
       final isImmersive = ref.read(immersiveModeProvider);
+
       
       // Získáme náhodný osobní fakt pro zamezení opakování úvodu
       final personalFact = SystemPromptBuilder.getRandomPersonalFact();
@@ -676,6 +692,21 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         }
       }
 
+      // Asynchronní analýza a režie hovoru na pozadí (VoiceDirectorAgent)
+      if (_currentSessionId != null && state.messages.isNotEmpty) {
+        _director.onTurnCompleted(
+          sessionId: _currentSessionId!,
+          messages: state.messages,
+          targetLevel: _targetLevelSnapshot,
+          userFacts: _userFactsSnapshot,
+          recentTopics: _recentTopicsSnapshot,
+          onWhisperReady: (whisper) {
+            L.i('VoiceDirector: Našeptávám tutorovi: "$whisper"');
+            injectMidSessionGuidance('[DIRECTOR WHISPER] $whisper', turnComplete: false);
+          },
+        );
+      }
+
       // Proaktivní obnova WebSocket relace při příliš vysoké spotřebě tokenů
       if (client.currentTokenCount > 25000) {
         L.w('Spotřeba tokenů (${client.currentTokenCount}) dosáhla limitu. Proaktivně provádím plynulý reconnect pro zamezení lagů...');
@@ -704,6 +735,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       _resetStuckTimer();
       _playbackCompleteTimer?.cancel();
       _turnCompleteReceived = false;
+      _director.dismissTip();
       L.i('Model byl přerušen uživatelem.');
       
       // Uložíme rozpracovaný transkript tutora (i neúplný), aby se neztratil z historie
@@ -764,23 +796,20 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   }
 
   /// Po výpadku a znovupřipojení WebSocketu injektuje do nové relace Gemini
-  /// stručný souhrn dosavadní konverzace, aby model neztratil nit a plynule navázal.
+  /// living executive summary od VoiceDirectorAgenta, aby model neztratil nit ani v dlouhém hovoru.
   void _restoreConversationContext(GeminiLiveClient client) {
     try {
-      final recentMessages = state.messages.length > 12 
-          ? state.messages.sublist(state.messages.length - 12) 
-          : state.messages;
+      final executiveBriefing = _director.getExecutiveBriefingForReconnect(
+        recentMessages: state.messages,
+      );
       
-      final historySummary = recentMessages.map((m) => '${m.isUser ? "Student" : "Tutor"}: ${m.text}').join('\n');
+      L.i('Obnovuji kontext konverzace po reconnectu s využitím living executive summary z VoiceDirectorAgenta...');
+      L.director('Obnovuji kontext konverzace po reconnectu s využitím living executive summary...');
+      L.block('RECONNECT', 'Living Executive Briefing (Kontext pro obnovené spojení)', executiveBriefing);
       
-      L.i('Obnovuji kontext konverzace po reconnectu (${recentMessages.length} zpráv)...');
       client.sendClientContent(
         role: 'user',
-        text: '[SYSTEM CONTEXT RECOVERY - RECONNECTED]\n'
-              'We just reconnected. Here is the recent conversation history so you remember what we were talking about:\n'
-              '$historySummary\n\n'
-              'CRITICAL INSTRUCTION: Continue seamlessly as AJ Tudor from where we left off. '
-              'Remember all subjects, game titles, or names discussed above. Listen to the student.',
+        text: executiveBriefing,
         turnComplete: false,
       );
     } catch (e) {
@@ -902,6 +931,10 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         );
         
         _currentSessionId = null;
+        if (ref.mounted) {
+          _director.reset();
+        }
+
         
         // Spuštění asynchronní Structured Outputs analýzy na pozadí přes MemoryManagerAgent
         _memory.analyzeSession(sessionId).catchError((e, stack) {
@@ -1006,6 +1039,8 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     _playbackCompleteTimer?.cancel();
     _stuckTimer?.cancel();
     _audio.stopPlayback();
+    _director.dismissTip();
+
     
     // Bezpečně uložíme částečný přepis tutora, pokud již dorazil
     if (state.currentTranscript.isNotEmpty) {

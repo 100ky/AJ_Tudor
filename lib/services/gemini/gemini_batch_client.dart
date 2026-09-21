@@ -30,8 +30,8 @@ class GeminiBatchClient {
   /// Inicializuje klienta s potřebnými konfiguračními údaji.
   GeminiBatchClient(this.apiKey, this.primaryModelName, {this.systemPrompt})
       : _dio = Dio(BaseOptions(
-          connectTimeout: const Duration(seconds: 8),
-          receiveTimeout: const Duration(seconds: 15),
+          connectTimeout: const Duration(seconds: 15),
+          receiveTimeout: const Duration(seconds: 45),
         ));
 
   /// Pokusí se odeslat zprávu a vrátí odpověď modelu jako [String].
@@ -49,13 +49,13 @@ class GeminiBatchClient {
     double? temperature,
   }) async {
     // Definice pořadí zkoušených modelů (waterfall).
-    // Začínáme primárně vybraným modelem a v případě selhání pokračujeme na záložní.
+    // Začínáme primárně vybraným modelem a v případě přetížení (429, 503) kaskádovitě
+    // přecházíme od nejinteligentnějšího (3.8 Flash) přes silný reasoning (3.1 Pro) až po starší stabilní (3.5 Flash).
     final allCandidates = {
       primaryModelName,
       GeminiModels.flash3_8,
       GeminiModels.flash3_7,
-      GeminiModels.flash3_6,
-      GeminiModels.flashLite3_5,
+      GeminiModels.pro3_1,
       GeminiModels.flash3_5,
       GeminiModels.flashLite3_1,
     }.toList();
@@ -104,8 +104,11 @@ class GeminiBatchClient {
         }
 
         // Dočasné přetížení – zkusíme další model
+        // POZNÁMKA: Někdy Dio vrátí statusCode 0 při vypršení časového limitu (timeout),
+        // takže to musíme zahrnout do isOverloaded heuristiky.
         final isOverloaded = statusCode == 429 ||
             statusCode == 503 ||
+            statusCode == 0 ||
             e.type == DioExceptionType.connectionTimeout ||
             e.type == DioExceptionType.receiveTimeout;
 
@@ -114,15 +117,18 @@ class GeminiBatchClient {
           L.w('Model $modelName je přetížený ($statusCode). Dávám na 3min cooldown a zkouším další...');
         } else {
           L.e('Neočekávaná chyba u modelu $modelName: $lastError');
-          lastError = lastError;
+          rethrow; // Vyhodíme výjimku dál, ať to agent umí zpracovat (např. v catch JSON)
         }
       } catch (e) {
         L.e('Neočekávaná chyba u modelu $modelName', e);
         lastError = e.toString();
+        throw Exception(lastError); // Vyhodíme Exception pro konzistenci
       }
     }
 
-    return '❌ Všechny modely jsou momentálně přetížené. Poslední chyba: $lastError';
+    // Pokud selžou všechny modely, namísto vracení textu, který rozbije JSON parser,
+    // vyhodíme jasnou výjimku, aby se aktivovaly záložní/retry mechanismy v agentech.
+    throw Exception('Všechny modely jsou momentálně přetížené. Poslední chyba: $lastError');
   }
 
   /// Provede přímé REST volání na Gemini generateContent endpoint.
@@ -170,11 +176,11 @@ class GeminiBatchClient {
           data: body,
           options: Options(
             headers: {'Content-Type': 'application/json'},
-            sendTimeout: const Duration(seconds: 10),
-            receiveTimeout: const Duration(seconds: 30),
+            sendTimeout: const Duration(seconds: 15),
+            receiveTimeout: const Duration(seconds: 45),
           ),
         )
-        .timeout(const Duration(seconds: 40));
+        .timeout(const Duration(seconds: 55));
 
     final data = response.data;
     if (data == null) throw Exception('Prázdná odpověď od serveru');
