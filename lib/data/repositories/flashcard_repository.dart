@@ -90,10 +90,14 @@ class FlashcardRepository {
 
   /// Sleduje proud všech kartiček, které jsou připravené k dnešnímu procvičení.
   /// Kartičky s masteryScore >= 1.0 se považují za plně naučené a nevrací se.
+  ///
+  /// Aktuální čas vyhodnocuje SQLite při každém přepočtu dotazu, takže ani dlouho
+  /// otevřený stream nepoužívá čas z okamžiku, kdy vznikl.
   Stream<List<Flashcard>> watchDueFlashcards() {
-    final now = DateTime.now();
     return (_db.select(_db.flashcards)
-          ..where((t) => t.nextReviewAt.isSmallerOrEqualValue(now) & t.masteryScore.isSmallerThanValue(1.0))
+          ..where((t) =>
+              t.nextReviewAt.isSmallerOrEqual(currentDateAndTime) &
+              t.masteryScore.isSmallerThanValue(1.0))
           ..orderBy([(t) => OrderingTerm.asc(t.nextReviewAt)]))
         .watch();
   }
