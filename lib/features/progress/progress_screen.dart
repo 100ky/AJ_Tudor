@@ -1,16 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:fl_chart/fl_chart.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../data/data_providers.dart';
 import '../../data/repositories/profile_repository.dart';
-import '../../data/database/app_database.dart';
 import '../../data/models/flashcard_stats.dart';
 import '../../core/app_theme.dart';
-import '../../core/widgets/glass_container.dart';
-import '../history/history_screen.dart';
 import '../skeleton/navigation_provider.dart';
+import 'widgets/error_distribution_card.dart';
+import 'widgets/fluency_chart_card.dart';
+import 'widgets/lesson_history_tab.dart';
+import 'widgets/mastery_overview_card.dart';
+import 'widgets/memory_card.dart';
+import 'widgets/recent_errors_card.dart';
+import 'widgets/summary_grid.dart';
+import 'widgets/vocabulary_card.dart';
 
 class ProgressScreen extends ConsumerStatefulWidget {
   const ProgressScreen({super.key});
@@ -30,11 +34,11 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final sessionRepo = ref.watch(sessionRepositoryProvider);
-    final userProfileStream = ref.watch(profileRepositoryProvider).watchUserProfile();
-    final errorLogsStream = sessionRepo.watchAllErrorLogs();
-    final sessionsStream = sessionRepo.watchAllSessions();
-    final flashcardStatsStream = ref.watch(flashcardRepositoryProvider).watchFlashcardStats();
+    final profile = ref.watch(userProfileProvider).value;
+    final errors = ref.watch(allErrorLogsProvider).value ?? const [];
+    final sessions = ref.watch(allSessionsProvider).value ?? const [];
+    final stats =
+        ref.watch(flashcardStatsProvider).value ?? const FlashcardStats.empty();
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -51,1166 +55,104 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen> {
         elevation: 0,
         backgroundColor: Colors.transparent,
       ),
-      body: StreamBuilder<UserProfile?>(
-        stream: userProfileStream,
-        builder: (context, profileSnapshot) {
-          final profile = profileSnapshot.data;
-
-          return StreamBuilder<List<ErrorLog>>(
-            stream: errorLogsStream,
-            builder: (context, errorsSnapshot) {
-              final errors = errorsSnapshot.data ?? [];
-
-              return StreamBuilder<List<Session>>(
-                stream: sessionsStream,
-                builder: (context, sessionsSnapshot) {
-                  final sessions = sessionsSnapshot.data ?? [];
-
-                  return StreamBuilder<FlashcardStats>(
-                    stream: flashcardStatsStream,
-                    builder: (context, statsSnapshot) {
-                      final stats =
-                          statsSnapshot.data ?? const FlashcardStats.empty();
-
-                      return Column(
-                        children: [
-                          // ── Přepínač: Přehled a vývoj vs Historie lekcí ────────
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-                            child: SegmentedButton<int>(
-                              segments: const [
-                                ButtonSegment<int>(
-                                  value: 0,
-                                  icon: Icon(Icons.analytics_outlined, size: 16),
-                                  label: Text('Přehled a vývoj'),
-                                ),
-                                ButtonSegment<int>(
-                                  value: 1,
-                                  icon: Icon(Icons.history_rounded, size: 16),
-                                  label: Text('Historie lekcí'),
-                                ),
-                              ],
-                              selected: {_selectedTabIndex.clamp(0, 1)},
-                              onSelectionChanged: (set) {
-                                HapticFeedback.selectionClick();
-                                setState(() {
-                                  _selectedTabIndex = set.first;
-                                });
-                              },
-                            ),
-                          ),
-
-                          // ── Obsah podle vybrané záložky ────────────────────────
-                          Expanded(
-                            child: _selectedTabIndex == 0
-                                ? _buildOverviewTab(
-                                    context, profile, sessions, errors, stats)
-                                : _buildHistoryTab(context, sessions),
-                          ),
-                        ],
-                      );
-                    },
-                  );
-                },
-              );
-            },
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildOverviewTab(BuildContext context, UserProfile? profile,
-      List<Session> sessions, List<ErrorLog> errors, FlashcardStats stats) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      body: Column(
         children: [
-          _buildSummaryGrid(context, profile, sessions),
-          const SizedBox(height: 14),
-          _buildMasteryOverviewCard(context, stats),
-          const SizedBox(height: 12),
-          if (sessions.isNotEmpty) ...[
-            _buildFluencyChart(context, sessions),
-            const SizedBox(height: 12),
-          ],
-          if (errors.isNotEmpty) ...[
-            _buildErrorDistributionChart(context, errors),
-            const SizedBox(height: 12),
-          ],
-          if (profile?.memoryBriefing != null &&
-              profile!.memoryBriefing!.isNotEmpty) ...[
-            _buildMemoryCard(context, profile.memoryBriefing!),
-            const SizedBox(height: 12),
-          ],
-          _buildVocabularyCard(context, profile?.vocabularyList ?? const []),
-          const SizedBox(height: 12),
-          _buildRecentErrorsCard(context, errors),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHistoryTab(BuildContext context, List<Session> sessions) {
-    if (sessions.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppTheme.primary.withValues(alpha: 0.08),
+          // ── Přepínač: Přehled a vývoj vs Historie lekcí ────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+            child: SegmentedButton<int>(
+              segments: const [
+                ButtonSegment<int>(
+                  value: 0,
+                  icon: Icon(Icons.analytics_outlined, size: 16),
+                  label: Text('Přehled a vývoj'),
                 ),
-                child: Icon(Icons.history_rounded,
-                    size: 38, color: AppTheme.primary),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Zatím nemáš žádné lekce',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.textColor(context),
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Spusť svou první hlasovou lekci v záložce Hlas.',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.plusJakartaSans(
-                  color: AppTheme.mutedTextColor(context),
-                  fontSize: 13,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-      itemCount: sessions.length,
-      itemBuilder: (context, index) {
-        final session = sessions[index];
-        return SessionCard(session: session);
-      },
-    );
-  }
-
-
-  Widget _buildEmptyStateCard(BuildContext context, String message) {
-    return GlassContainer(
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 16.0),
-          child: Text(
-            message,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.plusJakartaSans(
-              color: AppTheme.onSurfaceMuted,
-              fontSize: 14,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSummaryGrid(
-      BuildContext context, UserProfile? profile, List<Session> sessions) {
-    Duration totalDuration = Duration.zero;
-    for (var s in sessions) {
-      if (s.endedAt != null) {
-        totalDuration += s.endedAt!.difference(s.startedAt);
-      }
-    }
-    final hours = totalDuration.inHours;
-    final minutes = totalDuration.inMinutes.remainder(60);
-    final timeString = hours > 0 ? '${hours}h ${minutes}m' : '${minutes}m';
-
-    final vocabCount = profile?.vocabularyList.length ?? 0;
-
-    final activeDays = sessions
-        .map((s) => DateTime(s.startedAt.year, s.startedAt.month, s.startedAt.day))
-        .toSet()
-        .length;
-
-    return GridView.count(
-      crossAxisCount: 2,
-      crossAxisSpacing: 12,
-      mainAxisSpacing: 12,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      childAspectRatio: 1.5,
-      children: [
-        _buildGridCard(context, 'Lekce', '${profile?.totalSessions ?? 0}',
-            Icons.play_lesson_rounded, AppTheme.primary),
-        _buildGridCard(context, 'Čas', timeString, Icons.timer_rounded, AppTheme.accent),
-        _buildGridCard(context, 'Slovíčka', '$vocabCount', Icons.abc_rounded,
-            AppTheme.success),
-        _buildGridCard(context, 'Aktivní dny', '$activeDays',
-            Icons.local_fire_department_rounded, AppTheme.error),
-      ],
-    );
-  }
-
-  Widget _buildGridCard(BuildContext context,
-      String title, String value, IconData icon, Color color) {
-    return GlassContainer(
-      padding: const EdgeInsets.all(14.0),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(icon, color: color, size: 16),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                title,
-                style: GoogleFonts.plusJakartaSans(
-                  color: AppTheme.mutedTextColor(context),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-          const Spacer(),
-          Text(
-            value,
-            style: GoogleFonts.plusJakartaSans(
-              fontSize: 24,
-              fontWeight: FontWeight.w700,
-              color: AppTheme.textColor(context),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFluencyChart(BuildContext context, List<Session> sessions) {
-    final validSessions = sessions
-        .where((s) => s.fluencyScore != null)
-        .toList()
-        ..sort((a, b) => a.startedAt.compareTo(b.startedAt));
-
-    final recentSessions = validSessions.length > 10
-        ? validSessions.sublist(validSessions.length - 10)
-        : validSessions;
-
-    if (recentSessions.isEmpty) return const SizedBox.shrink();
-
-    final List<FlSpot> spots = [];
-    for (int i = 0; i < recentSessions.length; i++) {
-      spots.add(FlSpot(i.toDouble(), recentSessions[i].fluencyScore! * 100));
-    }
-
-    final latestScore = (recentSessions.last.fluencyScore! * 100).toInt();
-
-    return GlassContainer(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          InkWell(
-            onTap: () {
-              HapticFeedback.selectionClick();
-              setState(() => _isFluencyExpanded = !_isFluencyExpanded);
-            },
-            borderRadius: BorderRadius.circular(10),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(7),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(Icons.show_chart_rounded,
-                      color: AppTheme.primary, size: 18),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Vývoj plynulosti',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
-                      color: AppTheme.textColor(context),
-                    ),
-                  ),
-                ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    '$latestScore% naposledy',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.primary,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Icon(
-                  _isFluencyExpanded
-                      ? Icons.keyboard_arrow_up_rounded
-                      : Icons.keyboard_arrow_down_rounded,
-                  color: AppTheme.mutedTextColor(context),
-                  size: 20,
+                ButtonSegment<int>(
+                  value: 1,
+                  icon: Icon(Icons.history_rounded, size: 16),
+                  label: Text('Historie lekcí'),
                 ),
               ],
+              selected: {_selectedTabIndex.clamp(0, 1)},
+              onSelectionChanged: (set) {
+                HapticFeedback.selectionClick();
+                setState(() {
+                  _selectedTabIndex = set.first;
+                });
+              },
             ),
           ),
-          if (_isFluencyExpanded) ...[
-            const SizedBox(height: 18),
-            SizedBox(
-              height: 190,
-              child: LineChart(
-                LineChartData(
-                  gridData: FlGridData(
-                    show: true,
-                    drawVerticalLine: false,
-                    getDrawingHorizontalLine: (value) {
-                      return FlLine(
-                        color: AppTheme.outline.withValues(alpha: 0.3),
-                        strokeWidth: 1,
-                      );
-                    },
-                  ),
-                  titlesData: FlTitlesData(
-                    bottomTitles: const AxisTitles(
-                        sideTitles: SideTitles(showTitles: false)),
-                    topTitles: const AxisTitles(
-                        sideTitles: SideTitles(showTitles: false)),
-                    rightTitles: const AxisTitles(
-                        sideTitles: SideTitles(showTitles: false)),
-                    leftTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        reservedSize: 40,
-                        getTitlesWidget: (value, meta) {
-                          return Text(
-                            '${value.toInt()}%',
-                            style: GoogleFonts.plusJakartaSans(
-                                fontSize: 10, color: AppTheme.onSurfaceMuted),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                  lineTouchData: LineTouchData(
-                    handleBuiltInTouches: true,
-                    touchTooltipData: LineTouchTooltipData(
-                      getTooltipColor: (_) => AppTheme.onBackground,
-                      getTooltipItems: (touchedSpots) {
-                        return touchedSpots.map((spot) {
-                          return LineTooltipItem(
-                            '${spot.y.toInt()}% plynulost',
-                            GoogleFonts.plusJakartaSans(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 12,
-                            ),
-                          );
-                        }).toList();
-                      },
-                    ),
-                  ),
-                  borderData: FlBorderData(show: false),
-                  minX: 0,
-                  maxX: (recentSessions.length - 1)
-                      .toDouble()
-                      .clamp(0.0, double.infinity),
-                  minY: 0,
-                  maxY: 100,
-                  lineBarsData: [
-                    LineChartBarData(
-                      spots: spots,
-                      isCurved: true,
-                      color: AppTheme.primary,
-                      barWidth: 3,
-                      isStrokeCapRound: true,
-                      dotData: FlDotData(
-                        show: true,
-                        getDotPainter: (spot, percent, barData, index) =>
-                            FlDotCirclePainter(
-                          radius: 4,
-                          color: Colors.white,
-                          strokeWidth: 2,
-                          strokeColor: AppTheme.primary,
-                        ),
-                      ),
-                      belowBarData: BarAreaData(
-                        show: true,
-                        gradient: LinearGradient(
-                          colors: [
-                            AppTheme.primary.withValues(alpha: 0.3),
-                            AppTheme.primary.withValues(alpha: 0.0),
-                          ],
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
 
-  Widget _buildErrorDistributionChart(
-      BuildContext context, List<ErrorLog> errors) {
-    int grammarCount = 0;
-    int vocabCount = 0;
-    int pronunCount = 0;
-
-    for (var error in errors) {
-      if (error.errorType.toLowerCase() == 'grammar') {
-        grammarCount++;
-      } else if (error.errorType.toLowerCase() == 'vocabulary') {
-        vocabCount++;
-      } else if (error.errorType.toLowerCase() == 'pronunciation') {
-        pronunCount++;
-      }
-    }
-
-    final total = errors.length;
-
-    return GlassContainer(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          InkWell(
-            onTap: () {
-              HapticFeedback.selectionClick();
-              setState(() => _isErrorsExpanded = !_isErrorsExpanded);
-            },
-            borderRadius: BorderRadius.circular(10),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(7),
-                  decoration: BoxDecoration(
-                    color: AppTheme.error.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(Icons.pie_chart_outline_rounded,
-                      color: AppTheme.error, size: 18),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Rozložení chyb',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
-                      color: AppTheme.textColor(context),
-                    ),
-                  ),
-                ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: AppTheme.error.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    'Celkem $total chyb',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.error,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Icon(
-                  _isErrorsExpanded
-                      ? Icons.keyboard_arrow_up_rounded
-                      : Icons.keyboard_arrow_down_rounded,
-                  color: AppTheme.mutedTextColor(context),
-                  size: 20,
-                ),
-              ],
-            ),
-          ),
-          if (_isErrorsExpanded) ...[
-            const SizedBox(height: 20),
-            SizedBox(
-              height: 180,
-              child: Stack(
-                children: [
-                  PieChart(
-                    PieChartData(
-                      sectionsSpace: 2,
-                      centerSpaceRadius: 55,
-                      sections: [
-                        if (grammarCount > 0)
-                          PieChartSectionData(
-                            color: AppTheme.grammar,
-                            value: grammarCount.toDouble(),
-                            title: '${((grammarCount / total) * 100).toInt()}%',
-                            radius: 28,
-                            titleStyle: GoogleFonts.plusJakartaSans(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
-                            ),
-                          ),
-                        if (vocabCount > 0)
-                          PieChartSectionData(
-                            color: AppTheme.vocabulary,
-                            value: vocabCount.toDouble(),
-                            title: '${((vocabCount / total) * 100).toInt()}%',
-                            radius: 28,
-                            titleStyle: GoogleFonts.plusJakartaSans(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
-                            ),
-                          ),
-                        if (pronunCount > 0)
-                          PieChartSectionData(
-                            color: AppTheme.pronunciation,
-                            value: pronunCount.toDouble(),
-                            title: '${((pronunCount / total) * 100).toInt()}%',
-                            radius: 28,
-                            titleStyle: GoogleFonts.plusJakartaSans(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  Center(
+          // ── Obsah podle vybrané záložky ────────────────────────
+          Expanded(
+            child: _selectedTabIndex == 0
+                ? SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
                     child: Column(
-                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Text(
-                          '$total',
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 26,
-                            fontWeight: FontWeight.w700,
-                            color: AppTheme.textColor(context),
-                          ),
+                        SummaryGrid(profile: profile, sessions: sessions),
+                        const SizedBox(height: 14),
+                        MasteryOverviewCard(
+                          stats: stats,
+                          expanded: _isMasteryExpanded,
+                          onToggle: () => setState(
+                              () => _isMasteryExpanded = !_isMasteryExpanded),
+                          onOpenFlashcards: () => ref
+                              .read(mainNavigationIndexProvider.notifier)
+                              .setIndex(2),
                         ),
-                        Text(
-                          'Chyb',
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 11,
-                            color: AppTheme.mutedTextColor(context),
+                        const SizedBox(height: 12),
+                        if (sessions.isNotEmpty) ...[
+                          FluencyChartCard(
+                            sessions: sessions,
+                            expanded: _isFluencyExpanded,
+                            onToggle: () => setState(
+                                () => _isFluencyExpanded = !_isFluencyExpanded),
                           ),
+                          const SizedBox(height: 12),
+                        ],
+                        if (errors.isNotEmpty) ...[
+                          ErrorDistributionCard(
+                            errors: errors,
+                            expanded: _isErrorsExpanded,
+                            onToggle: () => setState(
+                                () => _isErrorsExpanded = !_isErrorsExpanded),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                        if (profile?.memoryBriefing != null &&
+                            profile!.memoryBriefing!.isNotEmpty) ...[
+                          MemoryCard(
+                            briefing: profile.memoryBriefing!,
+                            expanded: _isMemoryExpanded,
+                            onToggle: () => setState(
+                                () => _isMemoryExpanded = !_isMemoryExpanded),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                        VocabularyCard(
+                          vocabulary: profile?.vocabularyList ?? const [],
+                          expanded: _isVocabExpanded,
+                          onToggle: () => setState(
+                              () => _isVocabExpanded = !_isVocabExpanded),
+                        ),
+                        const SizedBox(height: 12),
+                        RecentErrorsCard(
+                          errors: errors,
+                          expanded: _isRecentErrorsExpanded,
+                          onToggle: () => setState(() =>
+                              _isRecentErrorsExpanded = !_isRecentErrorsExpanded),
+                          onShowHistory: () =>
+                              setState(() => _selectedTabIndex = 1),
                         ),
                       ],
                     ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 18),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _buildLegendItem(context, 'Gramatika', AppTheme.grammar),
-                const SizedBox(width: 16),
-                _buildLegendItem(context, 'Slovíčka', AppTheme.vocabulary),
-                const SizedBox(width: 16),
-                _buildLegendItem(context, 'Výslovnost', AppTheme.pronunciation),
-              ],
-            ),
-          ],
+                  )
+                : LessonHistoryTab(sessions: sessions),
+          ),
         ],
       ),
-    );
-  }
-
-  Widget _buildLegendItem(BuildContext context, String title, Color color) {
-    return Row(
-      children: [
-        Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(shape: BoxShape.circle, color: color),
-        ),
-        const SizedBox(width: 6),
-        Text(
-          title,
-          style: GoogleFonts.plusJakartaSans(
-              fontSize: 12,
-              color: AppTheme.surfaceTextColor(context),
-              fontWeight: FontWeight.w500),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMemoryCard(BuildContext context, String briefing) {
-    return GlassContainer(
-      color: AppTheme.primary.withValues(alpha: 0.05),
-      border: Border.all(color: AppTheme.primary.withValues(alpha: 0.15)),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          InkWell(
-            onTap: () {
-              HapticFeedback.selectionClick();
-              setState(() => _isMemoryExpanded = !_isMemoryExpanded);
-            },
-            borderRadius: BorderRadius.circular(10),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(7),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(Icons.psychology_rounded,
-                      color: AppTheme.primary, size: 18),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Co si tutor pamatuje',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
-                      color: AppTheme.primary,
-                    ),
-                  ),
-                ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    'Aktivní paměť',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.primary,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Icon(
-                  _isMemoryExpanded
-                      ? Icons.keyboard_arrow_up_rounded
-                      : Icons.keyboard_arrow_down_rounded,
-                  color: AppTheme.mutedTextColor(context),
-                  size: 20,
-                ),
-              ],
-            ),
-          ),
-          if (_isMemoryExpanded) ...[
-            const SizedBox(height: 12),
-            Text(
-              briefing,
-              style: GoogleFonts.plusJakartaSans(
-                fontStyle: FontStyle.italic,
-                fontSize: 13,
-                color: AppTheme.surfaceTextColor(context),
-                height: 1.5,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildVocabularyChipCloud(BuildContext context, List<String> words) {
-    if (words.isEmpty) {
-      return _buildEmptyStateCard(
-          context, 'Zatím nemáš uložená žádná slovíčka.');
-    }
-
-    return Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: words
-            .map((word) => Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: AppTheme.glassLightColor(context),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: AppTheme.glassBorderColor(context),
-                    ),
-                  ),
-                  child: Text(
-                    word,
-                    style: GoogleFonts.plusJakartaSans(
-                      fontWeight: FontWeight.w500,
-                      fontSize: 13,
-                      color: AppTheme.textColor(context),
-                    ),
-                  ),
-                ))
-            .toList(),
-      );
-  }
-
-  Widget _buildErrorTile(BuildContext context, ErrorLog error) {
-    final color = AppTheme.errorTypeColor(error.errorType);
-    final icon = AppTheme.errorTypeIcon(error.errorType);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: AppTheme.glassColor(context),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppTheme.glassBorderColor(context),
-        ),
-        boxShadow: AppTheme.glassShadowsLight(context),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: Theme(
-          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-          child: ExpansionTile(
-          iconColor: color,
-          collapsedIconColor: AppTheme.mutedTextColor(context),
-          leading: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: color, size: 20),
-          ),
-          title: Text(
-            error.userSaid,
-            style: GoogleFonts.plusJakartaSans(
-              decoration: TextDecoration.lineThrough,
-              color: AppTheme.error,
-              fontSize: 14,
-            ),
-          ),
-          subtitle: Text(
-            error.correctForm,
-            style: GoogleFonts.plusJakartaSans(
-              color: AppTheme.success,
-              fontWeight: FontWeight.w600,
-              fontSize: 15,
-            ),
-          ),
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppTheme.backgroundSecondaryColor(context),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(Icons.lightbulb_outline, size: 18, color: color),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        error.explanation,
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 13,
-                          color: AppTheme.surfaceTextColor(context),
-                          height: 1.4,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
-}
-
-  Widget _buildMasteryOverviewCard(BuildContext context, FlashcardStats stats) {
-    return GlassContainer(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          InkWell(
-            onTap: () {
-              HapticFeedback.selectionClick();
-              setState(() => _isMasteryExpanded = !_isMasteryExpanded);
-            },
-            borderRadius: BorderRadius.circular(10),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(7),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(Icons.style_rounded,
-                      color: AppTheme.primary, size: 18),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Stav cvičebny & kartiček',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 15,
-                          color: AppTheme.textColor(context),
-                        ),
-                      ),
-                      Text(
-                        stats.totalCards > 0
-                            ? '${stats.masteredCards} z ${stats.totalCards} kartiček zvládnuto'
-                            : 'Zatím žádné vytvořené kartičky',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 11.5,
-                          color: AppTheme.mutedTextColor(context),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (stats.totalCards > 0)
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: AppTheme.success.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                          color: AppTheme.success.withValues(alpha: 0.25)),
-                    ),
-                    child: Text(
-                      '${stats.masteredPercentage}% hotovo',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: AppTheme.success,
-                      ),
-                    ),
-                  ),
-                const SizedBox(width: 6),
-                Icon(
-                  _isMasteryExpanded
-                      ? Icons.keyboard_arrow_up_rounded
-                      : Icons.keyboard_arrow_down_rounded,
-                  color: AppTheme.mutedTextColor(context),
-                  size: 20,
-                ),
-              ],
-            ),
-          ),
-          if (_isMasteryExpanded) ...[
-            if (stats.totalCards > 0) ...[
-              const SizedBox(height: 14),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: SizedBox(
-                  height: 8,
-                  child: Row(
-                    children: [
-                      if (stats.masteredCards > 0)
-                        Flexible(
-                          flex: (stats.masteredCards * 100 ~/ stats.totalCards)
-                              .clamp(1, 100),
-                          child: Container(color: AppTheme.success),
-                        ),
-                      if (stats.learningCards > 0)
-                        Flexible(
-                          flex: (stats.learningCards * 100 ~/ stats.totalCards)
-                              .clamp(1, 100),
-                          child: Container(color: AppTheme.primary),
-                        ),
-                      if (stats.newCards > 0)
-                        Flexible(
-                          flex: (stats.newCards * 100 ~/ stats.totalCards)
-                              .clamp(1, 100),
-                          child: Container(
-                            color: AppTheme.outlineColor(context)
-                                .withValues(alpha: 0.3),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  _buildCardMiniLegend(
-                      context, '${stats.masteredCards} zvládnuto', AppTheme.success),
-                  _buildCardMiniLegend(
-                      context, '${stats.learningCards} v procesu', AppTheme.primary),
-                  _buildCardMiniLegend(
-                      context, '${stats.dueCards} k opakování', AppTheme.accent),
-                ],
-              ),
-            ],
-            const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: () {
-                  HapticFeedback.lightImpact();
-                  ref.read(mainNavigationIndexProvider.notifier).setIndex(2);
-                },
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppTheme.primary,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                icon: const Icon(Icons.fitness_center_rounded, size: 16),
-                label: Text(
-                  stats.dueCards > 0
-                      ? 'Procvičit kartičky (${stats.dueCards} dnes čeká) →'
-                      : 'Otevřít Cvičebnu →',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildVocabularyCard(BuildContext context, List<String> vocabulary) {
-    final vocabCount = vocabulary.length;
-
-    return GlassContainer(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          InkWell(
-            onTap: () {
-              HapticFeedback.selectionClick();
-              setState(() => _isVocabExpanded = !_isVocabExpanded);
-            },
-            borderRadius: BorderRadius.circular(10),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(7),
-                  decoration: BoxDecoration(
-                    color: AppTheme.success.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(Icons.menu_book_rounded,
-                      color: AppTheme.success, size: 18),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Slovní zásoba',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
-                      color: AppTheme.textColor(context),
-                    ),
-                  ),
-                ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: AppTheme.success.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    '$vocabCount slov',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.success,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Icon(
-                  _isVocabExpanded
-                      ? Icons.keyboard_arrow_up_rounded
-                      : Icons.keyboard_arrow_down_rounded,
-                  color: AppTheme.mutedTextColor(context),
-                  size: 20,
-                ),
-              ],
-            ),
-          ),
-          if (_isVocabExpanded) ...[
-            const SizedBox(height: 14),
-            _buildVocabularyChipCloud(context, vocabulary),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRecentErrorsCard(BuildContext context, List<ErrorLog> errors) {
-    return GlassContainer(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          InkWell(
-            onTap: () {
-              HapticFeedback.selectionClick();
-              setState(() => _isRecentErrorsExpanded = !_isRecentErrorsExpanded);
-            },
-            borderRadius: BorderRadius.circular(10),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(7),
-                  decoration: BoxDecoration(
-                    color: AppTheme.error.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(Icons.warning_amber_rounded,
-                      color: AppTheme.error, size: 18),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Nedávné chyby',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
-                      color: AppTheme.textColor(context),
-                    ),
-                  ),
-                ),
-                if (errors.isNotEmpty) ...[
-                  GestureDetector(
-                    onTap: () {
-                      HapticFeedback.selectionClick();
-                      setState(() => _selectedTabIndex = 1);
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: Text(
-                        'Historie →',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.primary,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                ],
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: AppTheme.error.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    '${errors.length}',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.error,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Icon(
-                  _isRecentErrorsExpanded
-                      ? Icons.keyboard_arrow_up_rounded
-                      : Icons.keyboard_arrow_down_rounded,
-                  color: AppTheme.mutedTextColor(context),
-                  size: 20,
-                ),
-              ],
-            ),
-          ),
-          if (_isRecentErrorsExpanded) ...[
-            const SizedBox(height: 14),
-            if (errors.isEmpty)
-              _buildEmptyStateCard(context,
-                  'Zatím nemáš žádné zaznamenané chyby. Skvělá práce!')
-            else
-              ...errors
-                  .take(5)
-                  .map((error) => _buildErrorTile(context, error)),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCardMiniLegend(BuildContext context, String label, Color color) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 6,
-          height: 6,
-          decoration: BoxDecoration(shape: BoxShape.circle, color: color),
-        ),
-        const SizedBox(width: 4),
-        Text(
-          label,
-          style: GoogleFonts.plusJakartaSans(
-            fontSize: 11,
-            color: AppTheme.mutedTextColor(context),
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
     );
   }
 }

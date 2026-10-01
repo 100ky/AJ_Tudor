@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'database/app_database.dart';
+import 'models/flashcard_stats.dart';
 import 'repositories/flashcard_repository.dart';
 import 'repositories/profile_repository.dart';
 import 'repositories/scenario_repository.dart';
@@ -39,4 +40,19 @@ final flashcardRepositoryProvider = Provider<FlashcardRepository>((ref) {
 /// Živý stream profilu studenta (paměť, fakta, slovní zásoba).
 final userProfileProvider = StreamProvider<UserProfile?>((ref) {
   return ref.watch(profileRepositoryProvider).watchUserProfile();
+});
+
+/// Všechny lekce od nejnovější.
+final allSessionsProvider = StreamProvider<List<Session>>((ref) {
+  return ref.watch(sessionRepositoryProvider).watchAllSessions();
+});
+
+/// Všechny zaznamenané chyby od nejnovější.
+final allErrorLogsProvider = StreamProvider<List<ErrorLog>>((ref) {
+  return ref.watch(sessionRepositoryProvider).watchAllErrorLogs();
+});
+
+/// Agregované statistiky kartiček (zvládnuté, v procesu, k opakování).
+final flashcardStatsProvider = StreamProvider<FlashcardStats>((ref) {
+  return ref.watch(flashcardRepositoryProvider).watchFlashcardStats();
 });
