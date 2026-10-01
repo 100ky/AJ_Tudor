@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:aj_tudor/features/history/history_screen.dart';
+import 'package:aj_tudor/features/history/widgets/session_card.dart';
 import 'package:aj_tudor/core/app_theme.dart';
 import 'package:aj_tudor/data/database/app_database.dart';
 import 'package:aj_tudor/data/repositories/session_repository.dart';

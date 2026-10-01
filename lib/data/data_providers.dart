@@ -52,6 +52,18 @@ final allErrorLogsProvider = StreamProvider<List<ErrorLog>>((ref) {
   return ref.watch(sessionRepositoryProvider).watchAllErrorLogs();
 });
 
+/// Přepis jedné lekce v reálném čase.
+final sessionTranscriptsProvider =
+    StreamProvider.autoDispose.family<List<Transcript>, int>((ref, sessionId) {
+  return ref.watch(sessionRepositoryProvider).watchTranscripts(sessionId);
+});
+
+/// Chyby zaznamenané v jedné lekci v reálném čase.
+final sessionErrorLogsProvider =
+    StreamProvider.autoDispose.family<List<ErrorLog>, int>((ref, sessionId) {
+  return ref.watch(sessionRepositoryProvider).watchErrorLogs(sessionId);
+});
+
 /// Agregované statistiky kartiček (zvládnuté, v procesu, k opakování).
 final flashcardStatsProvider = StreamProvider<FlashcardStats>((ref) {
   return ref.watch(flashcardRepositoryProvider).watchFlashcardStats();
