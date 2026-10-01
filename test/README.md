@@ -13,6 +13,8 @@ test/
 │   └── widgets/
 │       └── glass_container_test.dart             # Skleněný kontejner (blur, specular bordery, margin)
 ├── data/                                         # Testy datové vrstvy a repozitářů
+│   ├── database/
+│   │   └── app_database_test.dart                # Opravy při otevření DB (deduplikace kartiček po restartu)
 │   ├── models/
 │   │   ├── chat_message_test.dart                # ChatMessage a opravy pro chytré bubliny
 │   │   └── srs_scheduler_test.dart               # SRS plánovač (intervaly, mastery, meze)
