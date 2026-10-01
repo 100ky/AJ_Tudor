@@ -1,10 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../core/constants/gemini_models.dart';
-import '../services/gemini/gemini_live_client.dart';
-import '../services/gemini/gemini_batch_client.dart';
-import '../services/prompt/system_prompt_builder.dart';
-import 'audio_provider.dart';
-import 'config_provider.dart';
+import '../../core/constants/gemini_models.dart';
+import 'gemini_live_client.dart';
+import 'gemini_batch_client.dart';
+import '../prompt/system_prompt_builder.dart';
+import '../audio/audio_providers.dart';
+import '../../core/config/config_providers.dart';
 
 /// Poskytuje instanci [GeminiLiveClient] pro hlasovou komunikaci v reálném čase.
 /// 

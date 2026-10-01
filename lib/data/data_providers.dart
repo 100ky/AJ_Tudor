@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../data/database/app_database.dart';
-import '../data/repositories/session_repository.dart';
+import 'database/app_database.dart';
+import 'repositories/session_repository.dart';
 
 /// Poskytuje globální instanci databáze [AppDatabase].
 /// 
@@ -21,3 +21,9 @@ final sessionRepositoryProvider = Provider<SessionRepository>((ref) {
   return SessionRepository(db);
 });
 
+
+/// Živý stream profilu studenta (paměť, fakta, slovní zásoba).
+final userProfileProvider = StreamProvider<UserProfile?>((ref) {
+  final repo = ref.watch(sessionRepositoryProvider);
+  return repo.watchUserProfile();
+});

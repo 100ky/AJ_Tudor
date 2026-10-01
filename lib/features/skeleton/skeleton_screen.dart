@@ -10,24 +10,11 @@ import '../conversation/conversation_screen.dart';
 import '../flashcards/flashcards_screen.dart';
 import '../progress/progress_screen.dart';
 import '../settings/settings_screen.dart';
-import '../../providers/config_provider.dart';
+import '../../core/config/config_providers.dart';
 import '../../services/agents/voice_tutor_agent.dart';
 import '../../services/agents/topic_preparation_agent.dart';
 import '../../core/app_theme.dart';
-
-/// Notifier pro správu indexu vybrané záložky v dolní navigaci.
-class MainNavigationNotifier extends Notifier<int> {
-  @override
-  int build() => 0;
-
-  void setIndex(int index) {
-    state = index;
-  }
-}
-
-/// Globální provider pro index vybrané stránky v hlavní navigaci.
-final mainNavigationIndexProvider =
-    NotifierProvider<MainNavigationNotifier, int>(MainNavigationNotifier.new);
+import 'navigation_provider.dart';
 
 /// Hlavní kostra aplikace s čistou 5-položkovou navigací a živým gradient pozadím.
 ///

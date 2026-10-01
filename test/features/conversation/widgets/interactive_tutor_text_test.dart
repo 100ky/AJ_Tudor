@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:aj_tudor/core/widgets/interactive_tutor_text.dart';
+import 'package:aj_tudor/features/conversation/widgets/interactive_tutor_text.dart';
 import 'package:aj_tudor/services/gemini/translation_service.dart';
 
 void main() {

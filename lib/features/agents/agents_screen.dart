@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../providers/database_provider.dart';
+import '../../data/data_providers.dart';
 import '../../services/agents/voice_tutor_agent.dart';
 import '../../services/agents/scenario_planner_agent.dart';
 import '../../services/agents/topic_preparation_agent.dart';

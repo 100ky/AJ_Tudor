@@ -6,7 +6,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../core/utils/logger.dart';
-import '../../providers/database_provider.dart';
+import '../../data/data_providers.dart';
 
 /// Služba pro provádění exportu a importu zálohy databáze SQLite.
 class BackupService {

@@ -4,7 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/gemini_models.dart';
 import '../../core/utils/logger.dart';
-import '../../providers/config_provider.dart';
+import '../../core/config/config_providers.dart';
 
 /// Výsledek vyhodnocení výslovnosti konkrétního slova.
 class WordPronunciationResult {

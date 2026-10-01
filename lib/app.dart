@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/app_theme.dart';
 import 'features/skeleton/skeleton_screen.dart';
-import 'providers/notification_provider.dart';
-import 'providers/config_provider.dart';
+import 'services/notifications/notification_provider.dart';
+import 'core/config/config_providers.dart';
 
 /// Kořenový widget aplikace AJ Tudor.
 ///

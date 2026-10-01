@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../providers/database_provider.dart';
-import '../../providers/gemini_provider.dart';
+import '../../data/data_providers.dart';
+import '../gemini/gemini_providers.dart';
 import '../../data/repositories/session_repository.dart';
 import '../../core/utils/logger.dart';
 import '../prompt/system_prompt_builder.dart';

@@ -20,28 +20,37 @@
 
 ```
 lib/
-├── core/                  # Konstanty, utility, logování, barvy, témata
-│   ├── constants/         # Názvy modelů Gemini, systémové konfigurace
-│   └── utils/             # Logger, Result typy, pomocné funkce
-├── data/                  # Datová vrstva (Drift ORM, SQLite databáze, modely, repozitáře)
-│   ├── local/             # Databázové schéma Drift (AppDatabase)
-│   ├── models/            # Datové modely (ChatMessage, Session, ErrorLog...)
-│   └── repositories/      # Abstrakce a implementace repozitářů
-├── features/              # UI obrazovky a komponenty rozdělené dle domény
-│   ├── agents/            # Obrazovka správy agentů
-│   ├── conversation/      # Hlavní hlasová obrazovka (mikrofon, waveform, živý chat)
-│   ├── history/           # Historie proběhlých konverzací a jejich detail
+├── main.dart, app.dart    # Vstupní bod a kořenový widget
+├── core/                  # Sdílené jádro – nezávisí na žádné jiné části aplikace
+│   ├── config/            # Nastavení aplikace a API klíč (Riverpod providery nad SharedPreferences)
+│   ├── constants/         # Názvy modelů Gemini
+│   ├── error/             # Typy chyb (Failure)
+│   ├── utils/             # Logger, Result
+│   ├── widgets/           # Obecné UI prvky design systému (GlassContainer)
+│   └── app_theme.dart     # Barvy a témata
+├── data/                  # Datová vrstva (Drift ORM, SQLite)
+│   ├── database/          # Schéma Drift (AppDatabase, tabulky)
+│   ├── models/            # Datové modely (ChatMessage, FlashcardStats)
+│   ├── repositories/      # Repozitáře nad databází
+│   └── data_providers.dart  # Providery databáze, repozitářů a datových streamů
+├── features/              # Obrazovky rozdělené dle domény (části obrazovek ve widgets/)
+│   ├── agents/            # Přehled agentů
+│   ├── conversation/      # Hlasový tutor, gramatický dril, chat bubliny, překlad slov
+│   ├── flashcards/        # Smart Flashcards (SRS opakování, výslovnost)
+│   ├── history/           # Historie lekcí a jejich detail
 │   ├── progress/          # Statistiky, grafy, přehled chyb a slovíček
-│   ├── settings/          # Nastavení (Gemini API klíč, volba hlasu, modelů)
-│   └── skeleton/          # Hlavní navigační shell (BottomNavigationBar)
-├── providers/             # Riverpod providery pro správu stavu
-└── services/              # Aplikační služby
-    ├── agents/            # Notifiery pro VoiceTutorAgent, MemoryManagerAgent, ScenarioPlannerAgent
+│   ├── settings/          # Nastavení (API klíč, hlas, modely, záloha)
+│   └── skeleton/          # Navigační shell a provider aktivní záložky
+└── services/              # Aplikační logika – každá služba má svůj provider ve stejném souboru/složce
+    ├── agents/            # VoiceTutor, VoiceDirector, MemoryManager, ScenarioPlanner, TopicPreparation
     ├── audio/             # Nahrávání mikrofonu (record) a přehrávání (flutter_pcm_sound)
-    ├── gemini/            # WebSocket klient pro Gemini Live API
-    ├── prompt/            # Dynamický konstruktor systémových promptů (SystemPromptBuilder)
-    └── system/            # Wakelock (udržení zapnutého displeje), notifikace
+    ├── gemini/            # Gemini Live (WebSocket) a REST klienti (batch, TTS, výslovnost, překlad)
+    ├── notifications/     # Lokální připomínky
+    ├── prompt/            # Konstruktor systémových promptů (SystemPromptBuilder)
+    └── system/            # Wakelock, záloha databáze
 ```
+
+Závislosti vedou jedním směrem: `features → services → data → core`. Nižší vrstva nikdy neimportuje vyšší.
 
 ### Použité balíčky (Dependencies)
 - **State Management**: `flutter_riverpod`
@@ -65,8 +74,8 @@ lib/
 flutter pub get
 ```
 
-### 3. Generování kódu (Drift / JSON serialization)
-Pokud měníte databázové entity nebo modely:
+### 3. Generování kódu (Drift)
+Pokud měníte databázové tabulky:
 ```bash
 dart run build_runner build --delete-conflicting-outputs
 ```

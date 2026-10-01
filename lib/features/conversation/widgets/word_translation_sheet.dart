@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../app_theme.dart';
-import '../widgets/glass_container.dart';
-import '../../services/gemini/translation_service.dart';
-import '../../services/gemini/gemini_tts_service.dart';
-import '../../services/agents/voice_tutor_agent.dart';
+import '../../../core/app_theme.dart';
+import '../../../core/widgets/glass_container.dart';
+import '../../../services/gemini/translation_service.dart';
+import '../../../services/gemini/gemini_tts_service.dart';
+import '../../../services/agents/voice_tutor_agent.dart';
 
 /// Spodní karta pro zobrazení rychlého překladu slova/fráze, poslech výslovnosti
 /// a automatické uložení do Smart Flashcards.

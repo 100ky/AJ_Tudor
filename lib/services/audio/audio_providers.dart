@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../services/audio/audio_capture_service.dart';
-import '../services/audio/audio_playback_service.dart';
+import 'audio_capture_service.dart';
+import 'audio_playback_service.dart';
 
 final audioCaptureServiceProvider = Provider<AudioCaptureService>((ref) {
   final service = AudioCaptureService();

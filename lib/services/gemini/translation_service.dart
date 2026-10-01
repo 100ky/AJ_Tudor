@@ -9,8 +9,8 @@ import '../../core/constants/gemini_models.dart';
 import '../../core/utils/logger.dart';
 import '../../core/utils/result.dart';
 import '../../core/error/error_handling.dart';
-import '../../providers/config_provider.dart';
-import '../../providers/database_provider.dart';
+import '../../core/config/config_providers.dart';
+import '../../data/data_providers.dart';
 
 /// Výsledek překladu slova/fráze včetně případně vytvořené kartičky.
 class TranslationResult {

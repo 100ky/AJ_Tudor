@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:aj_tudor/core/widgets/chat_bubble.dart';
-import 'package:aj_tudor/core/widgets/interactive_tutor_text.dart';
+import 'package:aj_tudor/features/conversation/widgets/chat_bubble.dart';
+import 'package:aj_tudor/features/conversation/widgets/interactive_tutor_text.dart';
 import 'package:aj_tudor/core/app_theme.dart';
 
 void main() {

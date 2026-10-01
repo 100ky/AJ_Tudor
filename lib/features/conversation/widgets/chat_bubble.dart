@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../app_theme.dart';
+import '../../../core/app_theme.dart';
 import 'interactive_tutor_text.dart';
 
 /// Moderní znovupoužitelná bublina zprávy pro chat i hlasové přepisy.

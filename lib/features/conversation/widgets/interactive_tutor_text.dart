@@ -5,9 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../app_theme.dart';
+import '../../../core/app_theme.dart';
 import 'word_translation_sheet.dart';
-import '../../services/gemini/translation_service.dart';
+import '../../../services/gemini/translation_service.dart';
 
 /// Pomocná třída reprezentující geometrii jednoho slova pro 2D hit-testing.
 class _WordGeometry {

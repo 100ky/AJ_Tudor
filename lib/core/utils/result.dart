@@ -8,20 +8,20 @@ abstract class Result<S> {
   const factory Result.success(S value) = Success<S>;
 
   /// Vytvoří neúspěšný výsledek.
-  const factory Result.failure(Failure failure) = Error<S>;
+  const factory Result.failure(Failure failure) = Failed<S>;
 
   bool get isSuccess => this is Success<S>;
-  bool get isFailure => this is Error<S>;
+  bool get isFailure => this is Failed<S>;
 
   S? get valueOrNull => isSuccess ? (this as Success<S>).value : null;
-  Failure? get failureOrNull => isFailure ? (this as Error<S>).failure : null;
+  Failure? get failureOrNull => isFailure ? (this as Failed<S>).failure : null;
 
   /// Transformuje výsledek na základě stavu.
   T fold<T>(T Function(S value) onSuccess, T Function(Failure failure) onFailure) {
     if (this is Success<S>) {
       return onSuccess((this as Success<S>).value);
     } else {
-      return onFailure((this as Error<S>).failure);
+      return onFailure((this as Failed<S>).failure);
     }
   }
 
@@ -30,7 +30,7 @@ abstract class Result<S> {
     if (this is Success<S>) {
       return (this as Success<S>).value;
     } else {
-      throw (this as Error<S>).failure;
+      throw (this as Failed<S>).failure;
     }
   }
 }
@@ -40,7 +40,7 @@ class Success<S> extends Result<S> {
   const Success(this.value);
 }
 
-class Error<S> extends Result<S> {
+class Failed<S> extends Result<S> {
   final Failure failure;
-  const Error(this.failure);
+  const Failed(this.failure);
 }

@@ -9,16 +9,14 @@ Tato složka obsahuje komplexní sadu automatizovaných unit, widget a integrač
 ```
 test/
 ├── core/                                         # Testy jádra aplikace a utilit
-│   ├── interactive_tutor_text_test.dart          # Výběr textu a extrakce frází
 │   ├── result_test.dart                          # Typ Result<T> a zpracování chyb
-│   └── widgets/                                  # Základní UI komponenty design systému
-│       ├── glass_container_test.dart             # Skleněný kontejner (blur, specular bordery, margin)
-│       ├── chat_bubble_test.dart                 # Konverzační bublina (uživatel vs tutor, clipboard)
-│       ├── smart_chat_bubble_test.dart           # Chytrá bublina (kartička opravy, akordeon, TTS, uložení)
-│       └── word_translation_sheet_test.dart      # Bottom sheet kontextového překladu a rozšiřování frází
+│   └── widgets/
+│       └── glass_container_test.dart             # Skleněný kontejner (blur, specular bordery, margin)
 ├── data/                                         # Testy datové vrstvy a repozitářů
 │   └── repositories/
-│       └── session_repository_test.dart          # CRUD sessions, kaskádový delete, paměť, SRS, deduplikace
+│       ├── session_repository_test.dart          # CRUD sessions, kaskádový delete, paměť, SRS, deduplikace
+│       ├── flashcards_srs_test.dart              # ChatMessage model, SRS cyklus kartiček, statistiky
+│       └── user_facts_and_topics_test.dart       # Fakta „O mně“, připravené téma, prompty s fakty
 ├── features/                                     # Testy obrazovek a modulů aplikace
 │   ├── skeleton/
 │   │   └── skeleton_screen_test.dart             # Hlavní shell, navigace (5 tabů), API klíč warning
@@ -26,7 +24,11 @@ test/
 │   │   ├── conversation_screen_test.dart         # Gramatická cvičebna a interaktivní dril
 │   │   ├── voice_tutor_screen_test.dart          # Hlasový tutor (režimy, transkript, volání, audio)
 │   │   └── widgets/
-│   │       └── fluid_voice_wave_test.dart        # Vykreslování audio křivky (waveform, plynulé animace)
+│   │       ├── fluid_voice_wave_test.dart        # Vykreslování audio křivky (waveform, plynulé animace)
+│   │       ├── chat_bubble_test.dart             # Konverzační bublina (uživatel vs tutor, clipboard)
+│   │       ├── smart_chat_bubble_test.dart       # Chytrá bublina (kartička opravy, akordeon, TTS, uložení)
+│   │       ├── interactive_tutor_text_test.dart  # Výběr textu a extrakce frází
+│   │       └── word_translation_sheet_test.dart  # Bottom sheet kontextového překladu a rozšiřování frází
 │   ├── history/
 │   │   └── history_screen_test.dart              # Historie lekcí, filtry, detail lekce, mazání
 │   ├── agents/
@@ -35,16 +37,15 @@ test/
 │   │   └── progress_screen_test.dart             # Přehled pokroku, grafy (plynulost, chyby), paměť, statistiky
 │   ├── flashcards/
 │   │   └── flashcards_screen_test.dart           # Cvičebna kartiček, 3D otočení, SRS hodnocení, TTS
-│   ├── settings/
-│   │   └── settings_screen_test.dart             # Nastavení API klíče, motivy, připomínky, chytré bubliny
-│   ├── flashcards_test.dart                      # Integrační test logiky kartiček
-│   ├── settings_screen_layout_test.dart          # Responzivita a prvky v nastavení
-│   └── user_facts_and_topics_test.dart           # Správa faktů a témat uživatele
+│   └── settings/
+│       ├── settings_screen_test.dart             # Nastavení API klíče, motivy, připomínky, chytré bubliny
+│       └── settings_screen_layout_test.dart      # Responzivita a prvky v nastavení
 ├── services/                                     # Testy aplikačních služeb a agentů
 │   ├── agents/
 │   │   ├── memory_manager_agent_test.dart        # Analýza session, Structured Outputs, memory pruning, fakta
 │   │   ├── scenario_planner_agent_test.dart      # Plánování scénářů, integrace slabých kartiček, custom scénáře
 │   │   ├── topic_preparation_agent_test.dart     # Příprava témat, 12h čerstvost, wildcard, facts bootstrap
+│   │   ├── voice_director_agent_test.dart        # Režisér konverzace (cooldown, tipy, briefing pro reconnect)
 │   │   └── voice_tutor_agent_test.dart           # Stavový automat tutora, VAD, reconnect, nudge
 │   ├── prompt/
 │   │   └── system_prompt_builder_test.dart       # Sestavování promptů (tutor, CEFR, drill, schémata, fakta)
@@ -68,8 +69,8 @@ flutter test
 
 ### 2. Spuštění konkrétní skupiny testů
 ```bash
-# Pouze testy základních UI widgetů
-flutter test test/core/widgets/
+# Pouze testy chatových widgetů (bubliny, překlad slov)
+flutter test test/features/conversation/widgets/
 
 # Pouze testy obrazovek a funkcí (features)
 flutter test test/features/
@@ -142,8 +143,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:aj_tudor/core/app_theme.dart';
 import 'package:aj_tudor/data/database/app_database.dart';
 import 'package:aj_tudor/data/repositories/session_repository.dart';
-import 'package:aj_tudor/providers/config_provider.dart';
-import 'package:aj_tudor/providers/database_provider.dart';
+import 'package:aj_tudor/core/config/config_providers.dart';
+import 'package:aj_tudor/data/data_providers.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

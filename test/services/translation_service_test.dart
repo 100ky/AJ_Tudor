@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:aj_tudor/providers/config_provider.dart';
+import 'package:aj_tudor/core/config/config_providers.dart';
 import 'package:aj_tudor/services/gemini/translation_service.dart';
 
 void main() {

@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'audio_capture_service.dart';
 import 'audio_playback_service.dart';
 import '../../core/utils/logger.dart';
-import '../../providers/audio_provider.dart';
+import 'audio_providers.dart';
 
 /// Zapouzdřuje logiku nahrávání a přehrávání pro jednu lekci.
 class AudioSessionController {
