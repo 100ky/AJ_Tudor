@@ -101,14 +101,14 @@ class AppDatabase extends _$AppDatabase {
             // Sloupec již existuje
           }
 
-          // 6. Jednorázová deduplikace kartiček (odstraní duplikáty se stejným back_text,
-          //    zachová kartičku s nejlepším mastery_score)
+          // 6. Deduplikace kartiček při každém otevření databáze: z kartiček se stejným
+          //    back_text zachová v každé skupině tu s nejlepším mastery_score
           try {
             await customStatement('''
               DELETE FROM flashcards
               WHERE id NOT IN (
-                SELECT MIN(id) FROM (
-                  SELECT id, RANK() OVER (
+                SELECT id FROM (
+                  SELECT id, ROW_NUMBER() OVER (
                     PARTITION BY LOWER(TRIM(back_text))
                     ORDER BY mastery_score DESC, interval_days DESC, id ASC
                   ) AS rnk

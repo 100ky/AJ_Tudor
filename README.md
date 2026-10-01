@@ -160,7 +160,7 @@ Automatické testy nepokryjí mikrofon, přehrávání zvuku ani skutečné vol�
 
 ## 📋 Refaktoring struktury (říjen 2026)
 
-Refaktoring proběhl ve větvi `refactor/structure` ve čtyřech fázích. Schéma databáze ani migrace se neměnily. Počet testů vzrostl z 210 na 320.
+Refaktoring proběhl ve větvi `refactor/structure` ve čtyřech fázích. Schéma databáze ani migrace se neměnily. Počet testů vzrostl z 210 na 321.
 
 - **A, úklid:** z gitu zmizely `.artifacts/`, `.idea/` a dočasné soubory, z `pubspec.yaml` 4 nepoužívané balíčky. Složka `lib/providers/` zanikla a každý provider leží u své třídy.
 - **B, Gemini:** čtyři REST služby (batch, TTS, výslovnost, překlad) sdílí `GeminiRestCore`. Všechny prompty jsou v `services/prompt/`.
@@ -168,6 +168,7 @@ Refaktoring proběhl ve větvi `refactor/structure` ve čtyřech fázích. Sché
 - **D, obrazovky:** logika obrazovek je v controllerech a části obrazovek ve `widgets/`. Z `VoiceTutorAgent` se vyčlenila detekce řeči, časovače, metriky, analýza přepisu a pokyny během hovoru.
 
 ### Změny chování
+- **Opravená ztráta kartiček:** deduplikace kartiček při startu aplikace mazala všechny kartičky kromě jedné. Chyba je v kódu od 17. 9. 2026 a je i v `main`. Teď se z kartiček se stejnou anglickou stranou ponechá ta nejlépe naučená a ostatní kartičky zůstanou.
 - HTTP 500 od Gemini se všude bere jako přetížení a zkusí se další model. Dřív to platilo jen u překladu.
 - Překlad a výslovnost po odmítnutém API klíči (401/403) už nezkoušejí další modely. Uživatel vidí stejnou chybu jako dřív, jen odpadnou zbytečné požadavky.
 - Mezi kartičkami k opakování se objeví i ty, které začnou být na řadě, zatímco je obrazovka otevřená.
@@ -185,4 +186,5 @@ Refaktoring proběhl ve větvi `refactor/structure` ve čtyřech fázích. Sché
    - `features/conversation/widgets/interactive_tutor_text.dart` (639): rozpoznávač gest dát do vlastního souboru. Rozdělení textu na slova (včetně `**tučně**` a `*kurzívy*`) vytáhnout do čisté funkce a otestovat.
    - `services/gemini/gemini_live_client.dart` (630): zpracování zpráv ze serveru (`_handleIncomingMessage`, asi 190 řádků) přesunout do samostatného parseru. Klientovi zůstane připojení, reconnect a odesílání.
 4. **`features/history/history_screen.dart` se v aplikaci nepoužívá**, a to už před refaktoringem. Odkazují na ni jen testy, historie lekcí je v záložce Pokrok. Je potřeba rozhodnout, jestli ji smazat i s testem, nebo vrátit do navigace.
-5. **Migrace databáze (zatím odloženo).** Opravy schématu v `beforeOpen` (`data/database/app_database.dart`) běží při každém startu aplikace. Patří k nim i deduplikace kartiček, kterou komentář označuje jako jednorázovou. Doporučený postup: zvýšit `schemaVersion` na 4, opravy přesunout do `onUpgrade` a přidat test migrace na starší databázi. Změna se týká dat uložených v zařízení, proto zatím počkala.
+5. **Migrace databáze (zatím odloženo).** Opravy schématu a deduplikace kartiček v `beforeOpen` (`data/database/app_database.dart`) běží při každém startu aplikace. Doporučený postup: zvýšit `schemaVersion` na 4, opravy přesunout do `onUpgrade` a přidat test migrace na starší databázi. Změna se týká dat uložených v zařízení, proto zatím počkala.
+6. **Kartičky smazané chybnou deduplikací se samy nevrátí.** Jejich chyby mají dál příznak `in_flashcard`, takže z nich nové kartičky nevzniknou a detail lekce u nich ukazuje, že už v kartičkách jsou. Příznaky by šlo vynulovat u chyb, ke kterým žádná kartička neexistuje. Tím by se ale vrátily i chyby záměrně vyřazené z generování a chyby, jejichž kartičky byly smazané ručně, proto to zatím neproběhlo.
