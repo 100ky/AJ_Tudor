@@ -4,13 +4,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../providers/database_provider.dart';
+import '../../data/data_providers.dart';
 import '../../data/database/app_database.dart';
 import '../../data/models/flashcard_stats.dart';
 import '../../core/app_theme.dart';
 import '../../core/widgets/glass_container.dart';
 import '../history/history_screen.dart';
-import '../skeleton/skeleton_screen.dart';
+import '../skeleton/navigation_provider.dart';
 
 class ProgressScreen extends ConsumerStatefulWidget {
   const ProgressScreen({super.key});

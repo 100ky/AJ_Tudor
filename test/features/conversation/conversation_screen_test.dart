@@ -6,13 +6,12 @@ import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:aj_tudor/features/conversation/conversation_screen.dart';
 import 'package:aj_tudor/core/app_theme.dart';
-import 'package:aj_tudor/core/widgets/smart_chat_bubble.dart';
-import 'package:aj_tudor/core/widgets/interactive_tutor_text.dart';
+import 'package:aj_tudor/features/conversation/widgets/smart_chat_bubble.dart';
+import 'package:aj_tudor/features/conversation/widgets/interactive_tutor_text.dart';
 import 'package:aj_tudor/data/repositories/session_repository.dart';
-import 'package:aj_tudor/providers/config_provider.dart';
-import 'package:aj_tudor/providers/database_provider.dart';
-import 'package:aj_tudor/providers/gemini_provider.dart';
-import 'package:aj_tudor/providers/profile_provider.dart';
+import 'package:aj_tudor/core/config/config_providers.dart';
+import 'package:aj_tudor/data/data_providers.dart';
+import 'package:aj_tudor/services/gemini/gemini_providers.dart';
 import 'package:aj_tudor/services/gemini/gemini_batch_client.dart';
 import 'package:aj_tudor/services/gemini/gemini_tts_service.dart';
 

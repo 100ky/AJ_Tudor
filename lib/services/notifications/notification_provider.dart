@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'config_provider.dart';
-import '../services/notifications/notification_service.dart';
+import '../../core/config/config_providers.dart';
+import 'notification_service.dart';
 
 final notificationSyncProvider = Provider<void>((ref) {
   final enabled = ref.watch(remindersEnabledProvider);

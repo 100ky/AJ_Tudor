@@ -7,8 +7,8 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import '../../core/constants/gemini_models.dart';
 import '../../core/utils/logger.dart';
-import '../../providers/audio_provider.dart';
-import '../../providers/config_provider.dart';
+import '../audio/audio_providers.dart';
+import '../../core/config/config_providers.dart';
 
 /// Služba pro převod textu na řeč (Text-to-Speech) pomocí modelu Gemini TTS.
 /// 

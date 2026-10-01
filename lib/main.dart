@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter/services.dart';
 import 'app.dart';
-import 'providers/config_provider.dart';
+import 'core/config/config_providers.dart';
 import 'services/notifications/notification_service.dart';
 
 /// Vstupní bod do aplikace Flutter.

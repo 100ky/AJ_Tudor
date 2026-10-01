@@ -5,13 +5,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/app_theme.dart';
-import '../../core/widgets/chat_bubble.dart';
+import 'widgets/chat_bubble.dart';
 import '../../core/widgets/glass_container.dart';
-import '../../core/widgets/smart_chat_bubble.dart';
+import 'widgets/smart_chat_bubble.dart';
 import '../../data/models/chat_message.dart';
-import '../../providers/config_provider.dart';
-import '../../providers/gemini_provider.dart';
-import '../../providers/profile_provider.dart';
+import '../../core/config/config_providers.dart';
+import '../../services/gemini/gemini_providers.dart';
+import '../../data/data_providers.dart';
 import '../../services/prompt/system_prompt_builder.dart';
 
 /// Obrazovka pro interaktivní gramatický dril a textové cvičení s AI.

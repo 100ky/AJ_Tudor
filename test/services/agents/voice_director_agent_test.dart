@@ -6,8 +6,8 @@ import 'package:aj_tudor/services/agents/voice_director_agent.dart';
 import 'package:aj_tudor/services/gemini/gemini_batch_client.dart';
 import 'package:aj_tudor/data/repositories/session_repository.dart';
 import 'package:aj_tudor/data/models/chat_message.dart';
-import 'package:aj_tudor/providers/gemini_provider.dart';
-import 'package:aj_tudor/providers/database_provider.dart';
+import 'package:aj_tudor/services/gemini/gemini_providers.dart';
+import 'package:aj_tudor/data/data_providers.dart';
 
 class MockGeminiBatchClient extends Mock implements GeminiBatchClient {}
 class MockSessionRepository extends Mock implements SessionRepository {}

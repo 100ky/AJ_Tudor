@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
-import 'package:aj_tudor/core/widgets/word_translation_sheet.dart';
+import 'package:aj_tudor/features/conversation/widgets/word_translation_sheet.dart';
 import 'package:aj_tudor/core/app_theme.dart';
 import 'package:aj_tudor/core/utils/result.dart';
 import 'package:aj_tudor/services/agents/voice_tutor_agent.dart';

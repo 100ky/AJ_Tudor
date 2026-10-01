@@ -2,14 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
-import 'package:aj_tudor/core/widgets/smart_chat_bubble.dart';
-import 'package:aj_tudor/core/widgets/interactive_tutor_text.dart';
+import 'package:aj_tudor/features/conversation/widgets/smart_chat_bubble.dart';
+import 'package:aj_tudor/features/conversation/widgets/interactive_tutor_text.dart';
 import 'package:aj_tudor/core/app_theme.dart';
 import 'package:aj_tudor/core/utils/result.dart';
 import 'package:aj_tudor/data/models/chat_message.dart';
 import 'package:aj_tudor/data/repositories/session_repository.dart';
-import 'package:aj_tudor/providers/database_provider.dart';
-import 'package:aj_tudor/providers/gemini_provider.dart';
+import 'package:aj_tudor/data/data_providers.dart';
+import 'package:aj_tudor/services/gemini/gemini_providers.dart';
 import 'package:aj_tudor/services/gemini/gemini_tts_service.dart';
 import 'package:aj_tudor/services/gemini/gemini_batch_client.dart';
 

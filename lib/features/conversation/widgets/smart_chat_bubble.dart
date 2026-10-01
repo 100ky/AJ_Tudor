@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../data/models/chat_message.dart';
-import '../../data/repositories/session_repository.dart';
-import '../../providers/database_provider.dart';
-import '../../providers/gemini_provider.dart';
-import '../../services/gemini/gemini_tts_service.dart';
-import '../app_theme.dart';
+import '../../../data/models/chat_message.dart';
+import '../../../data/repositories/session_repository.dart';
+import '../../../data/data_providers.dart';
+import '../../../services/gemini/gemini_providers.dart';
+import '../../../services/gemini/gemini_tts_service.dart';
+import '../../../core/app_theme.dart';
 import 'interactive_tutor_text.dart';
 
 /// Chytrá interaktivní bublina zprávy pro chat a hlasové přepisy.

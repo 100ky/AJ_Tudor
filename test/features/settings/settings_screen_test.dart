@@ -9,8 +9,8 @@ import 'package:aj_tudor/core/app_theme.dart';
 import 'package:aj_tudor/data/database/app_database.dart';
 import 'package:aj_tudor/data/repositories/session_repository.dart';
 import 'package:aj_tudor/features/settings/settings_screen.dart';
-import 'package:aj_tudor/providers/config_provider.dart';
-import 'package:aj_tudor/providers/database_provider.dart';
+import 'package:aj_tudor/core/config/config_providers.dart';
+import 'package:aj_tudor/data/data_providers.dart';
 
 class MockSecureStorage extends Mock implements FlutterSecureStorage {}
 
