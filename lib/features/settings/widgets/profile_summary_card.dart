@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/app_theme.dart';
 import '../../../core/widgets/glass_container.dart';
-import '../../../data/data_providers.dart';
 import '../../../data/database/app_database.dart';
+import '../profile_settings_controller.dart';
 import 'settings_common.dart';
 
 /// Co si tutor pamatuje, úroveň angličtiny, počet lekcí a reset paměti.
@@ -52,7 +52,7 @@ class ProfileSummaryCard extends ConsumerWidget {
                   fontSize: 16),
               onChanged: (String? newLevel) async {
                 if (newLevel != null) {
-                  await ref.read(profileRepositoryProvider).updateTargetLevel(newLevel);
+                  await ref.read(profileSettingsControllerProvider).setTargetLevel(newLevel);
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
@@ -121,7 +121,7 @@ class ProfileSummaryCard extends ConsumerWidget {
           ),
           TextButton(
             onPressed: () async {
-              await ref.read(profileRepositoryProvider).resetUserMemory();
+              await ref.read(profileSettingsControllerProvider).resetMemory();
               if (context.mounted) {
                 Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(

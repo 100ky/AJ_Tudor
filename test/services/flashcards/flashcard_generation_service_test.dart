@@ -248,4 +248,45 @@ void main() {
       expect(sent, TaskPrompts.translateToCzech('give up'));
     });
   });
+
+  group('FlashcardGenerationService.saveCorrection', () {
+    Future<Flashcard> savedCard() async => (await flashcardRepo.getAllFlashcards()).single;
+
+    test('the front is the Czech translation of the corrected form', () async {
+      final result = await service.saveCorrection(
+        correctForm: "doesn't",
+        explanation: "3. osoba jednotného čísla vyžaduje doesn't.",
+        errorType: 'grammar',
+        sourceSentence: "She don't know.",
+        geminiClient: _FakeBatchClient((_) => 'Ona neví.'),
+      );
+
+      expect(result.isSuccess, true);
+      final card = await savedCard();
+      expect(card.frontText, 'Ona neví.');
+      expect(card.backText, "doesn't");
+      expect(card.sourceSentence, "She don't know.");
+    });
+
+    test('without a translation the front falls back to the Czech part of the explanation', () async {
+      await service.saveCorrection(
+        correctForm: 'one month',
+        explanation: "Místo 'one months' má být 'one month' (jeden měsíc).",
+        errorType: 'grammar',
+        geminiClient: _FakeBatchClient((_) => throw Exception('offline')),
+      );
+
+      expect((await savedCard()).frontText, 'jeden měsíc');
+    });
+
+    test('without a client or a Czech hint the front is a generic prompt', () async {
+      await service.saveCorrection(
+        correctForm: 'went',
+        explanation: 'Minulý čas slovesa go.',
+        errorType: 'grammar',
+      );
+
+      expect((await savedCard()).frontText, 'Přeložte do angličtiny');
+    });
+  });
 }

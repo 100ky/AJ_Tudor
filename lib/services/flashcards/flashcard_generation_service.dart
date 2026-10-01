@@ -162,6 +162,40 @@ class FlashcardGenerationService {
     }
   }
 
+  /// Uloží opravu z chytré bubliny jako kartičku.
+  ///
+  /// Líc je český překlad [correctForm] přes [geminiClient]. Když se nepodaří,
+  /// použije se česká část [explanation], jinak obecné zadání.
+  Future<Result<int>> saveCorrection({
+    required String correctForm,
+    required String explanation,
+    required String errorType,
+    String? sourceSentence,
+    GeminiBatchClient? geminiClient,
+  }) async {
+    String front = '';
+    if (geminiClient != null) {
+      try {
+        front = await translateToCzech(geminiClient, correctForm) ?? '';
+      } catch (_) {}
+    }
+
+    if (front.isEmpty) {
+      final extracted = FlashcardRepository.extractCzechFromExplanation(explanation);
+      front = (extracted != null && extracted.isNotEmpty)
+          ? extracted
+          : 'Přeložte do angličtiny';
+    }
+
+    return _flashcards.addFlashcard(
+      frontText: front,
+      backText: correctForm,
+      explanation: explanation,
+      errorType: errorType,
+      sourceSentence: sourceSentence,
+    );
+  }
+
   /// Automaticky přeloží a opraví staré kartičky se zadáním v chybné angličtině do přirozené češtiny.
   Future<int> autoMigrateLegacyCardsToCzech(GeminiBatchClient geminiClient) async {
     try {

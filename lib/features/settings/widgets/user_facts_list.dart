@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/app_theme.dart';
 import '../../../core/widgets/glass_container.dart';
-import '../../../data/data_providers.dart';
+import '../profile_settings_controller.dart';
 import 'settings_common.dart';
 
 /// Fakta „O mně“, která si Tudor pamatuje, s možností přidat a smazat.
@@ -124,7 +124,7 @@ class UserFactsList extends ConsumerWidget {
               final text = controller.text.trim();
               if (text.isNotEmpty) {
                 Navigator.pop(dialogCtx);
-                await ref.read(profileRepositoryProvider).addUserFact(text);
+                await ref.read(profileSettingsControllerProvider).addFact(text);
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Informace byla úspěšně přidána! ✅')),
@@ -189,7 +189,7 @@ class _FactTile extends ConsumerWidget {
             tooltip: 'Smazat fakt',
             onPressed: () async {
               HapticFeedback.selectionClick();
-              await ref.read(profileRepositoryProvider).removeUserFact(fact);
+              await ref.read(profileSettingsControllerProvider).removeFact(fact);
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(

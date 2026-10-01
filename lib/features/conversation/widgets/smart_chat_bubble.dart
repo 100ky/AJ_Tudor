@@ -3,8 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../data/models/chat_message.dart';
-import '../../../data/repositories/flashcard_repository.dart';
-import '../../../data/data_providers.dart';
 import '../../../services/gemini/gemini_providers.dart';
 import '../../../services/gemini/gemini_tts_service.dart';
 import '../../../services/flashcards/flashcard_generation_service.dart';
@@ -90,34 +88,13 @@ class _SmartChatBubbleState extends ConsumerState<SmartChatBubble> {
     if (_isSavedToFlashcards) return;
 
     HapticFeedback.mediumImpact();
-    final flashcardRepo = ref.read(flashcardRepositoryProvider);
-    final gemini = ref.read(geminiBatchClientProvider);
-
-    String front = '';
-    if (gemini != null) {
-      try {
-        front = await FlashcardGenerationService.translateToCzech(
-              gemini,
-              correction.correctForm,
-            ) ??
-            '';
-      } catch (_) {}
-    }
-
-    if (front.isEmpty) {
-      final extracted = FlashcardRepository.extractCzechFromExplanation(correction.explanation);
-      front = (extracted != null && extracted.isNotEmpty)
-          ? extracted
-          : 'Přeložte do angličtiny';
-    }
-
-    final result = await flashcardRepo.addFlashcard(
-      frontText: front,
-      backText: correction.correctForm,
-      explanation: correction.explanation,
-      errorType: correction.errorType,
-      sourceSentence: widget.message.text,
-    );
+    final result = await ref.read(flashcardGenerationServiceProvider).saveCorrection(
+          correctForm: correction.correctForm,
+          explanation: correction.explanation,
+          errorType: correction.errorType,
+          sourceSentence: widget.message.text,
+          geminiClient: ref.read(geminiBatchClientProvider),
+        );
 
     if (mounted) {
       if (result.isSuccess) {
