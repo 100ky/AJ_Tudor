@@ -1,33 +1,18 @@
-import 'dart:convert';
-import 'package:drift/drift.dart' hide isNull, isNotNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:aj_tudor/data/database/app_database.dart';
+import 'package:aj_tudor/data/repositories/profile_repository.dart';
 import 'package:aj_tudor/data/repositories/session_repository.dart';
-import 'package:aj_tudor/services/gemini/gemini_batch_client.dart';
-
-class _FakeBatchClient extends GeminiBatchClient {
-  final String Function(String prompt) handler;
-  _FakeBatchClient(this.handler) : super('dummy_key', 'dummy_model');
-
-  @override
-  Future<String> sendMessage(
-    String text, {
-    Map<String, dynamic>? responseSchema,
-    String? systemPrompt,
-    double? temperature,
-  }) async {
-    return handler(text);
-  }
-}
 
 void main() {
   late AppDatabase db;
   late SessionRepository repo;
+  late ProfileRepository profileRepo;
 
   setUp(() {
     db = AppDatabase.forTesting(NativeDatabase.memory());
     repo = SessionRepository(db);
+    profileRepo = ProfileRepository(db);
   });
 
   tearDown(() async {
@@ -205,12 +190,38 @@ void main() {
       final allLogs = await repo.watchAllErrorLogs().first;
       expect(allLogs.length, 1);
     });
+
+    test('getErrorLogsWithoutFlashcard and markErrorLogInFlashcard track processed errors', () async {
+      final s1 = (await repo.startNewSession()).getOrThrow();
+      final s2 = (await repo.startNewSession()).getOrThrow();
+      final e1 = (await repo.addErrorLog(
+        sessionId: s1,
+        errorType: 'grammar',
+        userSaid: 'He go',
+        correctForm: 'He goes',
+        explanation: '3. osoba',
+      )).getOrThrow();
+      final e2 = (await repo.addErrorLog(
+        sessionId: s2,
+        errorType: 'grammar',
+        userSaid: 'I has',
+        correctForm: 'I have',
+        explanation: '1. osoba',
+      )).getOrThrow();
+
+      expect((await repo.getErrorLogsWithoutFlashcard()).map((e) => e.id), unorderedEquals([e1, e2]));
+      expect((await repo.getErrorLogsWithoutFlashcard(sessionId: s1)).map((e) => e.id), [e1]);
+
+      await repo.markErrorLogInFlashcard(e1);
+      expect((await repo.getErrorLogsWithoutFlashcard()).map((e) => e.id), [e2]);
+      expect((await repo.getErrorLogs(s1)).single.inFlashcard, true);
+    });
   });
 
   group('SessionRepository - Cascading deleteSession', () {
     test('deleting latest session removes data and clears memoryBriefing', () async {
-      await repo.updateUserMemory('Latest briefing notes');
-      var profile = await repo.getUserProfile();
+      await profileRepo.updateUserMemory('Latest briefing notes');
+      var profile = await profileRepo.getUserProfile();
       expect(profile?.totalSessions, 1);
       expect(profile?.memoryBriefing, 'Latest briefing notes');
 
@@ -233,13 +244,13 @@ void main() {
       expect(await repo.watchAllSessions().first, isEmpty);
 
       // Verify profile is updated: since deleted session was latest, memoryBriefing is cleared
-      profile = await repo.getUserProfile();
+      profile = await profileRepo.getUserProfile();
       expect(profile?.totalSessions, 0);
       expect(profile?.memoryBriefing, isNull);
     });
 
     test('deleting older session decrements totalSessions but preserves latest memoryBriefing', () async {
-      await repo.updateUserMemory('Latest briefing');
+      await profileRepo.updateUserMemory('Latest briefing');
       // Create s1 with timestamp 1 hour ago
       final s1 = await db.into(db.sessions).insert(
         SessionsCompanion.insert(
@@ -252,403 +263,9 @@ void main() {
       final deleteRes = await repo.deleteSession(s1);
       expect(deleteRes.isSuccess, true);
 
-      final profile = await repo.getUserProfile();
+      final profile = await profileRepo.getUserProfile();
       expect(profile?.memoryBriefing, 'Latest briefing'); // preserved!
       expect((await repo.watchAllSessions().first).map((s) => s.id), [s2]);
-    });
-  });
-
-  group('SessionRepository - User Profile & Memory Operations', () {
-    test('updateUserMemory creates profile if absent and increments session count on subsequent calls', () async {
-      expect(await repo.getUserProfile(), isNull);
-
-      await repo.updateUserMemory('Initial briefing');
-      var profile = await repo.getUserProfile();
-      expect(profile, isNotNull);
-      expect(profile?.memoryBriefing, 'Initial briefing');
-      expect(profile?.totalSessions, 1);
-      expect(profile?.targetLevel, 'B1');
-
-      await repo.updateUserMemory('Second briefing');
-      profile = await repo.getUserProfile();
-      expect(profile?.memoryBriefing, 'Second briefing');
-      expect(profile?.totalSessions, 2);
-    });
-
-    test('updateUserVocabulary appends, deduplicates and keeps maximum 50 newest words', () async {
-      await repo.updateUserMemory('Init');
-
-      await repo.updateUserVocabulary(['apple', 'banana', 'cherry']);
-      var profile = await repo.getUserProfile();
-      List<dynamic> vocab = jsonDecode(profile!.vocabulary);
-      expect(vocab, ['apple', 'banana', 'cherry']);
-
-      // Adding duplicate should move it to the end (most recent)
-      await repo.updateUserVocabulary(['banana', 'date']);
-      profile = await repo.getUserProfile();
-      vocab = jsonDecode(profile!.vocabulary);
-      expect(vocab, ['apple', 'cherry', 'banana', 'date']);
-
-      // Adding 60 words to check 50 words trimming
-      final manyWords = List.generate(60, (i) => 'word_$i');
-      await repo.updateUserVocabulary(manyWords);
-      profile = await repo.getUserProfile();
-      vocab = jsonDecode(profile!.vocabulary);
-      expect(vocab.length, 50);
-      expect(vocab.first, 'word_10');
-      expect(vocab.last, 'word_59');
-    });
-
-    test('updateUserRecurringErrors deduplicates and keeps max 10 errors', () async {
-      await repo.updateUserMemory('Init');
-
-      await repo.updateUserRecurringErrors(['Past simple vs present perfect', 'Prepositions at/on']);
-      var profile = await repo.getUserProfile();
-      List<dynamic> errors = jsonDecode(profile!.recurringErrors);
-      expect(errors.length, 2);
-
-      // Adding duplicates does not duplicate
-      await repo.updateUserRecurringErrors(['Prepositions at/on', 'Articles a/the']);
-      profile = await repo.getUserProfile();
-      errors = jsonDecode(profile!.recurringErrors);
-      expect(errors.length, 3);
-
-      // Adding 15 items should trim to max 10
-      final manyErrors = List.generate(15, (i) => 'Error #$i');
-      await repo.updateUserRecurringErrors(manyErrors);
-      profile = await repo.getUserProfile();
-      errors = jsonDecode(profile!.recurringErrors);
-      expect(errors.length, 10);
-    });
-
-    test('pruneResolvedErrors removes resolved errors with case-insensitive fuzzy matching', () async {
-      await repo.updateUserMemory('Init');
-      await repo.updateUserRecurringErrors([
-        'Chyba v předložkách at/on',
-        'Minulý čas slovesa go',
-        'Člen the před městy',
-      ]);
-
-      // Prune matching resolved errors
-      await repo.pruneResolvedErrors(['předložkách at/on', 'člen the']);
-
-      final profile = await repo.getUserProfile();
-      final List<dynamic> errors = jsonDecode(profile!.recurringErrors);
-      expect(errors.length, 1);
-      expect(errors.first, 'Minulý čas slovesa go');
-    });
-
-    test('updateTargetLevel updates targetLevel on existing and creates profile if missing', () async {
-      await repo.updateTargetLevel('B2');
-      var profile = await repo.getUserProfile();
-      expect(profile?.targetLevel, 'B2');
-
-      await repo.updateTargetLevel('C1');
-      profile = await repo.getUserProfile();
-      expect(profile?.targetLevel, 'C1');
-    });
-
-    test('getLatestBriefing returns Result with briefing or null', () async {
-      final b1 = await repo.getLatestBriefing();
-      expect(b1.isSuccess, true);
-      expect(b1.valueOrNull, isNull);
-
-      await repo.updateUserMemory('A briefing to remember');
-      final b2 = await repo.getLatestBriefing();
-      expect(b2.isSuccess, true);
-      expect(b2.valueOrNull, 'A briefing to remember');
-    });
-  });
-
-  group('SessionRepository - Scenarios Management', () {
-    test('replaceScenarios deletes unused scenarios and inserts new ones within transaction', () async {
-      // Insert an unused scenario and a used scenario
-      final custom1 = await repo.insertScenario(
-        title: 'Custom unused',
-        description: 'Desc 1',
-        tutorInstruction: 'Instruction 1',
-      );
-      final custom2 = await repo.insertScenario(
-        title: 'Custom used',
-        description: 'Desc 2',
-        tutorInstruction: 'Instruction 2',
-      );
-      await repo.markScenarioUsed(custom2.id);
-
-      // Now replace with a new scenario
-      final newScenario = Scenario(
-        id: 0,
-        externalId: 'ai_new_1',
-        title: 'At the airport',
-        description: 'Check-in luggage',
-        tutorInstruction: 'Act as airline staff',
-        difficulty: 'medium',
-        isUsed: false,
-        createdAt: DateTime.now(),
-      );
-
-      await repo.replaceScenarios([newScenario]);
-
-      final available = await repo.watchAvailableScenarios().first;
-      expect(available.length, 1);
-      expect(available.first.title, 'At the airport');
-
-      // The used scenario should still exist in database
-      final allScenarios = await (db.select(db.scenarios)).get();
-      expect(allScenarios.any((s) => s.id == custom2.id && s.isUsed == true), true);
-      expect(allScenarios.any((s) => s.id == custom1.id), false);
-    });
-  });
-
-  group('SessionRepository - Flashcards & Duplication Logic', () {
-    test('addFlashcard rejects duplicates with identical backText or errorLogId', () async {
-      final s = (await repo.startNewSession()).getOrThrow();
-      final errId = (await repo.addErrorLog(
-        sessionId: s,
-        errorType: 'grammar',
-        userSaid: 'I go',
-        correctForm: 'I went',
-        explanation: 'Past tense',
-      )).getOrThrow();
-
-      final res1 = await repo.addFlashcard(
-        frontText: 'Šel jsem',
-        backText: 'I went',
-        explanation: 'Past tense of go is went',
-        errorLogId: errId,
-      );
-      expect(res1.isSuccess, true);
-      final firstCardId = res1.getOrThrow();
-
-      // Duplicate by errorLogId
-      final res2 = await repo.addFlashcard(
-        frontText: 'Different front',
-        backText: 'Different back',
-        explanation: 'Different explanation',
-        errorLogId: errId,
-      );
-      expect(res2.isSuccess, true);
-      expect(res2.getOrThrow(), firstCardId);
-
-      // Duplicate by backText (case-insensitive)
-      final res3 = await repo.addFlashcard(
-        frontText: 'Jiný český překlad',
-        backText: '  i went  ',
-        explanation: 'Minulý čas',
-      );
-      expect(res3.isSuccess, true);
-      expect(res3.getOrThrow(), firstCardId);
-
-      // Total cards in database should still be 1
-      final allCards = await repo.getAllFlashcards();
-      expect(allCards.length, 1);
-    });
-
-    test('addFlashcard marks sourceSentence matching transcripts and error logs as inFlashcard', () async {
-      final s = (await repo.startNewSession()).getOrThrow();
-      await repo.addTranscript(
-        sessionId: s,
-        speaker: 'user',
-        content: 'I have 20 years and I study math.',
-      );
-      final errId = (await repo.addErrorLog(
-        sessionId: s,
-        errorType: 'grammar',
-        userSaid: 'I have 20 years',
-        correctForm: 'I am 20 years old',
-        explanation: 'Věk slovesem be',
-      )).getOrThrow();
-
-      await repo.addFlashcard(
-        frontText: 'Je mi 20 let',
-        backText: 'I am 20 years old',
-        explanation: 'Věk se vyjadřuje pomocí to be',
-        sourceSentence: 'I have 20 years',
-        errorLogId: errId,
-      );
-
-      final transcripts = await repo.getTranscripts(s);
-      expect(transcripts.first.inFlashcard, true);
-
-      final errorLogs = await repo.getErrorLogs(s);
-      expect(errorLogs.first.inFlashcard, true);
-    });
-
-    test('deleteFlashcard and updateFlashcardFrontText', () async {
-      final res = await repo.addFlashcard(
-        frontText: 'Původní text',
-        backText: 'Original text',
-        explanation: 'Vysvětlení',
-      );
-      final cardId = res.getOrThrow();
-
-      await repo.updateFlashcardFrontText(cardId, 'Upravený český text');
-      var card = (await repo.getAllFlashcards()).first;
-      expect(card.frontText, 'Upravený český text');
-
-      final delRes = await repo.deleteFlashcard(cardId);
-      expect(delRes.isSuccess, true);
-      expect(await repo.getAllFlashcards(), isEmpty);
-    });
-
-    test('removeDuplicateFlashcards keeps highest masteryScore card', () async {
-      // Manually insert 3 cards with same backText but varying mastery
-      final now = DateTime.now();
-      await db.into(db.flashcards).insert(
-        FlashcardsCompanion.insert(
-          frontText: 'Pes 1',
-          backText: 'Dog',
-          explanation: 'Zvire',
-          masteryScore: const Value(0.2),
-          nextReviewAt: now,
-          createdAt: now,
-        ),
-      );
-
-      final id2 = await db.into(db.flashcards).insert(
-        FlashcardsCompanion.insert(
-          frontText: 'Pes 2',
-          backText: 'dog', // case-insensitive
-          explanation: 'Zvire',
-          masteryScore: const Value(0.9), // highest!
-          nextReviewAt: now,
-          createdAt: now,
-        ),
-      );
-
-      await db.into(db.flashcards).insert(
-        FlashcardsCompanion.insert(
-          frontText: 'Pes 3',
-          backText: 'DOG',
-          explanation: 'Zvire',
-          masteryScore: const Value(0.5),
-          nextReviewAt: now,
-          createdAt: now,
-        ),
-      );
-
-      final removedCount = await repo.removeDuplicateFlashcards();
-      expect(removedCount, 2);
-
-      final remaining = await repo.getAllFlashcards();
-      expect(remaining.length, 1);
-      expect(remaining.first.id, id2);
-      expect(remaining.first.masteryScore, 0.9);
-    });
-
-    test('generateFlashcardsFromErrors generates cards and filters out invalid sentences', () async {
-      final s = (await repo.startNewSession()).getOrThrow();
-
-      // Valid error
-      await repo.addErrorLog(
-        sessionId: s,
-        errorType: 'grammar',
-        userSaid: 'She do not like tea',
-        correctForm: 'She does not like tea',
-        explanation: '3. os. jednotného čísla (nemá ráda čaj)',
-      );
-
-      // Filtered out: userSaid == correctForm
-      await repo.addErrorLog(
-        sessionId: s,
-        errorType: 'grammar',
-        userSaid: 'Identical sentence',
-        correctForm: 'Identical sentence',
-        explanation: 'Not an error',
-      );
-
-      // Filtered out: tutor monologue / AI phrase
-      await repo.addErrorLog(
-        sessionId: s,
-        errorType: 'grammar',
-        userSaid: 'Wait a minute, as an AI tutor I think...',
-        correctForm: 'Wait a minute...',
-        explanation: 'Irrelevant',
-      );
-
-      final client = _FakeBatchClient((prompt) => 'Ona nemá ráda čaj');
-      final genRes = await repo.generateFlashcardsFromErrors(
-        sessionId: s,
-        limit: 10,
-        geminiClient: client,
-      );
-
-      expect(genRes.isSuccess, true);
-      expect(genRes.getOrThrow(), 1);
-
-      final cards = await repo.getAllFlashcards();
-      expect(cards.length, 1);
-      expect(cards.first.backText, 'She does not like tea');
-      expect(cards.first.frontText, 'Ona nemá ráda čaj');
-
-      // Error logs should now be marked as inFlashcard = true
-      final logs = await repo.getErrorLogs(s);
-      expect(logs.every((l) => l.inFlashcard), true);
-    });
-
-    test('generateFlashcardsFromErrors distills atomic target word/phrase from sentence', () async {
-      final s = (await repo.startNewSession()).getOrThrow();
-
-      await repo.addErrorLog(
-        sessionId: s,
-        errorType: 'vocabulary',
-        userSaid: 'Running cleans my head',
-        correctForm: 'Running clears my head regularly',
-        explanation: 'Idiom clear one\'s head',
-      );
-
-      final client = _FakeBatchClient((prompt) {
-        if (prompt.contains('extrahuj VÝHRADNĚ cílové anglické slovíčko')) {
-          return '{"target": "clear one\'s head", "czech": "vyčistit si hlavu"}';
-        }
-        return 'vyčistit si hlavu';
-      });
-
-      final genRes = await repo.generateFlashcardsFromErrors(
-        sessionId: s,
-        geminiClient: client,
-      );
-
-      expect(genRes.isSuccess, true);
-      expect(genRes.getOrThrow(), 1);
-
-      final cards = await repo.getAllFlashcards();
-      final card = cards.firstWhere((c) => c.backText == 'clear one\'s head');
-      expect(card.frontText, 'vyčistit si hlavu');
-      expect(card.sourceSentence, 'Running clears my head regularly');
-    });
-
-    test('cleanupInvalidFlashcards deletes cards with tutor monologue leaks and oversized cards', () async {
-      // 1. Valid card
-      await repo.addFlashcard(
-        frontText: 'vyčistit si hlavu',
-        backText: 'clear one\'s head',
-        explanation: 'Idiom',
-      );
-
-      // 2. Leaked tutor instruction card (like #266)
-      await repo.addFlashcard(
-        frontText: 'Zkus se prosím soustředit na naši anglickou konverzaci a nepřepínej do překládání úkolů.',
-        backText: 'was at my father\'s house',
-        explanation: 'Tutor prompt leak',
-      );
-
-      // 3. Oversized card
-      await repo.addFlashcard(
-        frontText: 'A' * 150,
-        backText: 'B' * 150,
-        explanation: 'Too long',
-      );
-
-      final initialCards = await repo.getAllFlashcards();
-      expect(initialCards.length, 3);
-
-      final deleted = await repo.cleanupInvalidFlashcards();
-      expect(deleted, 2);
-
-      final remaining = await repo.getAllFlashcards();
-      expect(remaining.length, 1);
-      expect(remaining.first.backText, 'clear one\'s head');
     });
   });
 }

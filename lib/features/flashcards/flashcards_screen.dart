@@ -9,14 +9,14 @@ import '../../core/utils/logger.dart';
 import '../../core/widgets/glass_container.dart';
 import '../../data/database/app_database.dart';
 import '../../data/models/flashcard_stats.dart';
-import '../../data/repositories/session_repository.dart';
+import '../../data/repositories/flashcard_repository.dart';
 import '../../services/audio/audio_providers.dart';
 import '../../data/data_providers.dart';
 import '../../services/gemini/gemini_providers.dart';
 import '../../services/gemini/gemini_batch_client.dart';
 import '../../services/gemini/gemini_tts_service.dart';
 import '../../services/gemini/pronunciation_service.dart';
-import '../../services/prompt/task_prompts.dart';
+import '../../services/flashcards/flashcard_generation_service.dart';
 
 /// Obrazovka pro procvičování kartiček s intervalovým opakováním (Smart Flashcards).
 class FlashcardsScreen extends ConsumerStatefulWidget {
@@ -60,9 +60,8 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
     HapticFeedback.mediumImpact();
 
     try {
-      final repo = ref.read(sessionRepositoryProvider);
       final gemini = ref.read(geminiBatchClientProvider);
-      final res = await repo.generateFlashcardsFromErrors(
+      final res = await ref.read(flashcardGenerationServiceProvider).generateFlashcardsFromErrors(
         limit: 15,
         geminiClient: gemini,
       );
@@ -146,11 +145,10 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
 
     // Na pozadí vyčistíme neplatné kartičky (leaky) a automaticky přeložíme staré kartičky s chybnou angličtinou do češtiny
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final repo = ref.read(sessionRepositoryProvider);
-      repo.cleanupInvalidFlashcards();
+      ref.read(flashcardRepositoryProvider).cleanupInvalidFlashcards();
       final gemini = ref.read(geminiBatchClientProvider);
       if (gemini != null) {
-        repo.autoMigrateLegacyCardsToCzech(gemini);
+        ref.read(flashcardGenerationServiceProvider).autoMigrateLegacyCardsToCzech(gemini);
       }
     });
   }
@@ -309,8 +307,7 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
 
   Future<void> _answerCard(Flashcard card, int rating, int totalCards) async {
     HapticFeedback.mediumImpact();
-    final repo = ref.read(sessionRepositoryProvider);
-    await repo.reviewFlashcard(flashcardId: card.id, rating: rating);
+    await ref.read(flashcardRepositoryProvider).reviewFlashcard(flashcardId: card.id, rating: rating);
 
     if (rating >= 2) {
       _sessionMasteredCount++;
@@ -365,8 +362,7 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
     if (confirmed != true) return;
 
     HapticFeedback.mediumImpact();
-    final repo = ref.read(sessionRepositoryProvider);
-    await repo.deleteFlashcard(card.id);
+    await ref.read(flashcardRepositoryProvider).deleteFlashcard(card.id);
 
     if (_flipController.isCompleted) {
       _flipController.reset();
@@ -398,7 +394,8 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
 
   @override
   Widget build(BuildContext context) {
-    final repo = ref.watch(sessionRepositoryProvider);
+    final flashcardRepo = ref.watch(flashcardRepositoryProvider);
+    final generation = ref.watch(flashcardGenerationServiceProvider);
     final gemini = ref.watch(geminiBatchClientProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -406,14 +403,14 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
     if (gemini != null && !_migrationStarted) {
       _migrationStarted = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        repo.autoMigrateLegacyCardsToCzech(gemini);
+        generation.autoMigrateLegacyCardsToCzech(gemini);
       });
     }
 
     ref.listen<GeminiBatchClient?>(geminiBatchClientProvider, (previous, next) {
       if (next != null && !_migrationStarted) {
         _migrationStarted = true;
-        repo.autoMigrateLegacyCardsToCzech(next);
+        generation.autoMigrateLegacyCardsToCzech(next);
       }
     });
 
@@ -422,12 +419,12 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
       body: SafeArea(
         bottom: false,
         child: StreamBuilder<FlashcardStats>(
-        stream: repo.watchFlashcardStats(),
+        stream: flashcardRepo.watchFlashcardStats(),
         builder: (context, statsSnapshot) {
           final stats = statsSnapshot.data ?? const FlashcardStats.empty();
 
           return StreamBuilder<List<Flashcard>>(
-            stream: repo.watchDueFlashcards(),
+            stream: flashcardRepo.watchDueFlashcards(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting &&
                   !snapshot.hasData &&
@@ -945,7 +942,7 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
     final raw = card.frontText.trim();
 
     // 2. Pokud je text již v čisté češtině (žádné legacy šablony ani anglické uvozovky)
-    if (!SessionRepository.isLegacyOrEnglishFront(
+    if (!FlashcardRepository.isLegacyOrEnglishFront(
       raw,
       backText: card.backText,
       sourceSentence: card.sourceSentence,
@@ -954,11 +951,11 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
     }
 
     // 3. Pokus o okamžitou extrakci českého překladu z vysvětlení (např. "(jeden měsíc)")
-    final extracted = SessionRepository.extractCzechFromExplanation(card.explanation);
+    final extracted = FlashcardRepository.extractCzechFromExplanation(card.explanation);
     if (extracted != null && extracted.isNotEmpty) {
       _resolvedCzechFronts[card.id] = extracted;
       // Na pozadí rovnou uložíme do SQLite, ať je to trvalé
-      ref.read(sessionRepositoryProvider).updateFlashcardFrontText(card.id, extracted);
+      ref.read(flashcardRepositoryProvider).updateFlashcardFrontText(card.id, extracted);
       return extracted;
     }
 
@@ -981,11 +978,10 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
 
     _translatingCardIds.add(card.id);
 
-    gemini.sendMessage(TaskPrompts.translateToCzech(card.backText)).then((translated) {
-      final clean = translated.trim().replaceAll('"', '').replaceAll('\n', ' ');
-      if (clean.isNotEmpty && !clean.startsWith('❌')) {
+    FlashcardGenerationService.translateToCzech(gemini, card.backText).then((clean) {
+      if (clean != null) {
         _resolvedCzechFronts[card.id] = clean;
-        ref.read(sessionRepositoryProvider).updateFlashcardFrontText(card.id, clean);
+        ref.read(flashcardRepositoryProvider).updateFlashcardFrontText(card.id, clean);
         if (mounted) setState(() {});
       }
     }).catchError((err) {

@@ -5,6 +5,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:aj_tudor/data/database/app_database.dart';
 import 'package:aj_tudor/data/repositories/session_repository.dart';
+import 'package:aj_tudor/data/repositories/profile_repository.dart';
+import 'package:aj_tudor/data/repositories/flashcard_repository.dart';
+import 'package:aj_tudor/data/repositories/scenario_repository.dart';
 import 'package:aj_tudor/data/data_providers.dart';
 import 'package:aj_tudor/services/gemini/gemini_providers.dart';
 import 'package:aj_tudor/services/agents/scenario_planner_agent.dart';
@@ -15,17 +18,24 @@ class MockGeminiBatchClient extends Mock implements GeminiBatchClient {}
 void main() {
   late AppDatabase db;
   late SessionRepository repo;
+  late ProfileRepository profileRepo;
+  late FlashcardRepository flashcardRepo;
+  late ScenarioRepository scenarioRepo;
   late MockGeminiBatchClient mockGemini;
   late ProviderContainer container;
 
   setUp(() {
     db = AppDatabase.forTesting(NativeDatabase.memory());
     repo = SessionRepository(db);
+    profileRepo = ProfileRepository(db);
+    flashcardRepo = FlashcardRepository(db);
+    scenarioRepo = ScenarioRepository(db);
     mockGemini = MockGeminiBatchClient();
 
     container = ProviderContainer(
       overrides: [
         sessionRepositoryProvider.overrideWithValue(repo),
+        databaseProvider.overrideWithValue(db),
         geminiBatchClientProvider.overrideWithValue(mockGemini),
       ],
     );
@@ -47,10 +57,11 @@ void main() {
     });
 
     test('planScenarios exits early if geminiBatchClient is null', () async {
-      await repo.updateUserMemory('Some briefing');
+      await profileRepo.updateUserMemory('Some briefing');
       final containerNoKey = ProviderContainer(
         overrides: [
           sessionRepositoryProvider.overrideWithValue(repo),
+          databaseProvider.overrideWithValue(db),
           geminiBatchClientProvider.overrideWithValue(null),
         ],
       );
@@ -65,23 +76,23 @@ void main() {
     });
 
     test('planScenarios incorporates struggling flashcards (<0.6 mastery) and replaces scenarios', () async {
-      await repo.updateUserMemory('Context briefing');
-      await repo.updateTargetLevel('B1');
+      await profileRepo.updateUserMemory('Context briefing');
+      await profileRepo.updateTargetLevel('B1');
 
       // Add a struggling flashcard (masteryScore default is 0.0 < 0.6)
-      await repo.addFlashcard(
+      await flashcardRepo.addFlashcard(
         frontText: 'Těším se na tebe',
         backText: 'I look forward to seeing you',
         explanation: 'Look forward to + -ing',
       );
 
       // Add a mastered flashcard (masteryScore >= 0.6)
-      final masteredCard = await repo.addFlashcard(
+      final masteredCard = await flashcardRepo.addFlashcard(
         frontText: 'Kočka',
         backText: 'Cat',
         explanation: 'Zvíře',
       );
-      await repo.reviewFlashcard(flashcardId: masteredCard.getOrThrow(), rating: 3); // mastery >= 0.85
+      await flashcardRepo.reviewFlashcard(flashcardId: masteredCard.getOrThrow(), rating: 3); // mastery >= 0.85
 
       final mockScenariosResponse = jsonEncode({
         "scenarios": [
@@ -129,7 +140,7 @@ void main() {
       expect(capturedPrompt?.contains('Problémy z kartiček: Kočka (Správně: Cat)'), false);
 
       // Verify scenarios are saved in DB
-      final available = await repo.watchAvailableScenarios().first;
+      final available = await scenarioRepo.watchAvailableScenarios().first;
       expect(available.length, 3);
       expect(available.any((s) => s.title == 'V kavárně v Londýně'), true);
       expect(available.any((s) => s.title == 'Pracovní pohovor'), true);
@@ -137,8 +148,8 @@ void main() {
     });
 
     test('planCustomScenario generates and inserts custom scenario based on user hint', () async {
-      await repo.updateUserMemory('Context');
-      await repo.updateTargetLevel('A2');
+      await profileRepo.updateUserMemory('Context');
+      await profileRepo.updateTargetLevel('A2');
 
       final customMockResponse = jsonEncode({
         "scenarios": [
@@ -174,7 +185,7 @@ void main() {
       expect(capturedSystemPrompt?.contains('A2'), true);
 
       // Verify it is present in available scenarios
-      final available = await repo.watchAvailableScenarios().first;
+      final available = await scenarioRepo.watchAvailableScenarios().first;
       expect(available.any((s) => s.id == created?.id), true);
     });
 
@@ -182,6 +193,7 @@ void main() {
       final containerNoKey = ProviderContainer(
         overrides: [
           sessionRepositoryProvider.overrideWithValue(repo),
+          databaseProvider.overrideWithValue(db),
           geminiBatchClientProvider.overrideWithValue(null),
         ],
       );

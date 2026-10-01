@@ -263,11 +263,11 @@ class VoiceDirectorAgent extends Notifier<VoiceDirectorState> {
       // 2. Uložení nových faktů o studentovi do databáze i do lokálního stavu
       final updatedSessionFacts = List<String>.from(state.sessionFacts);
       if (newFacts.isNotEmpty) {
-        final repo = ref.read(sessionRepositoryProvider);
+        final profileRepo = ref.read(profileRepositoryProvider);
         for (final fact in newFacts) {
           if (!updatedSessionFacts.contains(fact)) {
             updatedSessionFacts.add(fact);
-            await repo.addUserFact(fact);
+            await profileRepo.addUserFact(fact);
           }
         }
       }

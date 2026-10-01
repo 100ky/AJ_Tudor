@@ -1,10 +1,10 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../data/data_providers.dart';
+import '../../data/repositories/profile_repository.dart';
 import '../../data/database/app_database.dart';
 import '../../data/models/flashcard_stats.dart';
 import '../../core/app_theme.dart';
@@ -30,11 +30,11 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final repo = ref.watch(sessionRepositoryProvider);
-    final userProfileStream = repo.watchUserProfile();
-    final errorLogsStream = repo.watchAllErrorLogs();
-    final sessionsStream = repo.watchAllSessions();
-    final flashcardStatsStream = repo.watchFlashcardStats();
+    final sessionRepo = ref.watch(sessionRepositoryProvider);
+    final userProfileStream = ref.watch(profileRepositoryProvider).watchUserProfile();
+    final errorLogsStream = sessionRepo.watchAllErrorLogs();
+    final sessionsStream = sessionRepo.watchAllSessions();
+    final flashcardStatsStream = ref.watch(flashcardRepositoryProvider).watchFlashcardStats();
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -144,7 +144,7 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen> {
             _buildMemoryCard(context, profile.memoryBriefing!),
             const SizedBox(height: 12),
           ],
-          _buildVocabularyCard(context, profile?.vocabulary ?? '[]'),
+          _buildVocabularyCard(context, profile?.vocabularyList ?? const []),
           const SizedBox(height: 12),
           _buildRecentErrorsCard(context, errors),
         ],
@@ -234,11 +234,7 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen> {
     final minutes = totalDuration.inMinutes.remainder(60);
     final timeString = hours > 0 ? '${hours}h ${minutes}m' : '${minutes}m';
 
-    int vocabCount = 0;
-    try {
-      final List<dynamic> words = jsonDecode(profile?.vocabulary ?? '[]');
-      vocabCount = words.length;
-    } catch (_) {}
+    final vocabCount = profile?.vocabularyList.length ?? 0;
 
     final activeDays = sessions
         .map((s) => DateTime(s.startedAt.year, s.startedAt.month, s.startedAt.day))
@@ -757,15 +753,13 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen> {
     );
   }
 
-  Widget _buildVocabularyChipCloud(BuildContext context, String vocabJson) {
-    try {
-      final List<dynamic> words = jsonDecode(vocabJson);
-      if (words.isEmpty) {
-        return _buildEmptyStateCard(
-            context, 'Zatím nemáš uložená žádná slovíčka.');
-      }
+  Widget _buildVocabularyChipCloud(BuildContext context, List<String> words) {
+    if (words.isEmpty) {
+      return _buildEmptyStateCard(
+          context, 'Zatím nemáš uložená žádná slovíčka.');
+    }
 
-      return Wrap(
+    return Wrap(
         spacing: 8,
         runSpacing: 8,
         children: words
@@ -780,7 +774,7 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen> {
                     ),
                   ),
                   child: Text(
-                    word.toString(),
+                    word,
                     style: GoogleFonts.plusJakartaSans(
                       fontWeight: FontWeight.w500,
                       fontSize: 13,
@@ -790,10 +784,6 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen> {
                 ))
             .toList(),
       );
-    } catch (e) {
-      return Text('Chyba načítání slovíček',
-          style: GoogleFonts.plusJakartaSans(color: AppTheme.error));
-    }
   }
 
   Widget _buildErrorTile(BuildContext context, ErrorLog error) {
@@ -1034,12 +1024,8 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen> {
     );
   }
 
-  Widget _buildVocabularyCard(BuildContext context, String vocabJson) {
-    int vocabCount = 0;
-    try {
-      final List<dynamic> words = jsonDecode(vocabJson);
-      vocabCount = words.length;
-    } catch (_) {}
+  Widget _buildVocabularyCard(BuildContext context, List<String> vocabulary) {
+    final vocabCount = vocabulary.length;
 
     return GlassContainer(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -1103,7 +1089,7 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen> {
           ),
           if (_isVocabExpanded) ...[
             const SizedBox(height: 14),
-            _buildVocabularyChipCloud(context, vocabJson),
+            _buildVocabularyChipCloud(context, vocabulary),
           ],
         ],
       ),

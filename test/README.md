@@ -13,10 +13,14 @@ test/
 │   └── widgets/
 │       └── glass_container_test.dart             # Skleněný kontejner (blur, specular bordery, margin)
 ├── data/                                         # Testy datové vrstvy a repozitářů
+│   ├── models/
+│   │   ├── chat_message_test.dart                # ChatMessage a opravy pro chytré bubliny
+│   │   └── srs_scheduler_test.dart               # SRS plánovač (intervaly, mastery, meze)
 │   └── repositories/
-│       ├── session_repository_test.dart          # CRUD sessions, kaskádový delete, paměť, SRS, deduplikace
-│       ├── flashcards_srs_test.dart              # ChatMessage model, SRS cyklus kartiček, statistiky
-│       └── user_facts_and_topics_test.dart       # Fakta „O mně“, připravené téma, prompty s fakty
+│       ├── session_repository_test.dart          # Lekce, transkripty, chyby, kaskádový delete
+│       ├── profile_repository_test.dart          # Paměť, slovní zásoba, chyby, fakta „O mně“, připravené téma
+│       ├── scenario_repository_test.dart         # Scénáře (náhrada, vlastní scénář, použití)
+│       └── flashcard_repository_test.dart        # Kartičky: duplicity, SRS hodnocení, statistiky, heuristiky
 ├── features/                                     # Testy obrazovek a modulů aplikace
 │   ├── skeleton/
 │   │   └── skeleton_screen_test.dart             # Hlavní shell, navigace (5 tabů), API klíč warning
@@ -47,8 +51,14 @@ test/
 │   │   ├── topic_preparation_agent_test.dart     # Příprava témat, 12h čerstvost, wildcard, facts bootstrap
 │   │   ├── voice_director_agent_test.dart        # Režisér konverzace (cooldown, tipy, briefing pro reconnect)
 │   │   └── voice_tutor_agent_test.dart           # Stavový automat tutora, VAD, reconnect, nudge
+│   ├── flashcards/
+│   │   └── flashcard_generation_service_test.dart # Kartičky z chyb, migrace starých zadání, nová slovíčka
+│   ├── gemini/
+│   │   └── gemini_rest_core_test.dart            # Pořadí modelů, cooldown, třídění chyb, dekódování JSON
 │   ├── prompt/
-│   │   └── system_prompt_builder_test.dart       # Sestavování promptů (tutor, CEFR, drill, schémata, fakta)
+│   │   ├── system_prompt_builder_test.dart       # Sestavování promptů (tutor, CEFR, drill, schémata, fakta)
+│   │   ├── task_prompts_test.dart                # Krátké úlohové prompty (překlad, výslovnost, TTS, dril)
+│   │   └── user_facts_and_topic_prompts_test.dart # Prompty s fakty „O mně“ a příprava témat
 │   ├── system/
 │   │   └── backup_service_test.dart              # Validace SQLite hlavičky, export/import zálohy databáze
 │   ├── gemini_tts_service_test.dart              # Gemini TTS, audio cache

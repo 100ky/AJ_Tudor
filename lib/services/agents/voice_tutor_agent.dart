@@ -8,6 +8,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../gemini/gemini_providers.dart';
 import '../../core/config/config_providers.dart';
 import '../../data/data_providers.dart';
+import '../../data/repositories/profile_repository.dart';
+import '../../data/repositories/scenario_repository.dart';
 import '../../data/repositories/session_repository.dart';
 import '../../data/models/chat_message.dart';
 import '../../core/constants/gemini_models.dart';
@@ -129,6 +131,8 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   late final WakelockService _wakelock;
   late final AudioSessionController _audio;
   late final SessionRepository _repo;
+  late final ProfileRepository _profileRepo;
+  late final ScenarioRepository _scenarioRepo;
   late final MemoryManagerAgent _memory;
   late final VoiceDirectorAgent _director;
 
@@ -142,6 +146,8 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     _wakelock = ref.read(wakelockServiceProvider);
     _audio = ref.read(audioSessionControllerProvider);
     _repo = ref.read(sessionRepositoryProvider);
+    _profileRepo = ref.read(profileRepositoryProvider);
+    _scenarioRepo = ref.read(scenarioRepositoryProvider);
     _memory = ref.read(memoryManagerAgentProvider);
     _director = ref.read(voiceDirectorAgentProvider.notifier);
 
@@ -293,14 +299,14 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
 
       // Pokud máme vybraný scénář, označíme ho jako použitý v databázi
       if (state.selectedScenarioId != null && state.selectedScenarioId! > 0) {
-        await _repo.markScenarioUsed(state.selectedScenarioId!);
+        await _scenarioRepo.markScenarioUsed(state.selectedScenarioId!);
       }
 
       // Resetujeme stav režiséra na pozadí pro novou lekci
       _director.reset();
 
       // 1. Příprava dat a promptu pro AI – načtení KOMPLETNÍHO profilu studenta
-      final userProfile = await _repo.getUserProfile();
+      final userProfile = await _profileRepo.getUserProfile();
       final targetLevel = userProfile?.targetLevel ?? 'B1';
       _targetLevelSnapshot = targetLevel;
       _userFactsSnapshot = userProfile?.userFacts;

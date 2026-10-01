@@ -236,13 +236,14 @@ class WordTranslationService {
     }
 
     try {
-      final repo = _ref.read(sessionRepositoryProvider);
+      final flashcardRepo = _ref.read(flashcardRepositoryProvider);
+      final profileRepo = _ref.read(profileRepositoryProvider);
 
       final explanation = (contextSentence != null && contextSentence.trim().isNotEmpty)
           ? 'Z věty tutora: "${contextSentence.trim()}"'
           : 'Slovíčko z konverzace s tutorem';
 
-      final cardResult = await repo.addFlashcard(
+      final cardResult = await flashcardRepo.addFlashcard(
         frontText: cleanedCs,
         backText: cleanedEn,
         explanation: explanation,
@@ -253,7 +254,7 @@ class WordTranslationService {
       if (cardResult.isSuccess) {
         // Aktualizujeme slovní zásobu v profilu studenta, aby tutor věděl, co se student učí
         try {
-          await repo.updateUserVocabulary([cleanedEn]);
+          await profileRepo.updateUserVocabulary([cleanedEn]);
         } catch (_) {}
       }
 
@@ -267,8 +268,7 @@ class WordTranslationService {
   /// Odstraní dříve vytvořenou kartičku (Undo akce).
   Future<Result<void>> removeFromFlashcards(int flashcardId) async {
     try {
-      final repo = _ref.read(sessionRepositoryProvider);
-      return await repo.deleteFlashcard(flashcardId);
+      return await _ref.read(flashcardRepositoryProvider).deleteFlashcard(flashcardId);
     } catch (e, stack) {
       L.e('Chyba při mazání kartičky #$flashcardId', e, stack);
       return Result.failure(DatabaseFailure('Nepodařilo se odebrat kartičku.'));

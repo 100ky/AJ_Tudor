@@ -7,7 +7,7 @@ import '../../services/agents/voice_tutor_agent.dart';
 import '../../services/agents/scenario_planner_agent.dart';
 import '../../services/agents/topic_preparation_agent.dart';
 import '../../data/database/app_database.dart';
-import '../../data/repositories/session_repository.dart';
+import '../../data/repositories/scenario_repository.dart';
 import '../../core/app_theme.dart';
 import '../../core/widgets/glass_container.dart';
 
@@ -82,9 +82,8 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
   @override
   Widget build(BuildContext context) {
     final tutorState = ref.watch(voiceTutorAgentProvider);
-    final repo = ref.watch(sessionRepositoryProvider);
-    final userProfileStream = repo.watchUserProfile();
-    final sessionsStream = repo.watchAllSessions();
+    final userProfileStream = ref.watch(profileRepositoryProvider).watchUserProfile();
+    final sessionsStream = ref.watch(sessionRepositoryProvider).watchAllSessions();
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -122,8 +121,8 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
                   _buildAnalyzerAgentCard(
                       context, profile, lastSession, tutorState.status),
                   const SizedBox(height: 16),
-                  _buildPlannerAgentCard(
-                      context, repo, tutorState.selectedScenarioId),
+                  _buildPlannerAgentCard(context,
+                      ref.watch(scenarioRepositoryProvider), tutorState.selectedScenarioId),
                   const SizedBox(height: 16),
                   _buildTopicAgentCard(context),
                 ],
@@ -400,7 +399,7 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
   }
 
   Widget _buildPlannerAgentCard(BuildContext context,
-      SessionRepository repo, int? selectedScenarioId) {
+      ScenarioRepository scenarioRepo, int? selectedScenarioId) {
     return GlassContainer(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -454,7 +453,7 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
           ),
           const SizedBox(height: 10),
           StreamBuilder<List<Scenario>>(
-            stream: repo.watchAvailableScenarios(),
+            stream: scenarioRepo.watchAvailableScenarios(),
             builder: (context, snapshot) {
               final scenarios = snapshot.data ?? [];
 

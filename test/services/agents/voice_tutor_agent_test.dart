@@ -4,6 +4,7 @@ import 'package:mocktail/mocktail.dart';
 import 'package:aj_tudor/services/agents/voice_tutor_agent.dart';
 import 'package:aj_tudor/services/gemini/gemini_live_client.dart';
 import 'package:aj_tudor/services/audio/audio_session_controller.dart';
+import 'package:aj_tudor/data/repositories/profile_repository.dart';
 import 'package:aj_tudor/data/repositories/session_repository.dart';
 import 'package:aj_tudor/services/gemini/gemini_providers.dart';
 import 'package:aj_tudor/data/data_providers.dart';
@@ -17,6 +18,7 @@ import 'package:aj_tudor/core/utils/result.dart';
 class MockGeminiLiveClient extends Mock implements GeminiLiveClient {}
 class MockAudioSessionController extends Mock implements AudioSessionController {}
 class MockSessionRepository extends Mock implements SessionRepository {}
+class MockProfileRepository extends Mock implements ProfileRepository {}
 class MockMemoryManagerAgent extends Mock implements MemoryManagerAgent {}
 class MockWakelockService extends Mock implements WakelockService {}
 class MockSharedPreferences extends Mock implements SharedPreferences {}
@@ -29,6 +31,7 @@ void main() {
   late MockGeminiLiveClient mockClient;
   late MockAudioSessionController mockAudio;
   late MockSessionRepository mockRepo;
+  late MockProfileRepository mockProfileRepo;
   late MockMemoryManagerAgent mockMemory;
   late MockWakelockService mockWakelock;
   late MockSharedPreferences mockPrefs;
@@ -38,6 +41,7 @@ void main() {
     mockClient = MockGeminiLiveClient();
     mockAudio = MockAudioSessionController();
     mockRepo = MockSessionRepository();
+    mockProfileRepo = MockProfileRepository();
     mockMemory = MockMemoryManagerAgent();
     mockWakelock = MockWakelockService();
     mockPrefs = MockSharedPreferences();
@@ -67,6 +71,7 @@ void main() {
         geminiLiveClientProvider.overrideWithValue(mockClient),
         audioSessionControllerProvider.overrideWithValue(mockAudio),
         sessionRepositoryProvider.overrideWithValue(mockRepo),
+        profileRepositoryProvider.overrideWithValue(mockProfileRepo),
         memoryManagerAgentProvider.overrideWithValue(mockMemory),
         wakelockServiceProvider.overrideWithValue(mockWakelock),
         sharedPreferencesProvider.overrideWithValue(mockPrefs),
@@ -128,7 +133,7 @@ void main() {
     Function(String)? userTranscriptCallback;
 
     when(() => mockRepo.startNewSession()).thenAnswer((_) async => Result.success(123));
-    when(() => mockRepo.getUserProfile()).thenAnswer((_) async => null);
+    when(() => mockProfileRepo.getUserProfile()).thenAnswer((_) async => null);
     when(() => mockRepo.addTranscript(
       sessionId: any(named: 'sessionId'),
       speaker: any(named: 'speaker'),
@@ -170,7 +175,7 @@ void main() {
     Function(bool)? connectionStatusCallback;
 
     when(() => mockRepo.startNewSession()).thenAnswer((_) async => Result.success(123));
-    when(() => mockRepo.getUserProfile()).thenAnswer((_) async => null);
+    when(() => mockProfileRepo.getUserProfile()).thenAnswer((_) async => null);
     when(() => mockAudio.start(onAudioChunk: any(named: 'onAudioChunk'))).thenAnswer((_) async {});
     when(() => mockClient.connect(
       modelName: any(named: 'modelName'),
@@ -202,7 +207,7 @@ void main() {
 
   test('forceTopicChange immediately prompts model with turnComplete: true and enters thinking state', () async {
     when(() => mockRepo.startNewSession()).thenAnswer((_) async => Result.success(123));
-    when(() => mockRepo.getUserProfile()).thenAnswer((_) async => null);
+    when(() => mockProfileRepo.getUserProfile()).thenAnswer((_) async => null);
     when(() => mockAudio.start(onAudioChunk: any(named: 'onAudioChunk'))).thenAnswer((_) async {});
     when(() => mockClient.connect(
       modelName: any(named: 'modelName'),
@@ -233,7 +238,7 @@ void main() {
 
   test('interruptPlayback stops audio playback and returns state to listening', () async {
     when(() => mockRepo.startNewSession()).thenAnswer((_) async => Result.success(123));
-    when(() => mockRepo.getUserProfile()).thenAnswer((_) async => null);
+    when(() => mockProfileRepo.getUserProfile()).thenAnswer((_) async => null);
     when(() => mockAudio.start(onAudioChunk: any(named: 'onAudioChunk'))).thenAnswer((_) async {});
     when(() => mockAudio.isPlaying).thenReturn(true);
     when(() => mockAudio.stopPlayback()).thenAnswer((_) async {});
@@ -267,7 +272,7 @@ void main() {
 
   test('startSession passes configured silenceDurationMs to client.connect', () async {
     when(() => mockRepo.startNewSession()).thenAnswer((_) async => Result.success(123));
-    when(() => mockRepo.getUserProfile()).thenAnswer((_) async => null);
+    when(() => mockProfileRepo.getUserProfile()).thenAnswer((_) async => null);
     when(() => mockAudio.start(onAudioChunk: any(named: 'onAudioChunk'))).thenAnswer((_) async {});
     when(() => mockClient.connect(
       modelName: any(named: 'modelName'),
@@ -291,7 +296,7 @@ void main() {
     Function(String)? userTranscriptCallback;
 
     when(() => mockRepo.startNewSession()).thenAnswer((_) async => Result.success(123));
-    when(() => mockRepo.getUserProfile()).thenAnswer((_) async => null);
+    when(() => mockProfileRepo.getUserProfile()).thenAnswer((_) async => null);
     when(() => mockAudio.start(onAudioChunk: any(named: 'onAudioChunk'))).thenAnswer((_) async {});
     when(() => mockClient.connect(
       modelName: any(named: 'modelName'),
@@ -330,7 +335,7 @@ void main() {
     Function(List<int>)? audioChunkCallback;
 
     when(() => mockRepo.startNewSession()).thenAnswer((_) async => Result.success(123));
-    when(() => mockRepo.getUserProfile()).thenAnswer((_) async => null);
+    when(() => mockProfileRepo.getUserProfile()).thenAnswer((_) async => null);
     when(() => mockAudio.isPlaying).thenReturn(false);
     when(() => mockAudio.start(onAudioChunk: any(named: 'onAudioChunk'))).thenAnswer((invocation) async {
       audioChunkCallback = invocation.namedArguments[const Symbol('onAudioChunk')] as Function(List<int>)?;
@@ -366,7 +371,7 @@ void main() {
     Function(List<int>)? audioChunkCallback;
 
     when(() => mockRepo.startNewSession()).thenAnswer((_) async => Result.success(123));
-    when(() => mockRepo.getUserProfile()).thenAnswer((_) async => null);
+    when(() => mockProfileRepo.getUserProfile()).thenAnswer((_) async => null);
     when(() => mockAudio.isPlaying).thenReturn(false);
     when(() => mockAudio.start(onAudioChunk: any(named: 'onAudioChunk'))).thenAnswer((invocation) async {
       audioChunkCallback = invocation.namedArguments[const Symbol('onAudioChunk')] as Function(List<int>)?;

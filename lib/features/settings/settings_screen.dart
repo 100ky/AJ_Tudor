@@ -1,9 +1,9 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/config/config_providers.dart';
 import '../../data/data_providers.dart';
+import '../../data/repositories/profile_repository.dart';
 import '../../services/agents/topic_preparation_agent.dart';
 import '../../core/constants/gemini_models.dart';
 import '../../services/system/backup_service.dart';
@@ -669,13 +669,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     );
                   }
 
-                  List<String> facts = [];
-                  if (profile.userFacts.isNotEmpty) {
-                    try {
-                      final List<dynamic> raw = jsonDecode(profile.userFacts);
-                      facts = raw.map((e) => e.toString()).toList();
-                    } catch (_) {}
-                  }
+                  final facts = profile.userFactsList;
 
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -736,7 +730,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                 onChanged: (String? newLevel) async {
                                   if (newLevel != null) {
                                     await ref
-                                        .read(sessionRepositoryProvider)
+                                        .read(profileRepositoryProvider)
                                         .updateTargetLevel(newLevel);
                                     if (context.mounted) {
                                       ScaffoldMessenger.of(context).showSnackBar(
@@ -1059,7 +1053,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           TextButton(
             onPressed: () async {
-              await ref.read(sessionRepositoryProvider).resetUserMemory();
+              await ref.read(profileRepositoryProvider).resetUserMemory();
               if (context.mounted) {
                 Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -1243,7 +1237,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Widget _buildFactTile(BuildContext context, String fact) {
-    final repo = ref.read(sessionRepositoryProvider);
+    final repo = ref.read(profileRepositoryProvider);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -1363,7 +1357,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               final text = controller.text.trim();
               if (text.isNotEmpty) {
                 Navigator.pop(dialogCtx);
-                await ref.read(sessionRepositoryProvider).addUserFact(text);
+                await ref.read(profileRepositoryProvider).addUserFact(text);
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(

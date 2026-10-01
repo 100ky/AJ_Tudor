@@ -1039,10 +1039,10 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
 
   // ── Záložka 1: Scénáře na míru (Role-play) ─────────────────────────────────
   Widget _buildScenariosTab(VoiceTutorState tutorState) {
-    final repo = ref.watch(sessionRepositoryProvider);
+    final scenarioRepo = ref.watch(scenarioRepositoryProvider);
 
     return StreamBuilder<List<Scenario>>(
-      stream: repo.watchAvailableScenarios(),
+      stream: scenarioRepo.watchAvailableScenarios(),
       builder: (context, snapshot) {
         final scenarios = snapshot.data ?? [];
 

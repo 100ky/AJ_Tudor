@@ -4,31 +4,31 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:aj_tudor/services/agents/voice_director_agent.dart';
 import 'package:aj_tudor/services/gemini/gemini_batch_client.dart';
-import 'package:aj_tudor/data/repositories/session_repository.dart';
+import 'package:aj_tudor/data/repositories/profile_repository.dart';
 import 'package:aj_tudor/data/models/chat_message.dart';
 import 'package:aj_tudor/services/gemini/gemini_providers.dart';
 import 'package:aj_tudor/data/data_providers.dart';
 
 class MockGeminiBatchClient extends Mock implements GeminiBatchClient {}
-class MockSessionRepository extends Mock implements SessionRepository {}
+class MockProfileRepository extends Mock implements ProfileRepository {}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late ProviderContainer container;
   late MockGeminiBatchClient mockDirectorClient;
-  late MockSessionRepository mockRepo;
+  late MockProfileRepository mockRepo;
 
   setUp(() {
     mockDirectorClient = MockGeminiBatchClient();
-    mockRepo = MockSessionRepository();
+    mockRepo = MockProfileRepository();
 
     when(() => mockRepo.addUserFact(any())).thenAnswer((_) async {});
 
     container = ProviderContainer(
       overrides: [
         geminiDirectorClientProvider.overrideWithValue(mockDirectorClient),
-        sessionRepositoryProvider.overrideWithValue(mockRepo),
+        profileRepositoryProvider.overrideWithValue(mockRepo),
       ],
     );
   });

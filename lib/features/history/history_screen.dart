@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../data/data_providers.dart';
 import '../../services/gemini/gemini_providers.dart';
+import '../../services/flashcards/flashcard_generation_service.dart';
 import '../../services/prompt/task_prompts.dart';
 import '../../data/database/app_database.dart';
 import '../../services/agents/memory_manager_agent.dart';
@@ -461,8 +462,7 @@ class _SessionDetailSheetState extends ConsumerState<_SessionDetailSheet> {
     HapticFeedback.mediumImpact();
 
     try {
-      final repo = ref.read(sessionRepositoryProvider);
-      final res = await repo.generateFlashcardsFromErrors(
+      final res = await ref.read(flashcardGenerationServiceProvider).generateFlashcardsFromErrors(
         sessionId: widget.session.id,
         limit: 15,
       );
@@ -1016,7 +1016,7 @@ class _SessionDetailSheetState extends ConsumerState<_SessionDetailSheet> {
                                                       HapticFeedback
                                                           .lightImpact();
                                                       final repo = ref.read(
-                                                          sessionRepositoryProvider);
+                                                          flashcardRepositoryProvider);
                                                       final res = await repo
                                                           .createFlashcardFromTranscript(
                                                         transcriptId: t.id,
