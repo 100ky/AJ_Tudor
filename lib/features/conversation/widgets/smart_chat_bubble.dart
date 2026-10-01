@@ -7,6 +7,7 @@ import '../../../data/repositories/session_repository.dart';
 import '../../../data/data_providers.dart';
 import '../../../services/gemini/gemini_providers.dart';
 import '../../../services/gemini/gemini_tts_service.dart';
+import '../../../services/prompt/task_prompts.dart';
 import '../../../core/app_theme.dart';
 import 'interactive_tutor_text.dart';
 
@@ -96,7 +97,7 @@ class _SmartChatBubbleState extends ConsumerState<SmartChatBubble> {
     if (gemini != null) {
       try {
         final tr = await gemini.sendMessage(
-          'Přelož tuto anglickou větu/frázi do přirozené češtiny (vrať VÝHRADNĚ čistý český překlad bez uvozovek a bez vysvětlování): "${correction.correctForm}"',
+          TaskPrompts.translateToCzech(correction.correctForm),
         );
         final clean = tr.trim().replaceAll('"', '').replaceAll('\n', ' ');
         if (clean.isNotEmpty && !clean.startsWith('❌')) {

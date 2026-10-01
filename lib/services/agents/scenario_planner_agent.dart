@@ -5,6 +5,7 @@ import '../gemini/gemini_providers.dart';
 import '../../data/database/app_database.dart';
 import '../../core/utils/logger.dart';
 import '../prompt/system_prompt_builder.dart';
+import '../prompt/task_prompts.dart';
 
 /// Agent odpovědný za plánování a generování personalizovaných konverzačních scénářů.
 /// 
@@ -124,22 +125,14 @@ class ScenarioPlannerAgent {
     try {
       final profile = await repo.getUserProfile();
 
-      final prompt = '''Jsi Curriculum & Scenario Planner pro aplikaci AJ Tudor.
-Na základě popisu od studenta vygeneruj JEDEN konverzační scénář (Role-Play).
-
-POPIS OD STUDENTA: "$userHint"
-
-ÚROVEŇ STUDENTA: ${profile?.targetLevel ?? 'B1'}
-${profile?.recurringErrors != null && profile!.recurringErrors.isNotEmpty && profile.recurringErrors != '[]' ? 'ČASTÉ CHYBY: ${profile.recurringErrors}' : ''}
-
-POŽADAVKY:
-1. Vytvoř scénář, který věrně odpovídá popisu studenta.
-2. Navrhni ho tak, aby přirozeně procvičoval danou situaci a slovní zásobu pro studentovu úroveň.
-3. Název a popis v ČEŠTINĚ. Instrukce pro tutora v ANGLIČTINĚ (jasně definuj roli tutora a roli studenta).
-''';
+      final prompt = TaskPrompts.customScenarioSystem(
+        userHint: userHint,
+        targetLevel: profile?.targetLevel ?? 'B1',
+        recurringErrors: profile?.recurringErrors,
+      );
 
       final result = await gemini.sendMessage(
-        'Vygeneruj 1 scénář na základě mého popisu.',
+        TaskPrompts.customScenarioRequest,
         systemPrompt: prompt,
         responseSchema: SystemPromptBuilder.getScenarioResponseSchema(),
       );

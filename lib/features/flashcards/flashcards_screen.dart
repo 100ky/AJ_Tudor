@@ -16,6 +16,7 @@ import '../../services/gemini/gemini_providers.dart';
 import '../../services/gemini/gemini_batch_client.dart';
 import '../../services/gemini/gemini_tts_service.dart';
 import '../../services/gemini/pronunciation_service.dart';
+import '../../services/prompt/task_prompts.dart';
 
 /// Obrazovka pro procvičování kartiček s intervalovým opakováním (Smart Flashcards).
 class FlashcardsScreen extends ConsumerStatefulWidget {
@@ -980,9 +981,7 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
 
     _translatingCardIds.add(card.id);
 
-    gemini.sendMessage(
-      'Přelož tuto anglickou větu/frázi do přirozené češtiny (vrať VÝHRADNĚ čistý český překlad bez uvozovek a bez vysvětlování): "${card.backText}"',
-    ).then((translated) {
+    gemini.sendMessage(TaskPrompts.translateToCzech(card.backText)).then((translated) {
       final clean = translated.trim().replaceAll('"', '').replaceAll('\n', ' ');
       if (clean.isNotEmpty && !clean.startsWith('❌')) {
         _resolvedCzechFronts[card.id] = clean;

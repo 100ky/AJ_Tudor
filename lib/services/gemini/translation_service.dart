@@ -11,6 +11,8 @@ import '../../core/utils/result.dart';
 import '../../core/error/error_handling.dart';
 import '../../core/config/config_providers.dart';
 import '../../data/data_providers.dart';
+import '../prompt/task_prompts.dart';
+import 'gemini_rest_core.dart';
 
 /// Výsledek překladu slova/fráze včetně případně vytvořené kartičky.
 class TranslationResult {
@@ -28,10 +30,7 @@ class TranslationResult {
 /// Služba pro bleskový kontextový překlad slov a frází s automatickým zařazením do Smart Flashcards.
 class WordTranslationService {
   final Ref _ref;
-  final Dio _dio;
-
-  static const String _baseUrl =
-      'https://generativelanguage.googleapis.com/v1beta/models';
+  final GeminiRestCore _api;
 
   /// Bleskové modely optimalizované pro rychlý překlad slov a frází bez prodlev
   static const List<String> _fastModels = [
@@ -46,7 +45,7 @@ class WordTranslationService {
   static final Map<String, String> _translationCache = {};
 
   /// Dočasný cooldown pro přetížené modely (503/429/timeout)
-  static final Map<String, DateTime> _modelCooldowns = {};
+  static final ModelCooldownTracker _cooldowns = ModelCooldownTracker();
 
   /// Příznak, zda již byla načtena disková mezipaměť
   static bool _diskCacheLoaded = false;
@@ -55,10 +54,10 @@ class WordTranslationService {
   static File? diskCacheFileOverride;
 
   WordTranslationService(this._ref)
-      : _dio = Dio(BaseOptions(
+      : _api = GeminiRestCore(
           connectTimeout: const Duration(seconds: 3),
           receiveTimeout: const Duration(seconds: 4),
-        ));
+        );
 
   /// Počet položek v paměťové mezipaměti překladů.
   static int get cachedCount => _translationCache.length;
@@ -66,7 +65,7 @@ class WordTranslationService {
   /// Resetuje mezipaměť (pro testování a debug).
   static void resetState() {
     _translationCache.clear();
-    _modelCooldowns.clear();
+    _cooldowns.clear();
     _diskCacheLoaded = false;
     diskCacheFileOverride = null;
   }
@@ -159,27 +158,23 @@ class WordTranslationService {
 
     final stopwatch = Stopwatch()..start();
 
-    // Sestavení stručného, lehkého promptu (bez mohutného systémového promptu tutora)
-    final userPrompt = (contextSentence != null && contextSentence.trim().isNotEmpty)
-        ? 'Kontext věty: "${contextSentence.trim()}"\nPřelož výraz: "$cleaned"'
-        : 'Přelož výraz: "$cleaned"';
-
+    // Stručný, lehký prompt (bez mohutného systémového promptu tutora)
     final requestBody = <String, dynamic>{
       'system_instruction': {
         'parts': [
-          {
-            'text':
-                'Jsi bleskový překladač z angličtiny do přirozené češtiny. '
-                'Přelož zadané anglické slovo nebo frázi přesně tak, jak odpovídá kontextu věty. '
-                'Vrať VÝHRADNĚ čistý český překlad bez uvozovek, bez tečky a bez jakéhokoliv vysvětlování.'
-          }
+          {'text': TaskPrompts.wordTranslationSystem}
         ]
       },
       'contents': [
         {
           'role': 'user',
           'parts': [
-            {'text': userPrompt}
+            {
+              'text': TaskPrompts.wordTranslationRequest(
+                word: cleaned,
+                contextSentence: contextSentence,
+              )
+            }
           ]
         }
       ],
@@ -188,38 +183,15 @@ class WordTranslationService {
       },
     };
 
-    final now = DateTime.now();
-    var candidatesToTry = _fastModels.where((m) {
-      final cd = _modelCooldowns[m];
-      return cd == null || now.isAfter(cd);
-    }).toList();
-
-    if (candidatesToTry.isEmpty) {
-      candidatesToTry = _fastModels;
-    }
-
-    for (final modelName in candidatesToTry) {
+    for (final modelName in _cooldowns.order(_fastModels)) {
       try {
-        final url = '$_baseUrl/$modelName:generateContent?key=$apiKey';
-        final response = await _dio.post<Map<String, dynamic>>(
-          url,
-          data: requestBody,
-          options: Options(
-            headers: {'Content-Type': 'application/json'},
-          ),
+        final data = await _api.generateContent(
+          apiKey: apiKey,
+          model: modelName,
+          body: requestBody,
         );
 
-        final data = response.data;
-        if (data == null) continue;
-
-        final candidates = data['candidates'] as List?;
-        if (candidates == null || candidates.isEmpty) continue;
-
-        final content = candidates[0]['content'];
-        final parts = content?['parts'] as List?;
-        if (parts == null || parts.isEmpty) continue;
-
-        final rawText = parts[0]['text']?.toString() ?? '';
+        final rawText = GeminiRestCore.extractText(data) ?? '';
         final cleanTranslation = rawText
             .replaceAll('"', '')
             .replaceAll('„', '')
@@ -228,7 +200,7 @@ class WordTranslationService {
             .trim();
 
         if (cleanTranslation.isNotEmpty && !cleanTranslation.startsWith('❌')) {
-          _modelCooldowns.remove(modelName);
+          _cooldowns.markSuccess(modelName);
           _translationCache[cacheKey] = cleanTranslation;
           unawaited(_saveDiskCache());
           stopwatch.stop();
@@ -236,21 +208,14 @@ class WordTranslationService {
           return cleanTranslation;
         }
       } on DioException catch (e) {
-        final statusCode = e.response?.statusCode ?? 0;
-        if (statusCode == 503 ||
-            statusCode == 429 ||
-            statusCode == 500 ||
-            e.type == DioExceptionType.connectionTimeout ||
-            e.type == DioExceptionType.receiveTimeout) {
-          _modelCooldowns[modelName] = DateTime.now().add(const Duration(minutes: 2));
-          L.w('Model $modelName přetížen/timeout ($statusCode). Dávám na 2min cooldown a zkouším další...');
+        if (classifyGeminiError(e) == GeminiErrorKind.overloaded) {
+          _cooldowns.markOverloaded(modelName, const Duration(minutes: 2));
+          L.w('Model $modelName přetížen/timeout (${e.response?.statusCode ?? 0}). Dávám na 2min cooldown a zkouším další...');
         } else {
           L.w('Model $modelName selhal při překladu ($e), zkouším další...');
         }
-        continue;
       } catch (e) {
         L.w('Model $modelName selhal při překladu ($e), zkouším další...');
-        continue;
       }
     }
 

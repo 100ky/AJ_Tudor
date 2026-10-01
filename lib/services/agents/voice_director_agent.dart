@@ -1,9 +1,9 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/utils/logger.dart';
 import '../../data/models/chat_message.dart';
 import '../../data/data_providers.dart';
+import '../gemini/gemini_json.dart';
 import '../gemini/gemini_providers.dart';
 
 import '../prompt/system_prompt_builder.dart';
@@ -210,12 +210,7 @@ class VoiceDirectorAgent extends Notifier<VoiceDirectorState> {
         temperature: 0.4,
       );
 
-      final cleanJson = rawResponse
-          .replaceAll(RegExp(r'^```json\s*', multiLine: true), '')
-          .replaceAll(RegExp(r'^```\s*', multiLine: true), '')
-          .trim();
-
-      final data = jsonDecode(cleanJson) as Map<String, dynamic>;
+      final data = decodeModelJson(rawResponse) as Map<String, dynamic>;
 
       final topicHealth = (data['topicHealth'] as num?)?.toInt() ?? 8;
       final needsPivot = data['needsPivot'] as bool? ?? false;
