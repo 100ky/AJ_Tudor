@@ -69,6 +69,11 @@ final sessionErrorLogsProvider =
   return ref.watch(sessionRepositoryProvider).watchErrorLogs(sessionId);
 });
 
+/// Kartičky připravené k dnešnímu opakování.
+final dueFlashcardsProvider = StreamProvider<List<Flashcard>>((ref) {
+  return ref.watch(flashcardRepositoryProvider).watchDueFlashcards();
+});
+
 /// Agregované statistiky kartiček (zvládnuté, v procesu, k opakování).
 final flashcardStatsProvider = StreamProvider<FlashcardStats>((ref) {
   return ref.watch(flashcardRepositoryProvider).watchFlashcardStats();
