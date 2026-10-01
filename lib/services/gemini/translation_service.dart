@@ -53,11 +53,13 @@ class WordTranslationService {
   /// Volitelné přepsání souboru mezipaměti (pro testy)
   static File? diskCacheFileOverride;
 
-  WordTranslationService(this._ref)
-      : _api = GeminiRestCore(
-          connectTimeout: const Duration(seconds: 3),
-          receiveTimeout: const Duration(seconds: 4),
-        );
+  /// [api] lze v testech nahradit vlastním REST jádrem.
+  WordTranslationService(this._ref, {GeminiRestCore? api})
+      : _api = api ??
+            GeminiRestCore(
+              connectTimeout: const Duration(seconds: 3),
+              receiveTimeout: const Duration(seconds: 4),
+            );
 
   /// Počet položek v paměťové mezipaměti překladů.
   static int get cachedCount => _translationCache.length;
@@ -208,7 +210,13 @@ class WordTranslationService {
           return cleanTranslation;
         }
       } on DioException catch (e) {
-        if (classifyGeminiError(e) == GeminiErrorKind.overloaded) {
+        final kind = classifyGeminiError(e);
+        if (kind == GeminiErrorKind.auth) {
+          // Neplatný klíč odmítnou všechny modely – další pokusy jen zdržují.
+          L.w('API klíč byl odmítnut (${e.response?.statusCode}), překlad další modely nezkouší.');
+          break;
+        }
+        if (kind == GeminiErrorKind.overloaded) {
           _cooldowns.markOverloaded(modelName, const Duration(minutes: 2));
           L.w('Model $modelName přetížen/timeout (${e.response?.statusCode ?? 0}). Dávám na 2min cooldown a zkouším další...');
         } else {

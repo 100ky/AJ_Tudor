@@ -52,11 +52,13 @@ class PronunciationService {
   /// a naposledy funkční model pro okamžité vyhodnocení dalších nahrávek.
   static final ModelCooldownTracker _cooldowns = ModelCooldownTracker();
 
-  PronunciationService(this._ref)
-      : _api = GeminiRestCore(
-          connectTimeout: const Duration(seconds: 4),
-          receiveTimeout: const Duration(seconds: 8),
-        );
+  /// [api] lze v testech nahradit vlastním REST jádrem.
+  PronunciationService(this._ref, {GeminiRestCore? api})
+      : _api = api ??
+            GeminiRestCore(
+              connectTimeout: const Duration(seconds: 4),
+              receiveTimeout: const Duration(seconds: 8),
+            );
 
   /// Resetuje zapamatovaný model a cooldowny (užitečné např. pro testy).
   static void resetState() => _cooldowns.clear();
@@ -236,7 +238,13 @@ class PronunciationService {
             feedback: json['feedback']?.toString() ?? 'Skvělá práce!',
           );
         } on DioException catch (e) {
-          if (classifyGeminiError(e) == GeminiErrorKind.overloaded) {
+          final kind = classifyGeminiError(e);
+          if (kind == GeminiErrorKind.auth) {
+            // Neplatný klíč odmítnou všechny modely – další pokusy jen zdržují.
+            L.w('PronunciationService: API klíč byl odmítnut (${e.response?.statusCode}), další modely nezkouším.');
+            break;
+          }
+          if (kind == GeminiErrorKind.overloaded) {
             _cooldowns.markOverloaded(model, const Duration(minutes: 3));
             L.w('Model $model je přetížený (${e.response?.statusCode ?? 0} / ${e.type.name}). Dávám na 3min cooldown.');
           } else {
