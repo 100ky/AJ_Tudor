@@ -7,26 +7,26 @@ import 'package:aj_tudor/features/conversation/widgets/interactive_tutor_text.da
 import 'package:aj_tudor/core/app_theme.dart';
 import 'package:aj_tudor/core/utils/result.dart';
 import 'package:aj_tudor/data/models/chat_message.dart';
-import 'package:aj_tudor/data/repositories/session_repository.dart';
+import 'package:aj_tudor/data/repositories/flashcard_repository.dart';
 import 'package:aj_tudor/data/data_providers.dart';
 import 'package:aj_tudor/services/gemini/gemini_providers.dart';
 import 'package:aj_tudor/services/gemini/gemini_tts_service.dart';
 import 'package:aj_tudor/services/gemini/gemini_batch_client.dart';
 
 class MockGeminiTtsService extends Mock implements GeminiTtsService {}
-class MockSessionRepository extends Mock implements SessionRepository {}
+class MockFlashcardRepository extends Mock implements FlashcardRepository {}
 class MockGeminiBatchClient extends Mock implements GeminiBatchClient {}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late MockGeminiTtsService mockTts;
-  late MockSessionRepository mockRepo;
+  late MockFlashcardRepository mockRepo;
   late MockGeminiBatchClient mockBatchClient;
 
   setUp(() {
     mockTts = MockGeminiTtsService();
-    mockRepo = MockSessionRepository();
+    mockRepo = MockFlashcardRepository();
     mockBatchClient = MockGeminiBatchClient();
 
     when(() => mockTts.speak(any())).thenAnswer((_) async => true);
@@ -39,7 +39,7 @@ void main() {
     return ProviderScope(
       overrides: [
         geminiTtsServiceProvider.overrideWithValue(mockTts),
-        sessionRepositoryProvider.overrideWithValue(mockRepo),
+        flashcardRepositoryProvider.overrideWithValue(mockRepo),
         geminiBatchClientProvider.overrideWithValue(mockBatchClient),
       ],
       child: MaterialApp(

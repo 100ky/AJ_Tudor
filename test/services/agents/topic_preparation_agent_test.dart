@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:aj_tudor/data/database/app_database.dart';
 import 'package:aj_tudor/data/repositories/session_repository.dart';
+import 'package:aj_tudor/data/repositories/profile_repository.dart';
 import 'package:aj_tudor/data/data_providers.dart';
 import 'package:aj_tudor/services/gemini/gemini_providers.dart';
 import 'package:aj_tudor/services/agents/topic_preparation_agent.dart';
@@ -15,17 +16,20 @@ class MockGeminiBatchClient extends Mock implements GeminiBatchClient {}
 void main() {
   late AppDatabase db;
   late SessionRepository repo;
+  late ProfileRepository profileRepo;
   late MockGeminiBatchClient mockGemini;
   late ProviderContainer container;
 
   setUp(() {
     db = AppDatabase.forTesting(NativeDatabase.memory());
     repo = SessionRepository(db);
+    profileRepo = ProfileRepository(db);
     mockGemini = MockGeminiBatchClient();
 
     container = ProviderContainer(
       overrides: [
         sessionRepositoryProvider.overrideWithValue(repo),
+        databaseProvider.overrideWithValue(db),
         geminiBatchClientProvider.overrideWithValue(mockGemini),
       ],
     );
@@ -44,8 +48,8 @@ void main() {
         rationale: 'Zájem o přírodu',
         preparedAt: DateTime.now(),
       );
-      await repo.updateUserMemory('Init');
-      await repo.savePreparedTopic(jsonEncode(initialTopic.toJson()));
+      await profileRepo.updateUserMemory('Init');
+      await profileRepo.savePreparedTopic(jsonEncode(initialTopic.toJson()));
 
       // Read the provider and wait for the initial async microtask to complete
       container.read(topicPreparationAgentProvider.notifier);
@@ -61,6 +65,7 @@ void main() {
       final containerNoKey = ProviderContainer(
         overrides: [
           sessionRepositoryProvider.overrideWithValue(repo),
+          databaseProvider.overrideWithValue(db),
           geminiBatchClientProvider.overrideWithValue(null),
         ],
       );
@@ -80,8 +85,8 @@ void main() {
         rationale: 'Káva',
         preparedAt: DateTime.now().subtract(const Duration(hours: 2)), // 2 hours old < 12h
       );
-      await repo.updateUserMemory('Init');
-      await repo.savePreparedTopic(jsonEncode(freshTopic.toJson()));
+      await profileRepo.updateUserMemory('Init');
+      await profileRepo.savePreparedTopic(jsonEncode(freshTopic.toJson()));
 
       final notifier = container.read(topicPreparationAgentProvider.notifier);
       await Future.delayed(const Duration(milliseconds: 50));
@@ -100,8 +105,8 @@ void main() {
     });
 
     test('prepareTopic generates standard topic and updates database when forced', () async {
-      await repo.updateUserMemory('Notes from last session');
-      await repo.addUserFact('Pracuje jako programátor');
+      await profileRepo.updateUserMemory('Notes from last session');
+      await profileRepo.addUserFact('Pracuje jako programátor');
 
       final standardTopicResponse = jsonEncode({
         "topicTitle": "Nové technologie a AI",
@@ -126,13 +131,13 @@ void main() {
       expect(state.refreshCount, 1);
 
       // Verify persisted to DB
-      final savedJson = await repo.getPreparedTopic();
+      final savedJson = await profileRepo.getPreparedTopic();
       expect(savedJson, isNotNull);
       expect(savedJson?.contains('Nové technologie a AI'), true);
     });
 
     test('prepareTopic triggers random wildcard topic when isRandomTopic is explicitly true', () async {
-      await repo.updateUserMemory('Notes');
+      await profileRepo.updateUserMemory('Notes');
 
       final randomTopicResponse = jsonEncode({
         "topicTitle": "Cestování časem",
@@ -164,7 +169,7 @@ void main() {
     });
 
     test('prepareTopic automatically triggers wildcard on every 3rd forced refresh', () async {
-      await repo.updateUserMemory('Notes');
+      await profileRepo.updateUserMemory('Notes');
 
       final standardResp = jsonEncode({
         "topicTitle": "Běžné téma",
@@ -210,7 +215,7 @@ void main() {
     });
 
     test('prepareTopic bootstraps user facts from transcript history if facts are empty', () async {
-      await repo.updateUserMemory('Notes');
+      await profileRepo.updateUserMemory('Notes');
       // No user facts yet in profile
 
       // Insert past session with user messages
@@ -248,7 +253,7 @@ void main() {
       await notifier.prepareTopic(force: true);
 
       // Verify facts were extracted and saved into profile
-      final userFacts = await repo.getUserFacts();
+      final userFacts = await profileRepo.getUserFacts();
       expect(userFacts.contains('Má psa Buddyho'), true);
       expect(userFacts.contains('Rád chodí na túry'), true);
 
@@ -263,8 +268,8 @@ void main() {
         rationale: 'Test',
         preparedAt: DateTime.now(),
       );
-      await repo.updateUserMemory('Init');
-      await repo.savePreparedTopic(jsonEncode(topic.toJson()));
+      await profileRepo.updateUserMemory('Init');
+      await profileRepo.savePreparedTopic(jsonEncode(topic.toJson()));
 
       final notifier = container.read(topicPreparationAgentProvider.notifier);
       await Future.delayed(const Duration(milliseconds: 50));
@@ -273,11 +278,11 @@ void main() {
       await notifier.consumeTopic();
 
       expect(container.read(topicPreparationAgentProvider).topic, isNull);
-      expect(await repo.getPreparedTopic(), isNull);
+      expect(await profileRepo.getPreparedTopic(), isNull);
     });
 
     test('resetRefreshCounter resets the refresh counter to zero', () async {
-      await repo.updateUserMemory('Init');
+      await profileRepo.updateUserMemory('Init');
       when(() => mockGemini.sendMessage(
         any(),
         responseSchema: any(named: 'responseSchema'),

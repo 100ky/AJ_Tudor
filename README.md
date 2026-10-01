@@ -30,8 +30,8 @@ lib/
 │   └── app_theme.dart     # Barvy a témata
 ├── data/                  # Datová vrstva (Drift ORM, SQLite)
 │   ├── database/          # Schéma Drift (AppDatabase, tabulky)
-│   ├── models/            # Datové modely (ChatMessage, FlashcardStats)
-│   ├── repositories/      # Repozitáře nad databází
+│   ├── models/            # Datové modely a SRS plánovač opakování kartiček
+│   ├── repositories/      # Repozitáře: lekce, profil studenta, scénáře, kartičky
 │   └── data_providers.dart  # Providery databáze, repozitářů a datových streamů
 ├── features/              # Obrazovky rozdělené dle domény (části obrazovek ve widgets/)
 │   ├── agents/            # Přehled agentů
@@ -44,9 +44,10 @@ lib/
 └── services/              # Aplikační logika – každá služba má svůj provider ve stejném souboru/složce
     ├── agents/            # VoiceTutor, VoiceDirector, MemoryManager, ScenarioPlanner, TopicPreparation
     ├── audio/             # Nahrávání mikrofonu (record) a přehrávání (flutter_pcm_sound)
-    ├── gemini/            # Gemini Live (WebSocket) a REST klienti (batch, TTS, výslovnost, překlad)
+    ├── flashcards/        # Tvorba kartiček pomocí AI (z chyb, nová slovíčka, překlad zadání)
+    ├── gemini/            # Gemini Live (WebSocket), společné REST jádro a služby (batch, TTS, výslovnost, překlad)
     ├── notifications/     # Lokální připomínky
-    ├── prompt/            # Konstruktor systémových promptů (SystemPromptBuilder)
+    ├── prompt/            # Všechny prompty: SystemPromptBuilder (agenti) a TaskPrompts (krátké úlohy)
     └── system/            # Wakelock, záloha databáze
 ```
 

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/data_providers.dart';
 import '../gemini/gemini_providers.dart';
+import '../../data/repositories/profile_repository.dart';
 import '../../data/repositories/session_repository.dart';
 import '../gemini/gemini_batch_client.dart';
 import '../../core/utils/logger.dart';
@@ -90,8 +91,7 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
     // Asynchronní načtení již uloženého tématu z databáze při inicializaci
     Future.microtask(() async {
       try {
-        final repo = ref.read(sessionRepositoryProvider);
-        final user = await repo.getUserProfile();
+        final user = await ref.read(profileRepositoryProvider).getUserProfile();
         if (user?.preparedTopic != null && user!.preparedTopic!.isNotEmpty) {
           final data = jsonDecode(user.preparedTopic!);
           final loadedTopic = PreparedTopic.fromJson(data);
@@ -127,7 +127,8 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
       _refreshCounter = 0;
     }
 
-    final repo = ref.read(sessionRepositoryProvider);
+    final sessionRepo = ref.read(sessionRepositoryProvider);
+    final profileRepo = ref.read(profileRepositoryProvider);
     final gemini = ref.read(geminiBatchClientProvider);
 
     if (gemini == null) {
@@ -154,7 +155,7 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
     L.i('TopicPreparationAgent: Začínám připravovat nové konverzační téma (obnovení #$_refreshCounter, náhodné téma: $generateRandom)...');
 
     try {
-      final profile = await repo.getUserProfile();
+      final profile = await profileRepo.getUserProfile();
 
       // Shromáždíme témata k vynechání (stávající téma i nedávno navržená témata)
       final currentTitle = state.topic?.title;
@@ -197,7 +198,7 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
           _recentlyProposedTitles.removeAt(0);
         }
 
-        await repo.savePreparedTopic(jsonEncode(prepared.toJson()));
+        await profileRepo.savePreparedTopic(jsonEncode(prepared.toJson()));
         state = state.copyWith(
           isLoading: false,
           topic: prepared,
@@ -220,14 +221,14 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
       if (currentProfile?.userFacts == null ||
           currentProfile!.userFacts.isEmpty ||
           currentProfile.userFacts == '[]') {
-        await _bootstrapUserFactsIfEmpty(repo, gemini);
-        currentProfile = await repo.getUserProfile();
+        await _bootstrapUserFactsIfEmpty(sessionRepo, profileRepo, gemini);
+        currentProfile = await profileRepo.getUserProfile();
       }
 
-      final sessions = await repo.watchAllSessions().first;
+      final sessions = await sessionRepo.watchAllSessions().first;
 
       // Získání transkriptů z posledních rozhovorů, aby agent věděl, co se skutečně říkalo
-      final recentTranscripts = await repo.getRecentTranscripts(sessionLimit: 3);
+      final recentTranscripts = await sessionRepo.getRecentTranscripts(sessionLimit: 3);
       final recentTranscriptsSnippet = recentTranscripts.isNotEmpty
           ? recentTranscripts
               .take(40)
@@ -281,7 +282,7 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
         _recentlyProposedTitles.removeAt(0);
       }
 
-      await repo.savePreparedTopic(jsonEncode(prepared.toJson()));
+      await profileRepo.savePreparedTopic(jsonEncode(prepared.toJson()));
       state = state.copyWith(
         isLoading: false,
         topic: prepared,
@@ -309,10 +310,10 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
   /// Zpětně projde zprávy studenta ze všech dosavadních konverzací
   /// a jednorázově naplní paměť "O mně" (mazlíčci, koníčky, profese),
   /// aby se Tudor nemusel ptát na to, co už student dříve zmínil.
-  Future<void> _bootstrapUserFactsIfEmpty(
-      SessionRepository repo, GeminiBatchClient gemini) async {
+  Future<void> _bootstrapUserFactsIfEmpty(SessionRepository sessionRepo,
+      ProfileRepository profileRepo, GeminiBatchClient gemini) async {
     try {
-      final userTranscripts = await repo.getAllUserTranscripts(limit: 60);
+      final userTranscripts = await sessionRepo.getAllUserTranscripts(limit: 60);
       if (userTranscripts.isEmpty) return;
 
       L.i('TopicPreparationAgent: Nalezeno ${userTranscripts.length} starších zpráv studenta. Extrahuji fakta pro "O mně"...');
@@ -335,7 +336,7 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
             .where((s) => s.isNotEmpty)
             .toList();
         if (extracted.isNotEmpty) {
-          await repo.updateUserFacts(extracted);
+          await profileRepo.updateUserFacts(extracted);
           L.i('TopicPreparationAgent: Úspěšně zpětně extrahováno ${extracted.length} faktů do "O mně": $extracted');
         }
       }
@@ -346,8 +347,7 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
 
   /// Označí téma za spotřebované / vymaže ho (např. po proběhlé lekci).
   Future<void> consumeTopic() async {
-    final repo = ref.read(sessionRepositoryProvider);
-    await repo.clearPreparedTopic();
+    await ref.read(profileRepositoryProvider).clearPreparedTopic();
     state = state.copyWith(topic: null);
     state = state.copyWith(clearTopic: true);
   }

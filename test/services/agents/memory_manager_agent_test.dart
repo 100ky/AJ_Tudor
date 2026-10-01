@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:aj_tudor/data/database/app_database.dart';
 import 'package:aj_tudor/data/repositories/session_repository.dart';
+import 'package:aj_tudor/data/repositories/profile_repository.dart';
+import 'package:aj_tudor/data/repositories/flashcard_repository.dart';
 import 'package:aj_tudor/data/data_providers.dart';
 import 'package:aj_tudor/services/gemini/gemini_providers.dart';
 import 'package:aj_tudor/services/agents/memory_manager_agent.dart';
@@ -38,6 +40,8 @@ class FakeTopicPreparationAgent extends TopicPreparationAgent {
 void main() {
   late AppDatabase db;
   late SessionRepository repo;
+  late ProfileRepository profileRepo;
+  late FlashcardRepository flashcardRepo;
   late MockGeminiBatchClient mockGemini;
   late MockScenarioPlannerAgent mockScenarioPlanner;
   late FakeTopicPreparationAgent fakeTopicAgent;
@@ -46,6 +50,8 @@ void main() {
   setUp(() {
     db = AppDatabase.forTesting(NativeDatabase.memory());
     repo = SessionRepository(db);
+    profileRepo = ProfileRepository(db);
+    flashcardRepo = FlashcardRepository(db);
     mockGemini = MockGeminiBatchClient();
     mockScenarioPlanner = MockScenarioPlannerAgent();
     fakeTopicAgent = FakeTopicPreparationAgent();
@@ -55,6 +61,7 @@ void main() {
     container = ProviderContainer(
       overrides: [
         sessionRepositoryProvider.overrideWithValue(repo),
+        databaseProvider.overrideWithValue(db),
         geminiAnalysisClientProvider.overrideWithValue(mockGemini),
         scenarioPlannerAgentProvider.overrideWithValue(mockScenarioPlanner),
         topicPreparationAgentProvider.overrideWith(() => fakeTopicAgent),
@@ -72,6 +79,7 @@ void main() {
       final containerNoKey = ProviderContainer(
         overrides: [
           sessionRepositoryProvider.overrideWithValue(repo),
+          databaseProvider.overrideWithValue(db),
           geminiAnalysisClientProvider.overrideWithValue(null),
         ],
       );
@@ -100,7 +108,7 @@ void main() {
 
     test('analyzeSession handles short session (<2 user messages) without overwriting memory briefing', () async {
       final s = (await repo.startNewSession()).getOrThrow();
-      await repo.updateUserMemory('Preserved initial briefing');
+      await profileRepo.updateUserMemory('Preserved initial briefing');
 
       // Only 1 user message -> too short
       await repo.addTranscript(sessionId: s, speaker: 'tutor', content: 'Hello!');
@@ -134,14 +142,14 @@ void main() {
       expect(sessions.first.fluencyScore, 0.5);
 
       // But memory briefing should NOT be overwritten because session was too short
-      final profile = await repo.getUserProfile();
+      final profile = await profileRepo.getUserProfile();
       expect(profile?.memoryBriefing, 'Preserved initial briefing');
     });
 
     test('analyzeSession fully processes normal session, updates db, extracts facts, creates flashcards, and prunes resolved errors', () async {
       final s = (await repo.startNewSession()).getOrThrow();
-      await repo.updateUserMemory('Initial long-term briefing');
-      await repo.updateUserRecurringErrors(['Past simple errors', 'Articles a/the']);
+      await profileRepo.updateUserMemory('Initial long-term briefing');
+      await profileRepo.updateUserRecurringErrors(['Past simple errors', 'Articles a/the']);
 
       // 3 user messages and 2 tutor messages
       await repo.addTranscript(sessionId: s, speaker: 'tutor', content: 'Tell me about your job.');
@@ -187,7 +195,7 @@ void main() {
       expect(sessions.first.totalErrors, 1);
 
       // 2. Profile target level updated to B2
-      final profile = await repo.getUserProfile();
+      final profile = await profileRepo.getUserProfile();
       expect(profile?.targetLevel, 'B2');
 
       // 3. Memory briefing updated with tutorFeedback appended
@@ -206,12 +214,12 @@ void main() {
       expect(vocab.contains('espresso'), true);
 
       // 6. User facts updated
-      final facts = await repo.getUserFacts();
+      final facts = await profileRepo.getUserFacts();
       expect(facts.contains('Pracuje jako softwarový inženýr'), true);
       expect(facts.contains('Rád pije espresso'), true);
 
       // 7. Flashcard created with Czech prompt on front and English on back
-      final cards = await repo.getAllFlashcards();
+      final cards = await flashcardRepo.getAllFlashcards();
       expect(cards.length, 1);
       expect(cards.first.frontText, 'Pracuji jako softwarový inženýr již 5 let.');
       expect(cards.first.backText, 'I have been working as a software engineer for 5 years.');
@@ -252,7 +260,7 @@ void main() {
       final agent = container.read(memoryManagerAgentProvider);
       await agent.analyzeSession(s);
 
-      final profile = await repo.getUserProfile();
+      final profile = await profileRepo.getUserProfile();
       expect(profile?.memoryBriefing?.startsWith('...'), true);
       expect(profile?.memoryBriefing?.length, 603);
     });
@@ -322,7 +330,7 @@ void main() {
       final agent = container.read(memoryManagerAgentProvider);
       await agent.analyzeSession(s);
 
-      final flashcards = await repo.getAllFlashcards();
+      final flashcards = await flashcardRepo.getAllFlashcards();
       // Musí být vytvořena pouze 1 kartička (leak tutorovy zprávy byl zahozen)
       expect(flashcards.length, 1);
       final card = flashcards.first;

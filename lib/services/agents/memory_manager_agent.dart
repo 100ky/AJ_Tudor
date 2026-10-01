@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/data_providers.dart';
 import '../gemini/gemini_providers.dart';
-import '../../data/repositories/session_repository.dart';
+import '../../data/repositories/flashcard_repository.dart';
 import '../../core/utils/logger.dart';
 import '../prompt/system_prompt_builder.dart';
 import 'scenario_planner_agent.dart';
@@ -32,7 +32,9 @@ class MemoryManagerAgent {
     L.i('Zahajuji analýzu session $sessionId pomocí Structured Outputs...');
     
     // Načtení repozitáře pro přístup k databázi a batch klienta Gemini určeného pro analýzy.
-    final repo = _ref.read(sessionRepositoryProvider);
+    final sessionRepo = _ref.read(sessionRepositoryProvider);
+    final profileRepo = _ref.read(profileRepositoryProvider);
+    final flashcardRepo = _ref.read(flashcardRepositoryProvider);
     final gemini = _ref.read(geminiAnalysisClientProvider);
     
     if (gemini == null) {
@@ -42,7 +44,7 @@ class MemoryManagerAgent {
 
     try {
       // 1. Načtení historie transkriptu pro zadané sezení z databáze
-      final transcripts = await repo.getTranscripts(sessionId);
+      final transcripts = await sessionRepo.getTranscripts(sessionId);
       L.i('Nalezeno ${transcripts.length} záznamů v transkriptu pro session $sessionId');
       
       if (transcripts.isEmpty) {
@@ -55,7 +57,7 @@ class MemoryManagerAgent {
       final wrappedHistory = '<transcript>\n$chatHistory\n</transcript>';
 
       // Načtení předchozího profilu pro získání staršího briefingu (dlouhodobé paměti)
-      final userProfile = await repo.getUserProfile();
+      final userProfile = await profileRepo.getUserProfile();
       final previousBriefing = userProfile?.memoryBriefing;
       
       // Zjistíme, zda byla lekce příliš krátká (méně než 2 zprávy od uživatele)
@@ -123,7 +125,7 @@ class MemoryManagerAgent {
         }
         L.blockList('ANALYSIS', 'Kartičky z chyb', errorItems);
       }
-      await repo.updateSessionAnalysis(
+      await sessionRepo.updateSessionAnalysis(
         sessionId: sessionId,
         topicSummary: data['topicSummary']?.toString() ?? 'Bez popisu',
         fluencyScore: fluency,
@@ -144,7 +146,7 @@ class MemoryManagerAgent {
           
           // Repozitář provede vyhledání a odstranění těchto jevů z opakujících se chyb,
           // čímž se efektivně uvolní kapacita kontextového okna a zabrání zacyklení
-          await repo.pruneResolvedErrors(resolved); 
+          await profileRepo.pruneResolvedErrors(resolved); 
         }
       }
 
@@ -166,7 +168,7 @@ class MemoryManagerAgent {
            finalBriefing = '...${finalBriefing.substring(finalBriefing.length - 600)}';
         }
         
-        await repo.updateUserMemory(finalBriefing);
+        await profileRepo.updateUserMemory(finalBriefing);
       }
       
       // Aktualizace odhadované úrovně angličtiny v profilu studenta (pokud byla rozpoznána)
@@ -174,7 +176,7 @@ class MemoryManagerAgent {
         final estLevel = data['estimatedLevel'].toString().toUpperCase();
         if (['A1', 'A2', 'B1', 'B2'].contains(estLevel)) {
           L.i('Agent odhadl úroveň studenta na: $estLevel. Aktualizuji profil.');
-          await repo.updateTargetLevel(estLevel);
+          await profileRepo.updateTargetLevel(estLevel);
         }
       }
       
@@ -185,7 +187,7 @@ class MemoryManagerAgent {
             .where((s) => s.isNotEmpty)
             .toList();
         if (newWords.isNotEmpty) {
-          await repo.updateUserVocabulary(newWords);
+          await profileRepo.updateUserVocabulary(newWords);
         }
       }
 
@@ -196,7 +198,7 @@ class MemoryManagerAgent {
             .where((s) => s.isNotEmpty)
             .toList();
         if (newFacts.isNotEmpty) {
-          await repo.updateUserFacts(newFacts);
+          await profileRepo.updateUserFacts(newFacts);
           L.i('Uloženo ${newFacts.length} nových faktů o studentovi do "O mně": $newFacts');
         }
       }
@@ -230,7 +232,7 @@ class MemoryManagerAgent {
               continue;
             }
 
-            final errorLogRes = await repo.addErrorLog(
+            final errorLogRes = await sessionRepo.addErrorLog(
               sessionId: sessionId,
               errorType: type,
               userSaid: userSaid,
@@ -241,7 +243,7 @@ class MemoryManagerAgent {
             newErrors.add('Řekl: "$userSaid", ale správně je: "$correctForm" ($explanation)');
 
             final czechTranslation = err['czechTranslation']?.toString().trim();
-            final extracted = SessionRepository.extractCzechFromExplanation(explanation);
+            final extracted = FlashcardRepository.extractCzechFromExplanation(explanation);
             
             // Cílové slovíčko pro rub kartičky (atomická jednotka)
             final cardBack = (targetWordOrPhrase != null && targetWordOrPhrase.isNotEmpty)
@@ -261,7 +263,7 @@ class MemoryManagerAgent {
                 : (userSaid.isNotEmpty ? userSaid : null);
 
             // Automatické vytvoření Smart Flashcard pro studenta v češtině k procvičení
-            await repo.addFlashcard(
+            await flashcardRepo.addFlashcard(
               frontText: cardFront,
               backText: cardBack,
               explanation: explanation,
@@ -273,7 +275,7 @@ class MemoryManagerAgent {
         }
         
         if (newErrors.isNotEmpty) {
-          await repo.updateUserRecurringErrors(newErrors);
+          await profileRepo.updateUserRecurringErrors(newErrors);
           L.i('Přidáno ${newErrors.length} chyb do opakujících se chyb v profilu.');
         }
       }

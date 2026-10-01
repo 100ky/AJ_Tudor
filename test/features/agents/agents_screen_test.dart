@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:aj_tudor/core/app_theme.dart';
 import 'package:aj_tudor/data/database/app_database.dart';
 import 'package:aj_tudor/data/repositories/session_repository.dart';
+import 'package:aj_tudor/data/repositories/scenario_repository.dart';
 import 'package:aj_tudor/features/agents/agents_screen.dart';
 import 'package:aj_tudor/core/config/config_providers.dart';
 import 'package:aj_tudor/data/data_providers.dart';
@@ -39,12 +40,14 @@ void main() {
 
   late AppDatabase db;
   late SessionRepository repo;
+  late ScenarioRepository scenarioRepo;
   late SharedPreferences prefs;
   late MockScenarioPlannerAgent mockPlanner;
 
   setUp(() async {
     db = AppDatabase.forTesting(NativeDatabase.memory());
     repo = SessionRepository(db);
+    scenarioRepo = ScenarioRepository(db);
     SharedPreferences.setMockInitialValues({});
     prefs = await SharedPreferences.getInstance();
     mockPlanner = MockScenarioPlannerAgent();
@@ -185,7 +188,7 @@ void main() {
     testWidgets('displays scenarios when available in database', (WidgetTester tester) async {
       configureViewport(tester);
       // Insert a scenario into the database
-      await repo.insertScenario(
+      await scenarioRepo.insertScenario(
         title: 'Návštěva lékaře',
         description: 'Vysvětli lékaři své příznaky a domluv si vyšetření.',
         tutorInstruction: 'Hraj roli britského lékaře.',

@@ -27,7 +27,9 @@ class ScenarioPlannerAgent {
   Future<void> planScenarios() async {
     L.i('Zahajuji plánování scénářů...');
     
-    final repo = _ref.read(sessionRepositoryProvider);
+    final profileRepo = _ref.read(profileRepositoryProvider);
+    final scenarioRepo = _ref.read(scenarioRepositoryProvider);
+    final flashcardRepo = _ref.read(flashcardRepositoryProvider);
     final gemini = _ref.read(geminiBatchClientProvider);
     
     if (gemini == null) {
@@ -37,13 +39,13 @@ class ScenarioPlannerAgent {
 
     try {
       // 1. Načtení aktuálního profilu uživatele a problematických kartiček z databáze
-      final profile = await repo.getUserProfile();
+      final profile = await profileRepo.getUserProfile();
       if (profile == null) {
         L.w('Uživatelský profil nebyl nalezen, plánování scénářů nelze spustit.');
         return;
       }
 
-      final allCards = await repo.getAllFlashcards();
+      final allCards = await flashcardRepo.getAllFlashcards();
       final strugglingTopics = allCards
           .where((c) => c.masteryScore < 0.6)
           .map((c) => '${c.frontText} (Správně: ${c.backText})')
@@ -93,7 +95,7 @@ class ScenarioPlannerAgent {
         }
         
         // Přepsání starých nepoužitých scénářů v databázi novými personalizovanými scénáři
-        await repo.replaceScenarios(newScenarios);
+        await scenarioRepo.replaceScenarios(newScenarios);
         
         // ─── STRUKTUROVANÝ VÝPIS SCÉNÁŘŮ ───
         final scenarioItems = newScenarios.map((s) => 
@@ -114,7 +116,8 @@ class ScenarioPlannerAgent {
   Future<Scenario?> planCustomScenario(String userHint) async {
     L.i('Generuji vlastní scénář z popisu: "$userHint"');
     
-    final repo = _ref.read(sessionRepositoryProvider);
+    final profileRepo = _ref.read(profileRepositoryProvider);
+    final scenarioRepo = _ref.read(scenarioRepositoryProvider);
     final gemini = _ref.read(geminiBatchClientProvider);
     
     if (gemini == null) {
@@ -123,7 +126,7 @@ class ScenarioPlannerAgent {
     }
 
     try {
-      final profile = await repo.getUserProfile();
+      final profile = await profileRepo.getUserProfile();
 
       final prompt = TaskPrompts.customScenarioSystem(
         userHint: userHint,
@@ -146,7 +149,7 @@ class ScenarioPlannerAgent {
         final tutorInstruction = (s['tutorInstruction'] ?? '').toString();
         final difficulty = (s['difficulty'] ?? 'medium').toString();
 
-        final createdScenario = await repo.insertScenario(
+        final createdScenario = await scenarioRepo.insertScenario(
           title: title.isNotEmpty ? title : userHint,
           description: description,
           tutorInstruction: tutorInstruction,
