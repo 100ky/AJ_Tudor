@@ -33,25 +33,28 @@ lib/
 │   ├── models/            # Datové modely a SRS plánovač opakování kartiček
 │   ├── repositories/      # Repozitáře: lekce, profil studenta, scénáře, kartičky
 │   └── data_providers.dart  # Providery databáze, repozitářů a datových streamů
-├── features/              # Obrazovky rozdělené dle domény (části obrazovek ve widgets/)
+├── features/              # Obrazovky dle domény: obrazovka skládá layout, části jsou ve widgets/, akce v *_controller.dart
 │   ├── agents/            # Přehled agentů
-│   ├── conversation/      # Hlasový tutor, gramatický dril, chat bubliny, překlad slov
-│   ├── flashcards/        # Smart Flashcards (SRS opakování, výslovnost)
-│   ├── history/           # Historie lekcí a jejich detail
+│   ├── conversation/      # Hlasový tutor, gramatický dril (GrammarDrillController), chat bubliny, překlad slov
+│   ├── flashcards/        # Smart Flashcards: FlashcardsController, průběh opakování (ReviewSession), výslovnost
+│   ├── history/           # Historie lekcí a detail lekce (SessionDetailController)
 │   ├── progress/          # Statistiky, grafy, přehled chyb a slovíček
-│   ├── settings/          # Nastavení (API klíč, hlas, modely, záloha)
+│   ├── settings/          # Nastavení (API klíč, hlas, modely, záloha) a ProfileSettingsController
 │   └── skeleton/          # Navigační shell a provider aktivní záložky
 └── services/              # Aplikační logika – každá služba má svůj provider ve stejném souboru/složce
     ├── agents/            # VoiceTutor, VoiceDirector, MemoryManager, ScenarioPlanner, TopicPreparation
+    │   └── voice_tutor/   # Části hlasového tutora: detekce řeči (VAD), časovače, metriky, analýza přepisu
     ├── audio/             # Nahrávání mikrofonu (record) a přehrávání (flutter_pcm_sound)
-    ├── flashcards/        # Tvorba kartiček pomocí AI (z chyb, nová slovíčka, překlad zadání)
+    ├── flashcards/        # Tvorba kartiček pomocí AI (z chyb, z oprav v chatu, nová slovíčka, překlad zadání)
     ├── gemini/            # Gemini Live (WebSocket), společné REST jádro a služby (batch, TTS, výslovnost, překlad)
     ├── notifications/     # Lokální připomínky
-    ├── prompt/            # Všechny prompty: SystemPromptBuilder (agenti) a TaskPrompts (krátké úlohy)
+    ├── prompt/            # Všechny prompty: SystemPromptBuilder (agenti), LiveTutorPrompts (pokyny během hovoru), TaskPrompts (krátké úlohy)
     └── system/            # Wakelock, záloha databáze
 ```
 
 Závislosti vedou jedním směrem: `features → services → data → core`. Nižší vrstva nikdy neimportuje vyšší.
+
+Widgety nevolají AI ani nezapisují do databáze přímo. Jde to přes controller ve složce obrazovky, přes službu nebo přes agenta. Data z databáze čtou přes `StreamProvider`y v `data/data_providers.dart`.
 
 ### Použité balíčky (Dependencies)
 - **State Management**: `flutter_riverpod`
