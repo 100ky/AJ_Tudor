@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/app_theme.dart';
 import '../../../data/database/app_database.dart';
-import '../../history/history_screen.dart';
+import '../../history/widgets/session_card.dart';
 
 /// Záložka „Historie lekcí“ v přehledu pokroku.
 class LessonHistoryTab extends StatelessWidget {
