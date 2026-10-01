@@ -5,6 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/gemini_models.dart';
 import '../../core/utils/logger.dart';
 import '../../core/config/config_providers.dart';
+import '../prompt/task_prompts.dart';
+import 'gemini_json.dart';
+import 'gemini_rest_core.dart';
 
 /// Výsledek vyhodnocení výslovnosti konkrétního slova.
 class WordPronunciationResult {
@@ -43,31 +46,23 @@ class PronunciationAnalysis {
 /// Služba pro vyhodnocování kvality výslovnosti pomocí modelu Gemini Transcribe.
 class PronunciationService {
   final Ref _ref;
-  final Dio _dio;
+  final GeminiRestCore _api;
 
-  static const String _baseUrl =
-      'https://generativelanguage.googleapis.com/v1beta/models';
-
-  /// Naposledy úspěšně použitý model pro okamžité vyhodnocení dalších nahrávek.
-  static String? _preferredWorkingModel;
-
-  /// Dočasný cooldown pro přetížené modely (503, 429, timeout), aby nezdržovaly další kartičky.
-  static final Map<String, DateTime> _modelCooldowns = {};
+  /// Cooldown přetížených modelů (503, 429, timeout), aby nezdržovaly další kartičky,
+  /// a naposledy funkční model pro okamžité vyhodnocení dalších nahrávek.
+  static final ModelCooldownTracker _cooldowns = ModelCooldownTracker();
 
   PronunciationService(this._ref)
-      : _dio = Dio(BaseOptions(
+      : _api = GeminiRestCore(
           connectTimeout: const Duration(seconds: 4),
           receiveTimeout: const Duration(seconds: 8),
-        ));
+        );
 
   /// Resetuje zapamatovaný model a cooldowny (užitečné např. pro testy).
-  static void resetState() {
-    _preferredWorkingModel = null;
-    _modelCooldowns.clear();
-  }
+  static void resetState() => _cooldowns.clear();
 
   /// Aktuálně preferovaný funkční model.
-  static String? get preferredWorkingModel => _preferredWorkingModel;
+  static String? get preferredWorkingModel => _cooldowns.preferredModel;
 
   /// Převede surová PCM 16-bit Mono data na standardní WAV soubor s 44-bytovou hlavičkou.
   Uint8List pcm16ToWav(List<int> pcmBytes, {int sampleRate = 16000, int channels = 1}) {
@@ -122,7 +117,10 @@ class PronunciationService {
       audioBytes: audioBytes,
       referenceText: expectedEnglish,
       instructionHint: promptContext != null
-          ? 'Student odpovídá na kartičku se zadáním: "$promptContext". Cílová správná odpověď: "$expectedEnglish".'
+          ? TaskPrompts.spokenAnswerHint(
+              promptContext: promptContext,
+              expectedEnglish: expectedEnglish,
+            )
           : null,
     );
   }
@@ -156,37 +154,10 @@ class PronunciationService {
 
       final base64Audio = base64Encode(effectiveBytes);
 
-      final systemPrompt = '''Jsi expert na fonetiku a výslovnost moderního anglického jazyka.
-Tvým úkolem je detailně analyzovat mluvenou nahrávku studenta a porovnat ji se vzorovým anglickým textem.
-${instructionHint ?? ''}
-Vzorový anglický text: "$referenceText"
-
-Vyhodnoť:
-1. "transcribedText": Přesný přepis toho, co student v angličtině skutečně vyslovil.
-2. "overallScore": Celkové skóre výslovnosti a srozumitelnosti od 0.0 do 1.0 (např. 0.92 pro 92 %).
-3. "words": Seznam všech rozpoznaných slov s detailním hodnocením:
-   - "expectedWord": odpovídající vzorové slovo
-   - "recognizedWord": slovo jak ho student vyslovil
-   - "isAccurate": true pokud bylo slovo vysloveno foneticky správně a srozumitelně; false pokud byla výslovnost nepřesná, zkomolená nebo chyběla správná hláska.
-   - "confidence": číslo 0.0 až 1.0
-   - "phoneticTip": krátký český tip pro zlepšení tohoto konkrétního slova (např. "Pozor na znělé /ð/", "Otevřené /æ/").
-4. "feedback": Stručné, vstřícné české shrnutí výslovnosti (max 2 věty).
-
-Vrať VÝHRADNĚ validní JSON bez jakéhokoliv markdown formátování dle schématu:
-{
-  "transcribedText": "I am twenty five years old",
-  "overallScore": 0.92,
-  "feedback": "Velmi pěkná výslovnost, dej si jen pozor na hlásku v...",
-  "words": [
-    {
-      "expectedWord": "I",
-      "recognizedWord": "I",
-      "isAccurate": true,
-      "confidence": 0.98,
-      "phoneticTip": ""
-    }
-  ]
-}''';
+      final systemPrompt = TaskPrompts.pronunciationSystem(
+        referenceText: referenceText,
+        instructionHint: instructionHint,
+      );
 
       final requestBody = {
         'contents': [
@@ -198,9 +169,7 @@ Vrať VÝHRADNĚ validní JSON bez jakéhokoliv markdown formátování dle sch�
                   'data': base64Audio,
                 }
               },
-              {
-                'text': 'Zhodnoť výslovnost anglické nahrávky oproti vzorovému textu: "$referenceText"'
-              }
+              {'text': TaskPrompts.pronunciationRequest(referenceText)}
             ]
           }
         ],
@@ -226,90 +195,50 @@ Vrať VÝHRADNĚ validní JSON bez jakéhokoliv markdown formátování dle sch�
         GeminiModels.flash3_6,
       ];
 
-      final now = DateTime.now();
-
-      // Pokud máme naposledy úspěšný model, nasadíme ho jako první pro bleskovou odezvu
-      final candidateOrder = <String>[];
-      if (_preferredWorkingModel != null && baseModels.contains(_preferredWorkingModel)) {
-        candidateOrder.add(_preferredWorkingModel!);
-      }
-      for (final m in baseModels) {
-        if (!candidateOrder.contains(m)) {
-          candidateOrder.add(m);
-        }
-      }
-
-      // Filtrujeme modely, které jsou v dočasném cooldownu po chybě 503 / timeoutu
-      var modelsToTry = candidateOrder.where((m) {
-        final cooldown = _modelCooldowns[m];
-        return cooldown == null || now.isAfter(cooldown);
-      }).toList();
-
-      if (modelsToTry.isEmpty) {
-        modelsToTry = candidateOrder;
-      }
-
-      for (var model in modelsToTry) {
+      // Naposledy úspěšný model nasadíme jako první pro bleskovou odezvu,
+      // modely v cooldownu po chybě 503 / timeoutu přeskočíme
+      for (final model in _cooldowns.order(baseModels, preferLastWorking: true)) {
         try {
-          final url = '$_baseUrl/$model:generateContent?key=$apiKey';
-          final response = await _dio.post(
-            url,
-            data: requestBody,
-            options: Options(headers: {'Content-Type': 'application/json'}),
+          final data = await _api.generateContent(
+            apiKey: apiKey,
+            model: model,
+            body: requestBody,
           );
+          final text = GeminiRestCore.extractText(data);
+          if (text == null) continue;
 
-          if (response.statusCode == 200 && response.data != null) {
-            final candidates = response.data['candidates'] as List?;
-            if (candidates != null && candidates.isNotEmpty) {
-              final text = candidates[0]['content']?['parts']?[0]?['text']?.toString();
-              if (text != null && text.isNotEmpty) {
-                final cleanJson = text
-                    .replaceAll(RegExp(r'^```json\s*', multiLine: true), '')
-                    .replaceAll(RegExp(r'^```\s*', multiLine: true), '')
-                    .trim();
+          final json = decodeModelJson(text);
+          final List<WordPronunciationResult> wordList = [];
 
-                final json = jsonDecode(cleanJson);
-                final List<WordPronunciationResult> wordList = [];
-
-                if (json['words'] is List) {
-                  for (var w in json['words']) {
-                    if (w is Map) {
-                      wordList.add(WordPronunciationResult(
-                        expectedWord: w['expectedWord']?.toString() ?? '',
-                        recognizedWord: w['recognizedWord']?.toString() ?? '',
-                        isAccurate: w['isAccurate'] == true,
-                        confidence: double.tryParse(w['confidence']?.toString() ?? '1.0') ?? 1.0,
-                        phoneticTip: w['phoneticTip']?.toString(),
-                      ));
-                    }
-                  }
-                }
-
-                // Úspěch: uložíme jako preferovaný model pro další dotazy
-                _preferredWorkingModel = model;
-                _modelCooldowns.remove(model);
-                L.i('PronunciationService: Výslovnost úspěšně analyzována modelem $model.');
-
-                return PronunciationAnalysis(
-                  referenceText: referenceText,
-                  transcribedText: json['transcribedText']?.toString() ?? '',
-                  overallScore: double.tryParse(json['overallScore']?.toString() ?? '0.8') ?? 0.8,
-                  words: wordList,
-                  feedback: json['feedback']?.toString() ?? 'Skvělá práce!',
-                );
+          if (json['words'] is List) {
+            for (var w in json['words']) {
+              if (w is Map) {
+                wordList.add(WordPronunciationResult(
+                  expectedWord: w['expectedWord']?.toString() ?? '',
+                  recognizedWord: w['recognizedWord']?.toString() ?? '',
+                  isAccurate: w['isAccurate'] == true,
+                  confidence: double.tryParse(w['confidence']?.toString() ?? '1.0') ?? 1.0,
+                  phoneticTip: w['phoneticTip']?.toString(),
+                ));
               }
             }
           }
-        } on DioException catch (e) {
-          final statusCode = e.response?.statusCode ?? 0;
-          final isOverloaded = statusCode == 503 ||
-              statusCode == 429 ||
-              e.type == DioExceptionType.receiveTimeout ||
-              e.type == DioExceptionType.connectionTimeout;
 
-          if (isOverloaded) {
-            _modelCooldowns[model] = DateTime.now().add(const Duration(minutes: 3));
-            L.w('Model $model je přetížený ($statusCode / ${e.type.name}). Dávám na 3min cooldown.');
+          // Úspěch: uložíme jako preferovaný model pro další dotazy
+          _cooldowns.markSuccess(model, remember: true);
+          L.i('PronunciationService: Výslovnost úspěšně analyzována modelem $model.');
+
+          return PronunciationAnalysis(
+            referenceText: referenceText,
+            transcribedText: json['transcribedText']?.toString() ?? '',
+            overallScore: double.tryParse(json['overallScore']?.toString() ?? '0.8') ?? 0.8,
+            words: wordList,
+            feedback: json['feedback']?.toString() ?? 'Skvělá práce!',
+          );
+        } on DioException catch (e) {
+          if (classifyGeminiError(e) == GeminiErrorKind.overloaded) {
+            _cooldowns.markOverloaded(model, const Duration(minutes: 3));
+            L.w('Model $model je přetížený (${e.response?.statusCode ?? 0} / ${e.type.name}). Dávám na 3min cooldown.');
           } else {
             L.w('Model $model selhal při analýze výslovnosti: $e');
           }

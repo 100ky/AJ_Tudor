@@ -13,6 +13,7 @@ import '../../core/config/config_providers.dart';
 import '../../services/gemini/gemini_providers.dart';
 import '../../data/data_providers.dart';
 import '../../services/prompt/system_prompt_builder.dart';
+import '../../services/prompt/task_prompts.dart';
 
 /// Obrazovka pro interaktivní gramatický dril a textové cvičení s AI.
 ///
@@ -79,9 +80,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
       vocabulary: profile?.vocabulary,
     );
 
-    final kickoffMessage = (topicHint != null && topicHint.isNotEmpty)
-        ? 'Ahoj Tutore! Chci si procvičit téma: "$topicHint". Krátce mi česky vysvětli pravidlo a dej mi 3 české věty k přeložení do angličtiny.'
-        : 'Ahoj Tutore! Začni prosím nový gramatický dril na mé opakující se chyby. Vyber jednu z mých slabin, stručně mi česky vysvětli pravidlo a dej mi 3 české věty k přeložení do angličtiny.';
+    final kickoffMessage = TaskPrompts.drillKickoff(topicHint);
 
     try {
       final response =

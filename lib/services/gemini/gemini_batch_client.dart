@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../../core/constants/gemini_models.dart';
 import '../../core/utils/logger.dart';
 import '../prompt/system_prompt_builder.dart';
+import 'gemini_rest_core.dart';
 
 /// Klientská třída pro komunikaci s Gemini API v dávkovém/jednorázovém režimu (non-streaming).
 ///
@@ -19,20 +20,17 @@ class GeminiBatchClient {
   /// Volitelná systémová instrukce (prompt), která definuje chování modelu.
   final String? systemPrompt;
 
-  static const String _baseUrl =
-      'https://generativelanguage.googleapis.com/v1beta/models';
-
-  final Dio _dio;
+  final GeminiRestCore _api;
 
   /// Dočasný cooldown pro modely přetížené chybami 503/429/timeout.
-  static final Map<String, DateTime> _batchModelCooldowns = {};
+  static final ModelCooldownTracker _cooldowns = ModelCooldownTracker();
 
   /// Inicializuje klienta s potřebnými konfiguračními údaji.
   GeminiBatchClient(this.apiKey, this.primaryModelName, {this.systemPrompt})
-      : _dio = Dio(BaseOptions(
+      : _api = GeminiRestCore(
           connectTimeout: const Duration(seconds: 15),
           receiveTimeout: const Duration(seconds: 45),
-        ));
+        );
 
   /// Pokusí se odeslat zprávu a vrátí odpověď modelu jako [String].
   ///
@@ -58,21 +56,11 @@ class GeminiBatchClient {
       GeminiModels.pro3_1,
       GeminiModels.flash3_5,
       GeminiModels.flashLite3_1,
-    }.toList();
-
-    final now = DateTime.now();
-    var modelsToTry = allCandidates.where((m) {
-      final cooldown = _batchModelCooldowns[m];
-      return cooldown == null || now.isAfter(cooldown);
-    }).toList();
-
-    if (modelsToTry.isEmpty) {
-      modelsToTry = allCandidates;
-    }
+    };
 
     String lastError = '';
 
-    for (var modelName in modelsToTry) {
+    for (final modelName in _cooldowns.order(allCandidates)) {
       try {
         L.i('Zkouším model: $modelName...');
 
@@ -84,40 +72,27 @@ class GeminiBatchClient {
           temperature: temperature,
         );
 
-        _batchModelCooldowns.remove(modelName);
+        _cooldowns.markSuccess(modelName);
         if (modelName != primaryModelName) {
           L.w('⚠️ Fallback úspěšný s modelem: $modelName');
         }
         return result;
       } on DioException catch (e) {
-        final statusCode = e.response?.statusCode ?? 0;
-        lastError = _extractErrorMessage(e);
+        lastError = geminiErrorMessage(e);
 
-        // Trvalé autentizační chyby (401, 403) – nemá smysl zkoušet další model
-        if (statusCode == 401 || statusCode == 403) {
-          L.e('Trvalá autentizační chyba u $modelName: $lastError');
-          return _handlePermanentError(statusCode, lastError);
-        }
-        if (statusCode == 404) {
-          L.w('Model $modelName nebyl nalezen (404). Zkouším další záložní model v pořadí...');
-          continue;
-        }
-
-        // Dočasné přetížení – zkusíme další model
-        // POZNÁMKA: Někdy Dio vrátí statusCode 0 při vypršení časového limitu (timeout),
-        // takže to musíme zahrnout do isOverloaded heuristiky.
-        final isOverloaded = statusCode == 429 ||
-            statusCode == 503 ||
-            statusCode == 0 ||
-            e.type == DioExceptionType.connectionTimeout ||
-            e.type == DioExceptionType.receiveTimeout;
-
-        if (isOverloaded) {
-          _batchModelCooldowns[modelName] = DateTime.now().add(const Duration(minutes: 3));
-          L.w('Model $modelName je přetížený ($statusCode). Dávám na 3min cooldown a zkouším další...');
-        } else {
-          L.e('Neočekávaná chyba u modelu $modelName: $lastError');
-          rethrow; // Vyhodíme výjimku dál, ať to agent umí zpracovat (např. v catch JSON)
+        switch (classifyGeminiError(e)) {
+          case GeminiErrorKind.auth:
+            // Trvalá autentizační chyba – nemá smysl zkoušet další model
+            L.e('Trvalá autentizační chyba u $modelName: $lastError');
+            return '🔑 Neplatný API klíč. Zkontroluj ho v Nastavení.';
+          case GeminiErrorKind.notFound:
+            L.w('Model $modelName nebyl nalezen (404). Zkouším další záložní model v pořadí...');
+          case GeminiErrorKind.overloaded:
+            _cooldowns.markOverloaded(modelName, const Duration(minutes: 3));
+            L.w('Model $modelName je přetížený (${e.response?.statusCode ?? 0}). Dávám na 3min cooldown a zkouším další...');
+          case GeminiErrorKind.other:
+            L.e('Neočekávaná chyba u modelu $modelName: $lastError');
+            rethrow; // Vyhodíme výjimku dál, ať to agent umí zpracovat (např. v catch JSON)
         }
       } catch (e) {
         L.e('Neočekávaná chyba u modelu $modelName', e);
@@ -139,8 +114,6 @@ class GeminiBatchClient {
     String? systemPromptOverride,
     double? temperature,
   }) async {
-    final url = '$_baseUrl/$modelName:generateContent?key=$apiKey';
-
     final effectiveSystemPrompt = systemPromptOverride ??
         systemPrompt ??
         SystemPromptBuilder.buildTutorPrompt();
@@ -170,57 +143,16 @@ class GeminiBatchClient {
         },
     };
 
-    final response = await _dio
-        .post<Map<String, dynamic>>(
-          url,
-          data: body,
-          options: Options(
-            headers: {'Content-Type': 'application/json'},
-            sendTimeout: const Duration(seconds: 15),
-            receiveTimeout: const Duration(seconds: 45),
-          ),
+    final data = await _api
+        .generateContent(
+          apiKey: apiKey,
+          model: modelName,
+          body: body,
+          sendTimeout: const Duration(seconds: 15),
+          receiveTimeout: const Duration(seconds: 45),
         )
         .timeout(const Duration(seconds: 55));
 
-    final data = response.data;
-    if (data == null) throw Exception('Prázdná odpověď od serveru');
-
-    // Parsování odpovědi dle Gemini REST formátu
-    final candidates = data['candidates'] as List?;
-    if (candidates == null || candidates.isEmpty) {
-      throw Exception('Žádní kandidáti v odpovědi: $data');
-    }
-
-    final content = candidates[0]['content'];
-    final parts = content?['parts'] as List?;
-    if (parts == null || parts.isEmpty) {
-      throw Exception('Žádné části v odpovědi: $content');
-    }
-
-    final resultText = parts[0]['text'] as String?;
-    if (resultText == null || resultText.isEmpty) {
-      throw Exception('Prázdný text v odpovědi');
-    }
-
-    return resultText;
-  }
-
-  /// Extrahuje čitelnou chybovou zprávu z DioException.
-  String _extractErrorMessage(DioException e) {
-    try {
-      final data = e.response?.data;
-      if (data is Map) {
-        return data['error']?['message']?.toString() ?? e.message ?? e.toString();
-      }
-    } catch (_) {}
-    return e.message ?? e.toString();
-  }
-
-  /// Zpracuje trvalé chyby (neplatný klíč, chybějící oprávnění) a vrátí uživatelsky přívětivou zprávu.
-  String _handlePermanentError(int statusCode, String message) {
-    if (statusCode == 401 || statusCode == 403) {
-      return '🔑 Neplatný API klíč. Zkontroluj ho v Nastavení.';
-    }
-    return '❌ Chyba AI: $message';
+    return GeminiRestCore.requireText(data);
   }
 }

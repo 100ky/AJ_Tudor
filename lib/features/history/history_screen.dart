@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../data/data_providers.dart';
 import '../../services/gemini/gemini_providers.dart';
+import '../../services/prompt/task_prompts.dart';
 import '../../data/database/app_database.dart';
 import '../../services/agents/memory_manager_agent.dart';
 import '../../services/agents/scenario_planner_agent.dart';
@@ -411,21 +412,12 @@ class _SessionDetailSheetState extends ConsumerState<_SessionDetailSheet> {
       final profile = ref.read(userProfileProvider).value;
       final targetLevel = profile?.targetLevel ?? 'B1';
 
-      final prompt = '''Jsi AJ Tudor, přátelský a trpělivý rodilý učitel angličtiny pro Čechy.
-Student s tebou právě pokračuje v textovém chatu z této výukové lekce (${widget.session.topicSummary ?? 'Lekce angličtiny'}).
-Úroveň studenta: $targetLevel.
-
-Předchozí kontext konverzace v této lekci:
-$conversationHistory
-
-Nová zpráva od studenta: "$text"
-
-Instrukce pro odpověď:
-1. Reaguj přirozeně a v angličtině na to, co student píše.
-2. Pokud student udělal v angličtině gramatickou nebo slovní chybu, v závěru ho jemně a srozumitelně oprav (česky vysvětli správný tvar).
-3. Pokud se student ptá česky na vysvětlení gramatiky, slovíček nebo překladu, vysvětli mu to srozumitelně česky a uveď anglický příklad.
-4. Odpověď udržuj přiměřeně stručnou (2-4 věty) a na konci polož přesně JEDNU otázku v angličtině, aby konverzace plynula dál.
-''';
+      final prompt = TaskPrompts.sessionFollowUp(
+        topic: widget.session.topicSummary ?? 'Lekce angličtiny',
+        targetLevel: targetLevel,
+        conversationHistory: conversationHistory,
+        message: text,
+      );
 
       final reply = await client.sendMessage(prompt);
 

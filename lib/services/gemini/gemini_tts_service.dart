@@ -9,6 +9,8 @@ import '../../core/constants/gemini_models.dart';
 import '../../core/utils/logger.dart';
 import '../audio/audio_providers.dart';
 import '../../core/config/config_providers.dart';
+import '../prompt/task_prompts.dart';
+import 'gemini_rest_core.dart';
 
 /// Služba pro převod textu na řeč (Text-to-Speech) pomocí modelu Gemini TTS.
 /// 
@@ -16,10 +18,7 @@ import '../../core/config/config_providers.dart';
 /// fráze nebo věty v chatu a na kartičkách (Flashcards).
 class GeminiTtsService {
   final Ref _ref;
-  final Dio _dio;
-
-  static const String _baseUrl =
-      'https://generativelanguage.googleapis.com/v1beta/models';
+  final GeminiRestCore _api;
 
   /// Paměťová mezipaměť vygenerovaných audio bytů pro okamžité opakované přehrávání bez sítě.
   static final Map<String, List<int>> _audioCache = {};
@@ -30,11 +29,9 @@ class GeminiTtsService {
   /// Složka pro trvalou diskovou mezipaměť audia (pro testy lze přepsat)
   static Directory? diskCacheDirOverride;
 
-  /// Naposledy úspěšně použitý model pro okamžité generování dalších nahrávek.
-  static String? _preferredWorkingModel;
-
-  /// Dočasný cooldown pro přetížené/nedostupné modely.
-  static final Map<String, DateTime> _modelCooldowns = {};
+  /// Cooldown přetížených/nedostupných modelů a naposledy funkční model
+  /// pro okamžité generování dalších nahrávek.
+  static final ModelCooldownTracker _cooldowns = ModelCooldownTracker();
 
   /// Seznam podporovaných specializovaných TTS modelů v kaskádovém pořadí.
   static const List<String> _ttsModels = [
@@ -44,22 +41,21 @@ class GeminiTtsService {
   ];
 
   GeminiTtsService(this._ref)
-      : _dio = Dio(BaseOptions(
+      : _api = GeminiRestCore(
           connectTimeout: const Duration(seconds: 5),
           receiveTimeout: const Duration(seconds: 12),
-        ));
+        );
 
   /// Resetuje cache a model cooldowny (pro testování a debug).
   static void resetState() {
-    _preferredWorkingModel = null;
-    _modelCooldowns.clear();
+    _cooldowns.clear();
     _audioCache.clear();
     _diskCacheDir = null;
     diskCacheDirOverride = null;
   }
 
   /// Aktuálně preferovaný funkční model.
-  static String? get preferredWorkingModel => _preferredWorkingModel;
+  static String? get preferredWorkingModel => _cooldowns.preferredModel;
 
   /// Počet položek v paměťové audio mezipaměti.
   static int get cachedAudioCount => _audioCache.length;
@@ -169,27 +165,11 @@ class GeminiTtsService {
     try {
       L.i('Gemini TTS: Generuji výslovnost pro text: "$cleanText" (hlas: $voiceName)...');
 
-      // Formátování promptu dle oficiální Gemini TTS specifikace,
-      // aby model oddělil instrukce od mluveného textu a nečetl pokyny nahlas.
-      final String promptText;
-      if (instruction != null && instruction.isNotEmpty) {
-        promptText = '''$instruction
-Read ONLY the transcript below with natural native pronunciation. Do not read directions.
-
-#### TRANSCRIPT
-$cleanText''';
-      } else {
-        promptText = '''Read ONLY the transcript below with standard, clear native pronunciation. Do not read directions.
-
-#### TRANSCRIPT
-$cleanText''';
-      }
-
       final requestBody = {
         'contents': [
           {
             'parts': [
-              {'text': promptText}
+              {'text': TaskPrompts.ttsTranscript(cleanText, instruction: instruction)}
             ]
           }
         ],
@@ -205,82 +185,46 @@ $cleanText''';
         }
       };
 
-      final now = DateTime.now();
-
-      // Pokud máme naposledy úspěšný model, zkusíme ho jako první
-      final candidateOrder = <String>[];
-      if (_preferredWorkingModel != null && _ttsModels.contains(_preferredWorkingModel)) {
-        candidateOrder.add(_preferredWorkingModel!);
-      }
-      for (final m in _ttsModels) {
-        if (!candidateOrder.contains(m)) {
-          candidateOrder.add(m);
-        }
-      }
-
-      // Vyfiltrujeme modely v aktivním cooldownu
-      var modelsToTry = candidateOrder.where((m) {
-        final cooldown = _modelCooldowns[m];
-        return cooldown == null || now.isAfter(cooldown);
-      }).toList();
-
-      if (modelsToTry.isEmpty) {
-        modelsToTry = candidateOrder;
-      }
-
-      for (var model in modelsToTry) {
+      // Naposledy úspěšný model zkusíme jako první, modely v cooldownu přeskočíme
+      for (final model in _cooldowns.order(_ttsModels, preferLastWorking: true)) {
         try {
-          final url = '$_baseUrl/$model:generateContent?key=$apiKey';
-          final response = await _dio.post(
-            url,
-            data: requestBody,
-            options: Options(headers: {'Content-Type': 'application/json'}),
+          final data = await _api.generateContent(
+            apiKey: apiKey,
+            model: model,
+            body: requestBody,
           );
+          final bytes = _extractAudio(data);
+          if (bytes == null) continue;
 
-          if (response.statusCode == 200 && response.data != null) {
-            final candidates = response.data['candidates'] as List?;
-            if (candidates != null && candidates.isNotEmpty) {
-              final parts = candidates[0]['content']?['parts'] as List?;
-              if (parts != null && parts.isNotEmpty) {
-                for (var part in parts) {
-                  final inlineData = part['inlineData'];
-                  if (inlineData != null && inlineData['data'] != null) {
-                    final String base64Data = inlineData['data'];
-                    final bytes = base64Decode(base64Data);
+          // Zapamatujeme si fungující model a zrušíme cooldown
+          _cooldowns.markSuccess(model, remember: true);
 
-                    // Zapamatujeme si fungující model a zrušíme cooldown
-                    _preferredWorkingModel = model;
-                    _modelCooldowns.remove(model);
-
-                    // Uložíme do mezipaměti (max 100 záznamů v paměti)
-                    _audioCache[cacheKey] = bytes;
-                    if (_audioCache.length > 100) {
-                      _audioCache.remove(_audioCache.keys.first);
-                    }
-
-                    // Uložíme do trvalé diskové mezipaměti na pozadí
-                    unawaited(_writeToDiskCache(cacheKey, bytes));
-
-                    // Přehrání surových PCM/audio bytů
-                    await audioPlayback.playPcmData(bytes);
-                    L.i('Gemini TTS: Výslovnost úspěšně přehrána modelem $model (${bytes.length} B).');
-                    return true;
-                  }
-                }
-              }
-            }
+          // Uložíme do mezipaměti (max 100 záznamů v paměti)
+          _audioCache[cacheKey] = bytes;
+          if (_audioCache.length > 100) {
+            _audioCache.remove(_audioCache.keys.first);
           }
+
+          // Uložíme do trvalé diskové mezipaměti na pozadí
+          unawaited(_writeToDiskCache(cacheKey, bytes));
+
+          // Přehrání surových PCM/audio bytů
+          await audioPlayback.playPcmData(bytes);
+          L.i('Gemini TTS: Výslovnost úspěšně přehrána modelem $model (${bytes.length} B).');
+          return true;
         } catch (e) {
           final errorDetail = (e is DioException && e.response?.data != null)
               ? '${e.message} -> ${e.response?.data}'
               : e.toString();
           L.w('Gemini TTS model $model selhal, zkouším další fallback: $errorDetail');
 
-          if (e is DioException && e.response?.statusCode == 404) {
-            _modelCooldowns[model] = now.add(const Duration(hours: 12));
-          } else {
-            _modelCooldowns[model] = now.add(const Duration(minutes: 3));
-          }
+          // Neexistující model (404) vyřadíme na delší dobu, ostatní chyby jen krátce
+          final notFound = e is DioException &&
+              classifyGeminiError(e) == GeminiErrorKind.notFound;
+          _cooldowns.markOverloaded(
+            model,
+            notFound ? const Duration(hours: 12) : const Duration(minutes: 3),
+          );
         }
       }
 
@@ -290,6 +234,19 @@ $cleanText''';
       L.e('Gemini TTS: Neočekávaná chyba při syntéze řeči', e, stack);
       return false;
     }
+  }
+
+  /// Najde v odpovědi první část s audio daty (`inlineData`) a dekóduje je.
+  static List<int>? _extractAudio(Map<String, dynamic>? data) {
+    final parts = GeminiRestCore.firstCandidateParts(data);
+    if (parts == null) return null;
+    for (final part in parts) {
+      final inlineData = part['inlineData'];
+      if (inlineData != null && inlineData['data'] != null) {
+        return base64Decode(inlineData['data'] as String);
+      }
+    }
+    return null;
   }
 
   /// Zastaví aktuálně probíhající přehrávání výslovnosti.

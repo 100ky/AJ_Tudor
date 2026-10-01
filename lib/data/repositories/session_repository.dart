@@ -5,6 +5,8 @@ import '../../core/error/error_handling.dart';
 import '../../core/utils/result.dart';
 import '../../core/utils/logger.dart';
 import '../../services/gemini/gemini_batch_client.dart';
+import '../../services/gemini/gemini_json.dart';
+import '../../services/prompt/task_prompts.dart';
 import '../models/flashcard_stats.dart';
 
 /// Repozitář pro správu dat souvisejících s výukovými lekcemi (sessions).
@@ -1032,20 +1034,14 @@ class SessionRepository {
         final wordCount = correctForm.split(RegExp(r'\s+')).length;
         if (wordCount > 3 && geminiClient != null) {
           try {
-            final prompt = '''Z této opravené anglické věty z konverzace a chyby studenta extrahuj VÝHRADNĚ cílové anglické slovíčko, frázové sloveso nebo ustálenou kolokaci (1–3 slova), kterou se má student naučit, a její přirozený český překlad.
-Opravená věta: "$correctForm"
-Výrok studenta: "$userSaid"
-Vysvětlení chyby: "${err.explanation}"
-
-Vrať VÝHRADNĚ validní JSON bez markdownu a formátování:
-{"target": "clear one's head", "czech": "vyčistit si hlavu"}''';
+            final prompt = TaskPrompts.extractTargetPhrase(
+              correctForm: correctForm,
+              userSaid: userSaid,
+              explanation: err.explanation,
+            );
 
             final response = await geminiClient.sendMessage(prompt);
-            final cleanJson = response
-                .replaceAll(RegExp(r'^```json\s*', multiLine: true), '')
-                .replaceAll(RegExp(r'^```\s*', multiLine: true), '')
-                .trim();
-            final dynamic decoded = jsonDecode(cleanJson);
+            final dynamic decoded = decodeModelJson(response);
             if (decoded is Map) {
               final t = decoded['target']?.toString().trim();
               final c = decoded['czech']?.toString().trim();
@@ -1060,9 +1056,7 @@ Vrať VÝHRADNĚ validní JSON bez markdownu a formátování:
 
         if (frontText.isEmpty && geminiClient != null) {
           try {
-            final prompt =
-                'Přelož tuto anglickou větu/frázi do přirozené češtiny (vrať VÝHRADNĚ čistý český překlad bez uvozovek a bez vysvětlení): "$targetWord"';
-            final czech = await geminiClient.sendMessage(prompt);
+            final czech = await geminiClient.sendMessage(TaskPrompts.translateToCzech(targetWord));
             final cleanCzech = czech.trim().replaceAll('"', '').replaceAll('\n', ' ');
             if (cleanCzech.isNotEmpty && !cleanCzech.startsWith('❌')) {
               frontText = cleanCzech;
@@ -1124,22 +1118,10 @@ Vrať VÝHRADNĚ validní JSON bez markdownu a formátování:
           'english': c.backText,
         }).toList();
 
-        final batchPrompt = '''Přelož následující anglické věty/fráze do přirozené češtiny pro zadání na výukové kartičky.
-Vrať VÝHRADNĚ validní JSON pole objektů bez formátování a bez dalšího textu:
-[
-  {"id": 1, "czechPrompt": "Přirozený český překlad"}
-]
-
-Věty k překladu:
-${jsonEncode(batchList)}''';
-
-        final response = await geminiClient.sendMessage(batchPrompt);
-        final cleanJson = response
-            .replaceAll(RegExp(r'^```json\s*', multiLine: true), '')
-            .replaceAll(RegExp(r'^```\s*', multiLine: true), '')
-            .trim();
-
-        final dynamic decoded = jsonDecode(cleanJson);
+        final response = await geminiClient.sendMessage(
+          TaskPrompts.batchTranslateCardsToCzech(batchList),
+        );
+        final dynamic decoded = decodeModelJson(response);
         if (decoded is List) {
           for (var item in decoded) {
             if (item is Map && item['id'] != null && item['czechPrompt'] != null) {
@@ -1177,9 +1159,7 @@ ${jsonEncode(batchList)}''';
               continue;
             }
 
-            final prompt =
-                'Přelož tuto anglickou větu/frázi do přirozené češtiny (vrať VÝHRADNĚ čistý český překlad bez uvozovek a bez vysvětlování): "${card.backText}"';
-            final czech = await geminiClient.sendMessage(prompt);
+            final czech = await geminiClient.sendMessage(TaskPrompts.translateToCzech(card.backText));
             final cleanCzech = czech.trim().replaceAll('"', '').replaceAll('\n', ' ');
             if (cleanCzech.isNotEmpty && !cleanCzech.startsWith('❌')) {
               await updateFlashcardFrontText(card.id, cleanCzech);
@@ -1298,31 +1278,15 @@ ${jsonEncode(batchList)}''';
           .map((c) => c.backText.trim().toLowerCase())
           .toSet();
 
-      final prompt = '''Jsi expert na výuku angličtiny. Vygeneruj přesně $count náhodných, užitečných a moderních anglických slovíček nebo hovorových frází/idiomů pro studenta na úrovni $level.
-${interests.isNotEmpty ? 'Témata a zájmy studenta (zaměř se na ně): ${interests.join(', ')}.' : ''}
-${existingWords.isNotEmpty ? 'Vyhni se těmto již známým slovíčkům: ${existingWords.take(40).join(', ')}.' : ''}
-
-Každé slovíčko musí mít:
-1. "czech": České slovo nebo fráze v základním tvaru (zadání k překladu). Např. "těšit se na", "vytrvalost", "vzdát se".
-2. "english": Správný anglický ekvivalent. Např. "look forward to", "perseverance", "give up".
-3. "exampleSentence": Příkladová anglická věta s českým překladem a vysvětlením. Např. "I look forward to seeing you. (Těším se, až tě uvidím - vazba se slovesem v -ing)."
-
-Vrať VÝHRADNĚ validní JSON pole objektů bez formátování:
-[
-  {
-    "czech": "těšit se na",
-    "english": "look forward to",
-    "exampleSentence": "I look forward to seeing you. (Těším se, až tě uvidím.)"
-  }
-]''';
-
-      final responseText = await geminiClient.sendMessage(prompt);
-      final cleanJson = responseText
-          .replaceAll(RegExp(r'^```json\s*', multiLine: true), '')
-          .replaceAll(RegExp(r'^```\s*', multiLine: true), '')
-          .trim();
-
-      final dynamic decoded = jsonDecode(cleanJson);
+      final responseText = await geminiClient.sendMessage(
+        TaskPrompts.randomVocabulary(
+          count: count,
+          level: level,
+          interests: interests,
+          existingWords: existingWords,
+        ),
+      );
+      final dynamic decoded = decodeModelJson(responseText);
       if (decoded is! List) {
         return Result.failure(ApiFailure('Neplatný formát odpovědi od AI.'));
       }
