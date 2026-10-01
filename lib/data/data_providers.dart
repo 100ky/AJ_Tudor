@@ -52,6 +52,11 @@ final allErrorLogsProvider = StreamProvider<List<ErrorLog>>((ref) {
   return ref.watch(sessionRepositoryProvider).watchAllErrorLogs();
 });
 
+/// Nepoužité scénáře, které lze vybrat pro hlasovou lekci.
+final availableScenariosProvider = StreamProvider<List<Scenario>>((ref) {
+  return ref.watch(scenarioRepositoryProvider).watchAvailableScenarios();
+});
+
 /// Přepis jedné lekce v reálném čase.
 final sessionTranscriptsProvider =
     StreamProvider.autoDispose.family<List<Transcript>, int>((ref, sessionId) {
