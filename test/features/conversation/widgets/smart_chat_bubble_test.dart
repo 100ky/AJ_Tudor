@@ -8,13 +8,17 @@ import 'package:aj_tudor/core/app_theme.dart';
 import 'package:aj_tudor/core/utils/result.dart';
 import 'package:aj_tudor/data/models/chat_message.dart';
 import 'package:aj_tudor/data/repositories/flashcard_repository.dart';
-import 'package:aj_tudor/data/data_providers.dart';
+import 'package:aj_tudor/data/repositories/profile_repository.dart';
+import 'package:aj_tudor/data/repositories/session_repository.dart';
+import 'package:aj_tudor/services/flashcards/flashcard_generation_service.dart';
 import 'package:aj_tudor/services/gemini/gemini_providers.dart';
 import 'package:aj_tudor/services/gemini/gemini_tts_service.dart';
 import 'package:aj_tudor/services/gemini/gemini_batch_client.dart';
 
 class MockGeminiTtsService extends Mock implements GeminiTtsService {}
 class MockFlashcardRepository extends Mock implements FlashcardRepository {}
+class MockSessionRepository extends Mock implements SessionRepository {}
+class MockProfileRepository extends Mock implements ProfileRepository {}
 class MockGeminiBatchClient extends Mock implements GeminiBatchClient {}
 
 void main() {
@@ -39,7 +43,9 @@ void main() {
     return ProviderScope(
       overrides: [
         geminiTtsServiceProvider.overrideWithValue(mockTts),
-        flashcardRepositoryProvider.overrideWithValue(mockRepo),
+        flashcardGenerationServiceProvider.overrideWithValue(
+          FlashcardGenerationService(MockSessionRepository(), mockRepo, MockProfileRepository()),
+        ),
         geminiBatchClientProvider.overrideWithValue(mockBatchClient),
       ],
       child: MaterialApp(
