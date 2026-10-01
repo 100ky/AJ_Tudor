@@ -14,6 +14,7 @@ import '../../data/models/chat_message.dart';
 import '../../core/constants/gemini_models.dart';
 import '../../core/utils/logger.dart';
 import '../../core/utils/result.dart';
+import '../prompt/live_tutor_prompts.dart';
 import '../prompt/system_prompt_builder.dart';
 import '../audio/audio_session_controller.dart';
 import '../system/wakelock_service.dart';
@@ -21,6 +22,7 @@ import '../gemini/gemini_live_client.dart';
 
 import 'memory_manager_agent.dart';
 import 'voice_director_agent.dart';
+import 'voice_tutor/session_metrics.dart';
 import 'voice_tutor/speech_activity_detector.dart';
 import 'voice_tutor/tutor_text_analysis.dart';
 import 'voice_tutor/tutor_timers.dart';
@@ -116,13 +118,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   bool _userSpokeInCurrentTurn = false;
 
   // ─── SESSION METRIKY pro terminálový výstup ───
-  DateTime? _sessionStartTime;
-  int _sessionReconnectCount = 0;
-  int _sessionFrustrationCount = 0;
-  int _sessionUserMessageCount = 0;
-  int _sessionTutorMessageCount = 0;
-  int _sessionTotalUserWords = 0;
-  DateTime? _userSpeechEndTime; // Pro měření reakční doby AI
+  final SessionMetrics _metrics = SessionMetrics();
 
   late final WakelockService _wakelock;
   late final AudioSessionController _audio;
@@ -278,13 +274,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       _currentUserTranscript = '';
 
       // Reset session metrik
-      _sessionStartTime = DateTime.now();
-      _sessionReconnectCount = 0;
-      _sessionFrustrationCount = 0;
-      _sessionUserMessageCount = 0;
-      _sessionTutorMessageCount = 0;
-      _sessionTotalUserWords = 0;
-      _userSpeechEndTime = null;
+      _metrics.start();
       _userSpokeInCurrentTurn = false;
       _vad.reset();
 
@@ -407,8 +397,6 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
           state = state.copyWith(status: TutorState.thinking);
           _resetThinkingTimer();
 
-          String initialPrompt = "Hello! Please greet me and start the conversation according to your instructions.";
-          final briefing = userProfile?.memoryBriefing;
           final prepTopicJson = userProfile?.preparedTopic;
           String? preparedOpener;
           if (prepTopicJson != null && prepTopicJson.isNotEmpty) {
@@ -418,18 +406,11 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
             } catch (_) {}
           }
 
-          if (state.scenarioContext == '__free_talk__') {
-            initialPrompt += " Start with a casual and warm greeting as a friend (do NOT introduce yourself, say your name or where you are from). Share a small, natural detail about your day or mood (following your system instructions example) and ask an open question to kick off the chat.";
-          } else if (state.scenarioContext != null) {
-            initialPrompt += " Introduce the role-play scenario and immediately start playing your role.";
-          } else if (preparedOpener != null && preparedOpener.isNotEmpty) {
-            initialPrompt += ' Open the conversation naturally and casually as AJ Tudor using this prepared hook/question: "$preparedOpener". Do NOT introduce yourself or ask generic questions about pets/hobbies.';
-          } else if (briefing != null && briefing.isNotEmpty) {
-            initialPrompt += " Refer briefly to our last lesson and follow up on the recommended topic or question.";
-          } else {
-            initialPrompt += " Start with a casual and warm greeting as a friend (do NOT introduce yourself, say your name or where you are from). Share a small, natural detail about your day or mood (following your system instructions example) and ask an open question to kick off the chat.";
-          }
-          currentClient.sendText(initialPrompt);
+          currentClient.sendText(LiveTutorPrompts.opening(
+            scenarioContext: state.scenarioContext,
+            preparedOpener: preparedOpener,
+            briefing: userProfile?.memoryBriefing,
+          ));
         }
       });
 
@@ -481,16 +462,14 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
 
       if (wordCount != null) {
         // ─── METRIKA: délka odpovědi uživatele ───
-        _sessionUserMessageCount++;
-        _sessionTotalUserWords += wordCount;
-        L.metric('user_response_words', wordCount);
+        _metrics.recordUserAnswer(wordCount);
 
         if (wordCount <= 3) {
           _consecutiveShortAnswers++;
           if (_consecutiveShortAnswers >= 3) {
-             _sessionFrustrationCount++;
+             _metrics.frustrationDetections++;
              L.w('Detekována frustrace/nezájem (3x krátká odpověď za sebou). Injektuji afektivní rekalibraci.');
-             injectMidSessionGuidance('STUDENT IS GIVING VERY SHORT ANSWERS. They might be frustrated or tired. STOP asking difficult questions. Validate their effort, be extremely encouraging, and switch to a very easy, fun, and relaxing topic immediately.');
+             injectMidSessionGuidance(LiveTutorPrompts.frustrationRecalibration);
              _consecutiveShortAnswers = 0; // reset po injekci
           }
         } else {
@@ -499,7 +478,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       }
 
       // ─── METRIKA: timestamp konce řeči studenta (pro měření reakční doby AI) ───
-      _userSpeechEndTime = DateTime.now();
+      _metrics.markUserSpeechEnd();
 
       if (_currentSessionId != null) {
         L.i('Ukládám nashromážděný transkript uživatele do DB: "$userText"');
@@ -582,11 +561,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     _resetWatchdog();
 
     // ─── METRIKA: reakční doba AI (ms od konce řeči studenta do první audio odpovědi) ───
-    if (_userSpeechEndTime != null) {
-      final responseLatency = DateTime.now().difference(_userSpeechEndTime!).inMilliseconds;
-      L.metric('ai_response_latency', responseLatency, 'ms');
-      _userSpeechEndTime = null;
-    }
+    _metrics.recordResponseStart();
     _turnCompleteReceived = false;
     if (state.status != TutorState.speaking) {
       state = state.copyWith(status: TutorState.speaking);
@@ -609,9 +584,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       L.i('Tutor řekl: "$tutorText"');
 
       // ─── METRIKA: délka odpovědi tutora ───
-      _sessionTutorMessageCount++;
-      final tutorWordCount = tutorText.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length;
-      L.metric('tutor_response_words', tutorWordCount);
+      _metrics.recordTutorAnswer(tutorText);
       // --- DETEKCE STAGNACE (Opakování slovníku) ---
       // 1. Intra-turn repetition (odstranění zacyklení uvnitř stejné promluvy)
       final finalTutorText = removeIntraTurnRepetition(tutorText);
@@ -661,7 +634,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         recentTopics: _recentTopicsSnapshot,
         onWhisperReady: (whisper) {
           L.i('VoiceDirector: Našeptávám tutorovi: "$whisper"');
-          injectMidSessionGuidance('[DIRECTOR WHISPER] $whisper', turnComplete: false);
+          injectMidSessionGuidance(LiveTutorPrompts.directorWhisper(whisper), turnComplete: false);
         },
       );
     }
@@ -719,8 +692,8 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     if (!isConnected && !_isStopping) {
       if (state.status == TutorState.listening || state.status == TutorState.speaking || state.status == TutorState.thinking) {
         // Výpadek uprostřed aktivního hovoru → reconnecting
-        _sessionReconnectCount++;
-        L.w('Spojení ztraceno během hovoru, přepínám na reconnecting... (reconnect #$_sessionReconnectCount)');
+        _metrics.reconnects++;
+        L.w('Spojení ztraceno během hovoru, přepínám na reconnecting... (reconnect #${_metrics.reconnects})');
         state = state.copyWith(status: TutorState.reconnecting);
       } else if (state.status == TutorState.connecting) {
         // Výpadek při inicializaci (např. 1007 od preview API) → zůstáváme v connecting
@@ -856,23 +829,8 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         }
 
         // ─── SESSION SUMMARY ───
-        final sessionDuration = _sessionStartTime != null
-            ? DateTime.now().difference(_sessionStartTime!)
-            : Duration.zero;
-        final avgUserWords = _sessionUserMessageCount > 0
-            ? _sessionTotalUserWords / _sessionUserMessageCount
-            : null;
-
-        L.sessionEnd(
-          sessionId: sessionId,
-          duration: sessionDuration,
-          userMessages: _sessionUserMessageCount,
-          tutorMessages: _sessionTutorMessageCount,
-          avgUserWords: avgUserWords,
-          reconnects: _sessionReconnectCount,
-          frustrationDetections: _sessionFrustrationCount,
-        );
-
+        _metrics.logSummary(sessionId);
+        
         _currentSessionId = null;
         if (ref.mounted) {
           _director.reset();
@@ -1024,7 +982,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       // nepodporuje roli 'system' v clientContent po úvodním setupu.
       client.sendClientContent(
         role: 'user',
-        text: '[SYSTEM INSTRUCTION - NOT FROM STUDENT] $hiddenInstruction',
+        text: LiveTutorPrompts.systemInstruction(hiddenInstruction),
         turnComplete: turnComplete,
       );
     }
@@ -1068,24 +1026,10 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       _resetWatchdog();
 
       // 5. Odešleme systémovou instrukci s turnComplete: true pro okamžité převzetí slova modelem
-      injectMidSessionGuidance(
-        "CRITICAL INSTRUCTION: The student just tapped 'Next Topic' / 'Change Topic'. "
-        "Immediately abandon the previous discussion. "
-        "Naturally acknowledge changing the subject in English in one brief, friendly sentence "
-        "(for example: \"Sure, let's switch gears!\" or \"Alright, let's move on to something else!\"), "
-        "smoothly introduce a completely fresh and engaging topic suited to the student's level and interests, "
-        "and ask ONE clear open-ended question to invite the student to speak.",
-        turnComplete: true,
-      );
+      injectMidSessionGuidance(LiveTutorPrompts.changeTopicNow, turnComplete: true);
     } else {
       // Pasivní heuristická změna při detekci stagnace v pozadí (přepne se v příštím tahu studenta)
-      injectMidSessionGuidance(
-        "CRITICAL INSTRUCTION: Okamžitě opusti současné téma hovoru, "
-        "protože se konverzace zacyklila. Přestaň klást otázky k dosavadnímu okruhu "
-        "a plynule přejdi na absolutně novou oblast zájmů studenta. Použij přirozený "
-        "oslí můstek. Neupozorňuj nahlas, že měníš téma na příkaz systému.",
-        turnComplete: false,
-      );
+      injectMidSessionGuidance(LiveTutorPrompts.changeTopicSilently, turnComplete: false);
     }
   }
 
