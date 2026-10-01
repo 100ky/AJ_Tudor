@@ -1,13 +1,31 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:aj_tudor/core/config/config_providers.dart';
+import 'package:aj_tudor/services/gemini/gemini_rest_core.dart';
 import 'package:aj_tudor/services/gemini/translation_service.dart';
+
+class _MockRestCore extends Mock implements GeminiRestCore {}
+
+class _FakeApiKeyNotifier extends ApiKeyNotifier {
+  @override
+  String? build() => 'test-key';
+}
+
+DioException _httpError(int statusCode) => DioException(
+      requestOptions: RequestOptions(),
+      response: Response(requestOptions: RequestOptions(), statusCode: statusCode),
+      type: DioExceptionType.badResponse,
+    );
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUpAll(() => registerFallbackValue(<String, dynamic>{}));
 
   group('WordTranslationService Tests', () {
     late ProviderContainer container;
@@ -95,5 +113,60 @@ void main() {
       expect(await tempFile.exists(), false);
     });
   });
-}
 
+  group('WordTranslationService model fallback', () {
+    late _MockRestCore api;
+    late ProviderContainer container;
+    late WordTranslationService service;
+    late Directory tempDir;
+
+    setUp(() async {
+      WordTranslationService.resetState();
+      tempDir = Directory.systemTemp.createTempSync('trans_fallback_');
+      WordTranslationService.diskCacheFileOverride = File('${tempDir.path}/cache.json');
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      api = _MockRestCore();
+      container = ProviderContainer(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          apiKeyProvider.overrideWith(_FakeApiKeyNotifier.new),
+          wordTranslationServiceProvider.overrideWith((ref) => WordTranslationService(ref, api: api)),
+        ],
+      );
+      service = container.read(wordTranslationServiceProvider);
+    });
+
+    tearDown(() {
+      WordTranslationService.resetState();
+      container.dispose();
+      tempDir.deleteSync(recursive: true);
+    });
+
+    void failWith(int statusCode) {
+      when(() => api.generateContent(
+            apiKey: any(named: 'apiKey'),
+            model: any(named: 'model'),
+            body: any(named: 'body'),
+          )).thenThrow(_httpError(statusCode));
+    }
+
+    VerificationResult verifyCalls() => verify(() => api.generateContent(
+          apiKey: any(named: 'apiKey'),
+          model: any(named: 'model'),
+          body: any(named: 'body'),
+        ));
+
+    test('a rejected API key stops after the first model', () async {
+      failWith(401);
+      expect(await service.translate(text: 'perseverance'), 'Překlad se nezdařil');
+      verifyCalls().called(1);
+    });
+
+    test('an overloaded model falls back to the next one', () async {
+      failWith(503);
+      expect(await service.translate(text: 'perseverance'), 'Překlad se nezdařil');
+      verifyCalls().called(greaterThan(1));
+    });
+  });
+}

@@ -1,9 +1,28 @@
 import 'dart:typed_data';
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
+import 'package:aj_tudor/core/config/config_providers.dart';
+import 'package:aj_tudor/services/gemini/gemini_rest_core.dart';
 import 'package:aj_tudor/services/gemini/pronunciation_service.dart';
 
+class _MockRestCore extends Mock implements GeminiRestCore {}
+
+class _FakeApiKeyNotifier extends ApiKeyNotifier {
+  @override
+  String? build() => 'test-key';
+}
+
+DioException _httpError(int statusCode) => DioException(
+      requestOptions: RequestOptions(),
+      response: Response(requestOptions: RequestOptions(), statusCode: statusCode),
+      type: DioExceptionType.badResponse,
+    );
+
 void main() {
+  setUpAll(() => registerFallbackValue(<String, dynamic>{}));
+
   group('PronunciationService & Audio Conversion Tests', () {
     late ProviderContainer container;
     late PronunciationService service;
@@ -83,6 +102,58 @@ void main() {
     test('PronunciationService preferredWorkingModel can be read and reset', () {
       PronunciationService.resetState();
       expect(PronunciationService.preferredWorkingModel, isNull);
+    });
+  });
+
+  group('PronunciationService model fallback', () {
+    late _MockRestCore api;
+    late ProviderContainer container;
+    late PronunciationService service;
+
+    setUp(() {
+      PronunciationService.resetState();
+      api = _MockRestCore();
+      container = ProviderContainer(
+        overrides: [
+          apiKeyProvider.overrideWith(_FakeApiKeyNotifier.new),
+          pronunciationServiceProvider.overrideWith((ref) => PronunciationService(ref, api: api)),
+        ],
+      );
+      service = container.read(pronunciationServiceProvider);
+    });
+
+    tearDown(() {
+      PronunciationService.resetState();
+      container.dispose();
+    });
+
+    void failWith(int statusCode) {
+      when(() => api.generateContent(
+            apiKey: any(named: 'apiKey'),
+            model: any(named: 'model'),
+            body: any(named: 'body'),
+          )).thenThrow(_httpError(statusCode));
+    }
+
+    VerificationResult verifyCalls() => verify(() => api.generateContent(
+          apiKey: any(named: 'apiKey'),
+          model: any(named: 'model'),
+          body: any(named: 'body'),
+        ));
+
+    Future<PronunciationAnalysis?> evaluate() =>
+        service.evaluatePronunciation(audioBytes: Uint8List(64), referenceText: 'Hello there');
+
+    test('a rejected API key stops after the first model', () async {
+      failWith(403);
+      expect(await evaluate(), isNull);
+      verifyCalls().called(1);
+    });
+
+    test('an overloaded model falls back to the next one', () async {
+      failWith(429);
+      expect(await evaluate(), isNull);
+      verifyCalls().called(greaterThan(1));
     });
   });
 }
