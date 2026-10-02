@@ -14,6 +14,8 @@ import 'answer_recorder.dart';
 import 'card_front_resolver.dart';
 import 'flashcards_controller.dart';
 import 'review_session.dart';
+import 'typed_answer.dart';
+import 'widgets/answer_input_bar.dart';
 import 'widgets/deck_status_views.dart';
 import 'widgets/flashcard_back.dart';
 import 'widgets/flashcard_front.dart';
@@ -49,6 +51,13 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
   bool _isEvaluatingSpeech = false;
   double _recordingVolume = 0.0;
   PronunciationAnalysis? _lastPronunciation;
+
+  // Písemná odpověď nebo „Nevím“ místo mluvené odpovědi
+  TypedAnswer? _typedAnswer;
+  bool _gaveUp = false;
+
+  /// Student se pokusil odpovědět; teprve pak jde kartičku otočit a ohodnotit.
+  bool get _hasAnswered => _lastPronunciation != null || _typedAnswer != null || _gaveUp;
 
   @override
   void initState() {
@@ -98,6 +107,8 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
   }
 
   void _flipCard() {
+    // Na řešení se nejde podívat bez pokusu o odpověď
+    if (!_flipController.isCompleted && !_hasAnswered) return;
     HapticFeedback.selectionClick();
     if (_flipController.isCompleted) {
       _flipController.reverse();
@@ -113,11 +124,25 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
     }
   }
 
-  void _clearSpeechState() {
+  void _clearAnswerState() {
     _lastPronunciation = null;
+    _typedAnswer = null;
+    _gaveUp = false;
     _recorder.clear();
     _isRecording = false;
     _isEvaluatingSpeech = false;
+  }
+
+  void _submitTypedAnswer(Flashcard card, String text) {
+    FocusScope.of(context).unfocus();
+    setState(() => _typedAnswer = TypedAnswer.evaluate(text, card.backText));
+    _flipCard();
+  }
+
+  void _giveUp() {
+    FocusScope.of(context).unfocus();
+    setState(() => _gaveUp = true);
+    _flipCard();
   }
 
   Future<void> _generateFromErrors() async {
@@ -312,7 +337,7 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
     _resetFlip();
 
     setState(() {
-      _clearSpeechState();
+      _clearAnswerState();
       _session?.recordAnswer(card, rating);
     });
   }
@@ -361,7 +386,7 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
       );
 
       setState(() {
-        _clearSpeechState();
+        _clearAnswerState();
         _session?.remove(card.id);
       });
     }
@@ -462,6 +487,7 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
                             child: FlashcardBack(
                               card: currentCard,
                               lastPronunciation: _lastPronunciation,
+                              typedAnswer: _typedAnswer,
                               isPlayingTts: _isPlayingTts,
                               onPlayAudio: () => _playAudio(currentCard.backText),
                               onDelete: () => _deleteCurrentCard(currentCard),
@@ -481,8 +507,16 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
           if (_isBackVisible) ...[
             SrsRatingBar(
               card: currentCard,
-              pronunciationScore: _lastPronunciation?.overallScore,
+              answerScore: _lastPronunciation?.overallScore ?? _typedAnswer?.score,
+              againOnly: _gaveUp,
               onRate: (rating) => _answerCard(currentCard, rating),
+            ),
+          ] else if (!_hasAnswered) ...[
+            AnswerInputBar(
+              key: ValueKey(currentCard.id),
+              enabled: !_isRecording && !_isEvaluatingSpeech,
+              onSubmit: (text) => _submitTypedAnswer(currentCard, text),
+              onGiveUp: _giveUp,
             ),
           ] else ...[
             SizedBox(

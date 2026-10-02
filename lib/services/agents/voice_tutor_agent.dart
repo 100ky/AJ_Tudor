@@ -117,6 +117,11 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   bool _muteLogged = false;
   bool _userSpokeInCurrentTurn = false;
 
+  // Skryté pokyny (rada režiséra, odlehčení, tichá změna tématu) čekající na konec tahu tutora.
+  // Zpráva clientContent podle dokumentace Live API přeruší právě generovanou odpověď,
+  // proto je posíláme až po turnComplete: model nemluví a mikrofon je ještě ztlumený.
+  final List<String> _pendingGuidance = [];
+
   // ─── SESSION METRIKY pro terminálový výstup ───
   final SessionMetrics _metrics = SessionMetrics();
 
@@ -617,6 +622,9 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       );
     }
 
+    // Model domluvil – teď můžeme bezpečně předat skryté pokyny, aniž bychom ho utnuli
+    _flushPendingGuidance();
+
     // Pokud reprák ještě hraje, počkáme, až dozní v audio handleru nebo v časovači; jinak jsme rovnou listening
     _turnCompleteReceived = isStillPlaying;
     if (isStillPlaying) {
@@ -752,6 +760,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       _timers.cancelAll();
       _turnCompleteReceived = false;
       _userSpokeInCurrentTurn = false;
+      _pendingGuidance.clear();
       _vad.reset();
 
       _wakelock.disable(); // Povolíme opětovné zhasínání displeje
@@ -970,9 +979,30 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   ///
   /// Slouží k vynucenému řízení témat a prevenci repetice uprostřed běžícího hovoru
   /// přes strukturu BidiGenerateContentClientContent protokolu WebSocket.
-  /// Pokud je [turnComplete] `true`, model tah ihned uzavře a okamžitě odpoví.
-  /// Pokud je `false`, model instrukci absorbuje do kontextu a čeká na další vstup studenta.
+  /// Pokud je [turnComplete] `true`, pokyn se odešle hned a model okamžitě odpoví
+  /// (případnou rozpracovanou odpověď tím záměrně přeruší).
+  /// Pokud je `false`, pokyn počká na konec tahu tutora ([_flushPendingGuidance]),
+  /// aby tutora neutnul uprostřed věty, a model ho absorbuje do kontextu.
   void injectMidSessionGuidance(String hiddenInstruction, {bool turnComplete = false}) {
+    if (!turnComplete) {
+      _pendingGuidance.add(hiddenInstruction);
+      L.i('Skrytý pokyn čeká na konec tahu tutora (ve frontě: ${_pendingGuidance.length}).');
+      return;
+    }
+    _sendGuidance(hiddenInstruction, turnComplete: true);
+  }
+
+  /// Odešle pokyny, které čekaly na konec tahu tutora.
+  void _flushPendingGuidance() {
+    if (_pendingGuidance.isEmpty) return;
+    final pending = List<String>.from(_pendingGuidance);
+    _pendingGuidance.clear();
+    for (final instruction in pending) {
+      _sendGuidance(instruction, turnComplete: false);
+    }
+  }
+
+  void _sendGuidance(String hiddenInstruction, {required bool turnComplete}) {
     final client = ref.read(geminiLiveClientProvider);
 
     if (client != null && client.isConnected && state.status != TutorState.idle) {

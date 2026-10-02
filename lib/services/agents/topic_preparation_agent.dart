@@ -80,6 +80,9 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
   final List<String> _recentlyProposedTitles = [];
   int _refreshCounter = 0;
 
+  /// Dokončí se po načtení uloženého tématu z databáze (viz [build]).
+  late Future<void> _storedTopicLoaded;
+
   int get refreshCount => _refreshCounter;
 
   void resetRefreshCounter() {
@@ -89,7 +92,7 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
   @override
   TopicPreparationState build() {
     // Asynchronní načtení již uloženého tématu z databáze při inicializaci
-    Future.microtask(() async {
+    _storedTopicLoaded = Future.microtask(() async {
       try {
         final user = await ref.read(profileRepositoryProvider).getUserProfile();
         if (user?.preparedTopic != null && user!.preparedTopic!.isNotEmpty) {
@@ -121,6 +124,8 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
     bool resetCounter = false,
     bool? isRandomTopic,
   }) async {
+    // Bez uloženého tématu by kontrola čerstvosti níže zbytečně generovala nové
+    await _storedTopicLoaded;
     if (state.isLoading) return;
 
     if (resetCounter) {

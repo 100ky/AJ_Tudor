@@ -6,11 +6,12 @@
 
 ## 🌟 Klíčové vlastnosti
 
-- 🎙️ **Real-time hlasová konverzace (A2A)**: Obousměrný WebSocket přenos surového PCM audia přímo do modelu `gemini-3.1-flash-live-preview` (odezva pod 1 sekundu).
+- 🎙️ **Real-time hlasová konverzace (A2A)**: Obousměrný WebSocket přenos surového PCM audia přímo do modelu Gemini Live (výchozí `gemini-3.8-live`, odezva pod 1 sekundu).
 - 🤖 **Multi-agentní systém**:
   - **Voice Tutor Agent**: Řídí živý hlasový dialog, detekci řeči (VAD), skákání do řeči (barge-in), ochranu proti repetici a automatické popostrčení (nudge).
   - **Memory Manager Agent**: Po skončení lekce asynchronně analyzuje transkript pomocí *Structured Outputs (JSON)*, sleduje chyby, slovní zásobu a aplikuje Ebbinghausovu křivku zapomínání.
 - 📝 **Inteligentní telemetrie chyb & Memory Pruning**: Po skončení hovoru `MemoryManagerAgent` přes *Structured Outputs (JSON)* provede detailní rozbor chyb, extrahuje nová slovíčka, odnaučuje zvládnuté jevy a automaticky vytváří kartičky (Smart Flashcards) k procvičení.
+- 🗂️ **Smart Flashcards s opakováním (SRS)**: Kartička se otočí až po pokusu o odpověď (hlasem s hodnocením výslovnosti, napsáním, nebo „Nevím“), takže ji nejde ohodnotit bez zkoušení.
 - 📊 **Sledování pokroku & Statistika**: Přehledné grafy (`fl_chart`), vývoj plynulosti (fluency score), historie lekcí a kartotéka chyb.
 - 💾 **Lokální offline persistence**: Lokální SQLite databáze přes `Drift`, bezpečné ukládání API klíče přes `flutter_secure_storage`.
 
@@ -36,7 +37,7 @@ lib/
 ├── features/              # Obrazovky dle domény: obrazovka skládá layout, části jsou ve widgets/, akce v *_controller.dart
 │   ├── agents/            # Přehled agentů
 │   ├── conversation/      # Hlasový tutor, gramatický dril (GrammarDrillController), chat bubliny, překlad slov
-│   ├── flashcards/        # Smart Flashcards: FlashcardsController, průběh opakování (ReviewSession), výslovnost
+│   ├── flashcards/        # Smart Flashcards: FlashcardsController, průběh opakování (ReviewSession), výslovnost, napsaná odpověď (TypedAnswer)
 │   ├── history/           # Historie lekcí a detail lekce (SessionDetailController)
 │   ├── progress/          # Statistiky, grafy, přehled chyb a slovíček
 │   ├── settings/          # Nastavení (API klíč, hlas, modely, záloha) a ProfileSettingsController
@@ -116,6 +117,7 @@ Po prvním spuštění přejděte na záložku **Settings** (Nastavení) a vlož
    ```
 3. **Výstup z AI**: Model v reálném čase vrací 24 000 Hz PCM audio chunky a STT textový přepis.
 4. **Lokální VAD & Nudge**: Pokud uživatel domluví, lokální Voice Activity Detection a záchranné časovače zajistí, že model okamžitě dostane signál k odpovědi (`turnComplete: true`).
+5. **Skryté pokyny**: Rady režiséra (`VoiceDirectorAgent`) a další pokyny během hovoru jdou jako `clientContent`. Taková zpráva podle dokumentace Live API přeruší odpověď, kterou model právě generuje, proto pokyny čekají ve frontě a odešlou se až po `turnComplete` tutora. Hned se posílá jen „Změnit téma“, kde je přerušení záměr.
 
 ---
 
@@ -128,7 +130,7 @@ dart analyze lib test   # statická analýza
 flutter test            # všechny testy, podrobnosti v test/README.md
 ```
 
-Na cestě s diakritikou (např. `D:\Programování\…`) `flutter analyze` padá na chybě `FormatException`. `dart analyze` provede stejnou kontrolu a funguje.
+Na cestě s diakritikou (např. `D:\Programování\…`) `flutter analyze` padá na chybě `FormatException`. `dart analyze` provede stejnou kontrolu a funguje. Ze stejného důvodu vypíše `flutter run` na začátku červené řádky od `aapt` (`Illegal byte sequence`, `Failed to extract manifest from APK`). Flutter si pak manifest vezme ze zdrojáků a aplikace se nainstaluje normálně.
 
 Směr závislostí ověříte v Git Bash. Žádný z příkazů nesmí nic vypsat:
 
@@ -144,17 +146,40 @@ Největší soubory (hranice je zhruba 600 řádků):
 find lib -name "*.dart" ! -name "*.g.dart" -exec wc -l {} + | sort -rn | head
 ```
 
+### Log z telefonu
+Výpis z konzole je na sdílení obvykle moc dlouhý. Ladicí verze proto ukládá log i do souboru v úložišti aplikace. Stáhnete ho v Git Bash:
+
+```bash
+adb exec-out run-as com.tudor.aj_tudor cat app_flutter/logs/latest.log > latest.log
+```
+
+Každé spuštění aplikace začne nový `latest.log`, předchozí běh zůstane v `previous.log`.
+
 ### Ruční test na zařízení
 Automatické testy nepokryjí mikrofon, přehrávání zvuku ani skutečné volání Gemini. Po větších změnách projděte na telefonu:
 
 - [ ] Hlasová lekce: start, pauza a obnovení (i přes překlad slova), stop
+- [ ] Hlasová lekce: věta se dvěma chybami (tutor je opraví postupně, vždy jednu), tutor se neutíná uprostřed věty
 - [ ] Překlad slova a uložení do kartiček
 - [ ] Tlačítko „Do kartiček“ u opravy v chatové bublině
-- [ ] Opakování kartiček, výslovnost a přehrání nahlas
+- [ ] Opakování kartiček: odpověď hlasem, napsáním i „Nevím“ (pak jde jen „Znovu“), přehrání nahlas
 - [ ] Chat nad lekcí (detail lekce v záložce Pokrok) a gramatický dril
 - [ ] Nastavení: přepínače, úroveň angličtiny, přidání a smazání faktu „O mně“
 - [ ] Záloha a import
 - [ ] Reset paměti, jen pokud vám nevadí přijít o to, co si Tudor pamatuje
+
+---
+
+## 🛠️ Úpravy po ručním testu (2. 10. 2026)
+
+Úpravy vzešly z prvního testu na telefonu. Počet testů vzrostl z 321 na 333.
+
+- **Příprava tématu při startu:** `TopicPreparationAgent` se spouštěl dřív, než se z úložiště načetl API klíč. Při startu aplikace proto nikdy nepřipravil téma a v logu bylo „Chybí API klíč, přeskočeno“. Teď `SkeletonScreen` čeká na načtení klíče. Agent si navíc před kontrolou čerstvosti načte uložené téma z databáze, aby zbytečně nevolal Gemini.
+- **Kartičky bez proklikávání:** kartička se otočí až po pokusu o odpověď. Odpovědět jde hlasem, napsáním (`AnswerInputBar`), nebo tlačítkem „Nevím – ukázat řešení“. Po „Nevím“ jde dát jen „Znovu“. Napsanou odpověď porovnává `TypedAnswer` přímo v telefonu bez AI (Levenshteinova vzdálenost) a podle shody zvýrazní doporučené hodnocení. Porovnává se jen podle písmen, takže synonymum dostane nízké skóre.
+- **Více chyb v jedné větě:** tutor z jedné promluvy vybere nejvýš dvě nejdůležitější chyby a opraví je postupně, vždy jednu za tah a bez další otázky. K tématu se vrátí až potom. Drobnosti nechá na rozbor po lekci.
+- **Tutor se neutíná:** rady režiséra, pokyn k odlehčení a tichá změna tématu se dřív posílaly kdykoliv a mohly tutora utnout uprostřed věty. Teď čekají na konec jeho tahu (viz *Jak funguje Gemini Live Audio Pipeline*, bod 5).
+- **Přepis v cizím jazyce:** STT Gemini Live občas přepíše anglickou řeč do jiného jazyka (španělštiny, hindštiny…), i když model studentovi rozumí. Je to známá chyba na straně Google. Pro konverzační model se jazyk přepisu nastavit nedá, `languageCodes` podporuje jen `gemini-3.5-transcribe-live`. Bublina proto může ukázat nesmysl. Rozbor lekce takové repliky ignoruje. `MemoryManagerAgent` navíc neuloží chybu, jejíž text obsahuje ¿ ¡ ñ nebo nelatinkové písmo, aby z ní nevznikla kartička.
+- **Log do souboru:** ladicí verze zapisuje výstup loggeru `L` i do `logs/latest.log` (viz *Kontrola změn*).
 
 ---
 
@@ -179,7 +204,7 @@ Refaktoring proběhl ve větvi `refactor/structure` ve čtyřech fázích. Sché
 
 ### Otevřené body a doporučení
 1. **Ruční test na zařízení** (oddíl *Kontrola změn*) projít před sloučením do `main`.
-2. **`voice_tutor_agent.dart` má pořád 1232 řádků.** Dalším krokem je vyčlenit do `services/agents/voice_tutor/` spuštění a ukončení lekce (`startSession` má asi 200 řádků, `stopSession` asi 120) a zpracování zvuku z mikrofonu (`_handleIncomingAudioChunk`, `_processAudioChunkForVAD` a časovače, asi 190 řádků). Dělat to až po úspěšném ručním testu. Jde o řízení živého hovoru a reálný zvuk automatické testy nepokryjí.
+2. **`voice_tutor_agent.dart` má pořád 1262 řádků.** Dalším krokem je vyčlenit do `services/agents/voice_tutor/` spuštění a ukončení lekce (`startSession` má asi 200 řádků, `stopSession` asi 120) a zpracování zvuku z mikrofonu (`_handleIncomingAudioChunk`, `_processAudioChunkForVAD` a časovače, asi 190 řádků). Dělat to až po úspěšném ručním testu. Jde o řízení živého hovoru a reálný zvuk automatické testy nepokryjí.
 3. **Další soubory nad 600 řádků.** Rozdělit je, až se na nich bude pracovat:
    - `core/app_theme.dart` (781): oddělit barvy od `ThemeData` a `TextTheme`.
    - `features/conversation/widgets/word_translation_sheet.dart` (750): překlad, uložení do kartiček a vrácení zpět přesunout ze stavu widgetu do controlleru. Metodu `build` (přes 400 řádků) rozdělit na menší widgety.
@@ -188,3 +213,7 @@ Refaktoring proběhl ve větvi `refactor/structure` ve čtyřech fázích. Sché
 4. **`features/history/history_screen.dart` se v aplikaci nepoužívá**, a to už před refaktoringem. Odkazují na ni jen testy, historie lekcí je v záložce Pokrok. Je potřeba rozhodnout, jestli ji smazat i s testem, nebo vrátit do navigace.
 5. **Migrace databáze (zatím odloženo).** Opravy schématu a deduplikace kartiček v `beforeOpen` (`data/database/app_database.dart`) běží při každém startu aplikace. Doporučený postup: zvýšit `schemaVersion` na 4, opravy přesunout do `onUpgrade` a přidat test migrace na starší databázi. Změna se týká dat uložených v zařízení, proto zatím počkala.
 6. **Kartičky smazané chybnou deduplikací se samy nevrátí.** Jejich chyby mají dál příznak `in_flashcard`, takže z nich nové kartičky nevzniknou a detail lekce u nich ukazuje, že už v kartičkách jsou. Příznaky by šlo vynulovat u chyb, ke kterým žádná kartička neexistuje. Tím by se ale vrátily i chyby záměrně vyřazené z generování a chyby, jejichž kartičky byly smazané ručně, proto to zatím neproběhlo.
+7. **Zaseknutí po přerušení tutora (nevyřešeno).** Na konci jedné lekce tutor zachytil vlastní hlas a dvakrát se utnul. Pak aplikace ukazovala zelenou vlnu, ale nic nepřepisovala a neodpovídala. Nejpravděpodobnější spouštěč, tedy skryté pokyny uprostřed odpovědi, je opravený. Samotná příčina zaseknutí ale bez celého logu potvrzená není. Když se to zopakuje, stáhnout `latest.log` (viz *Kontrola změn*).
+8. **Tutor občas pochválí špatně zopakovanou opravu**, např. „I will call.“ místo „I will code.“ → „Exactly!“. Nejspíš studenta špatně slyší. Zatím neřešeno.
+9. **Diakritika v cestě k projektu.** Kvůli `Programování` v cestě nefunguje `flutter analyze`, `aapt` vypisuje chyby a AGP potřebuje `android.overridePathCheck=true` v `android/gradle.properties`. Přejmenováním složky na `Programovani` by všechny tyhle obcházky odpadly.
+10. **Upgrade AGP a Kotlinu.** Flutter varuje, že brzy přestane podporovat AGP 8.11.1 a Kotlin 2.2.20. Chce AGP aspoň 9.0.1 a Kotlin aspoň 2.3.20. AGP 9 mění zapojení Kotlinu (`android.builtInKotlin` v `android/gradle.properties`), proto upgrade dělat samostatně a otestovat build na zařízení.

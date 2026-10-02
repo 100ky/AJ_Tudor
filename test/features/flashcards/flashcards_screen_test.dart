@@ -54,6 +54,18 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
   }
 
+  Future<void> typeAnswer(WidgetTester tester, String text) async {
+    await tester.enterText(find.byType(TextField), text);
+    await tester.pump();
+    await tester.tap(find.byTooltip('Odeslat odpověď'));
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> giveUp(WidgetTester tester) async {
+    await tester.tap(find.text('Nevím – ukázat řešení'));
+    await tester.pumpAndSettle();
+  }
+
   Widget buildTestWidget() {
     return ProviderScope(
       overrides: [
@@ -107,8 +119,10 @@ void main() {
       // Front card content
       expect(find.text('Včera jsem šel do kina na nový film.'), findsOneWidget);
 
-      // Flip button
-      expect(find.text('Otočit kartičku (Zobrazit řešení)'), findsOneWidget);
+      // Bez pokusu o odpověď není tlačítko pro otočení, jen odpověď nebo „Nevím“
+      expect(find.text('Otočit kartičku (Zobrazit řešení)'), findsNothing);
+      expect(find.byType(TextField), findsOneWidget);
+      expect(find.text('Nevím – ukázat řešení'), findsOneWidget);
 
       await drainTimers(tester);
     });
@@ -130,13 +144,16 @@ void main() {
       await tester.pumpWidget(buildTestWidget());
       await tester.pumpAndSettle();
 
-      // Tap to flip card
-      await tester.tap(find.text('Otočit kartičku (Zobrazit řešení)'));
-      await tester.pumpAndSettle();
+      // Napsaná odpověď otočí kartičku
+      await typeAnswer(tester, 'I am very hungry');
 
       // Back card content
       expect(find.text('SPRÁVNÉ ŘEŠENÍ'), findsOneWidget);
       expect(find.text('I am really very hungry.'), findsOneWidget);
+      expect(find.text('I am very hungry'), findsOneWidget);
+      expect(find.text('TVOJE ODPOVĚĎ · SHODA 70 %'), findsOneWidget);
+      // 70 % shody doporučí „Dobré“
+      expect(find.text('DOPORUČENO'), findsOneWidget);
 
       // SRS rating buttons
       expect(find.text('Znovu'), findsOneWidget);
@@ -164,9 +181,7 @@ void main() {
       await tester.pumpWidget(buildTestWidget());
       await tester.pumpAndSettle();
 
-      // Flip card
-      await tester.tap(find.text('Otočit kartičku (Zobrazit řešení)'));
-      await tester.pumpAndSettle();
+      await giveUp(tester);
 
       // Find speaker icon
       final speakerButton = find.byTooltip('Přehrát rodilou výslovnost (Gemini TTS)');
@@ -197,9 +212,7 @@ void main() {
       await tester.pumpWidget(buildTestWidget());
       await tester.pumpAndSettle();
 
-      // Flip card
-      await tester.tap(find.text('Otočit kartičku (Zobrazit řešení)'));
-      await tester.pumpAndSettle();
+      await typeAnswer(tester, 'Thank you');
 
       // Rate card as "Dobré"
       await tester.tap(find.text('Dobré'));
@@ -242,21 +255,18 @@ void main() {
       await tester.pumpWidget(buildTestWidget());
       await tester.pumpAndSettle();
 
-      // First card: flip and rate "Znovu"
-      await tester.tap(find.text('Otočit kartičku (Zobrazit řešení)'));
-      await tester.pumpAndSettle();
+      // First card: "Nevím" and rate "Znovu"
+      await giveUp(tester);
       await tester.tap(find.text('Znovu'));
       await tester.pumpAndSettle();
 
-      // Second card: flip and rate "Dobré"
-      await tester.tap(find.text('Otočit kartičku (Zobrazit řešení)'));
-      await tester.pumpAndSettle();
+      // Second card: answer and rate "Dobré"
+      await typeAnswer(tester, 'Two');
       await tester.tap(find.text('Dobré'));
       await tester.pumpAndSettle();
 
-      // Re-queued first card: flip and rate "Dobré" to finish session
-      await tester.tap(find.text('Otočit kartičku (Zobrazit řešení)'));
-      await tester.pumpAndSettle();
+      // Re-queued first card: answer and rate "Dobré" to finish session
+      await typeAnswer(tester, 'One');
       await tester.tap(find.text('Dobré'));
       await tester.pumpAndSettle();
 
@@ -287,8 +297,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Flip card to reveal delete button
-      await tester.tap(find.text('Otočit kartičku (Zobrazit řešení)'));
-      await tester.pumpAndSettle();
+      await giveUp(tester);
 
       final deleteButton = find.byTooltip('Smazat tuto kartičku');
       expect(deleteButton, findsOneWidget);
@@ -307,6 +316,74 @@ void main() {
       // Verify card was deleted from database
       final remainingCards = await db.select(db.flashcards).get();
       expect(remainingCards.any((c) => c.id == cardId), isFalse);
+
+      await drainTimers(tester);
+    });
+
+    testWidgets('card cannot be flipped without an answer attempt',
+        (WidgetTester tester) async {
+      configureViewport(tester);
+      final now = DateTime.now();
+      await db.into(db.flashcards).insert(
+            FlashcardsCompanion.insert(
+              frontText: 'Mám hlad.',
+              backText: 'I am hungry.',
+              explanation: 'Sloveso to be.',
+              nextReviewAt: now.subtract(const Duration(hours: 1)),
+              createdAt: now.subtract(const Duration(days: 1)),
+            ),
+          );
+
+      await tester.pumpWidget(buildTestWidget());
+      await tester.pumpAndSettle();
+
+      // Klepnutí na kartičku bez odpovědi ji neotočí
+      await tester.tap(find.text('Mám hlad.'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('SPRÁVNÉ ŘEŠENÍ'), findsNothing);
+      expect(find.text('Znovu'), findsNothing);
+
+      // Prázdnou odpověď nejde odeslat
+      await tester.tap(find.byTooltip('Odeslat odpověď'));
+      await tester.pumpAndSettle();
+      expect(find.text('SPRÁVNÉ ŘEŠENÍ'), findsNothing);
+
+      await drainTimers(tester);
+    });
+
+    testWidgets('"Nevím" reveals the solution but allows only "Znovu"',
+        (WidgetTester tester) async {
+      configureViewport(tester);
+      final now = DateTime.now();
+      final cardId = await db.into(db.flashcards).insert(
+            FlashcardsCompanion.insert(
+              frontText: 'Uniknout',
+              backText: 'escape',
+              explanation: 'Sloveso.',
+              nextReviewAt: now.subtract(const Duration(hours: 1)),
+              createdAt: now.subtract(const Duration(days: 1)),
+            ),
+          );
+
+      await tester.pumpWidget(buildTestWidget());
+      await tester.pumpAndSettle();
+
+      await giveUp(tester);
+      expect(find.text('SPRÁVNÉ ŘEŠENÍ'), findsOneWidget);
+
+      // „Snadné“ je zakázané, kartička zůstane neohodnocená
+      await tester.tap(find.text('Snadné'));
+      await tester.pumpAndSettle();
+      expect(find.text('SPRÁVNÉ ŘEŠENÍ'), findsOneWidget);
+      final unchanged = await (db.select(db.flashcards)..where((c) => c.id.equals(cardId))).getSingle();
+      expect(unchanged.repetitionCount, 0);
+
+      // „Znovu“ funguje a kartička se vrátí na konec relace
+      await tester.tap(find.text('Znovu'));
+      await tester.pumpAndSettle();
+      expect(find.text('Kartička 2 z 2'), findsOneWidget);
+      expect(find.text('Uniknout'), findsOneWidget);
 
       await drainTimers(tester);
     });

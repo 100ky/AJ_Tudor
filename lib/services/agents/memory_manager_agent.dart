@@ -21,6 +21,11 @@ class MemoryManagerAgent {
   /// Inicializuje agenta paměti.
   MemoryManagerAgent(this._ref);
 
+  /// Znaky, které se v angličtině ani češtině nevyskytují: španělské ¿ ¡ ñ
+  /// a nelatinková písma (azbuka, hindština, arabština, japonština, čínština…).
+  /// STT Gemini Live občas přepíše anglickou řeč studenta do cizího jazyka.
+  static final _foreignTranscriptChars = RegExp(r'[¿¡ñÑͰ-᷿⺀-￯]');
+
   /// Spustí asynchronní analýzu ukončené lekce podle jejího ID.
   /// 
   /// 1. Načte transkripci rozhovoru (uživatel vs. tutor).
@@ -229,6 +234,12 @@ class MemoryManagerAgent {
                 lowerSaid.contains('translation task') ||
                 lowerCorrect.contains('soustředit na naši')) {
               L.w('Filtrován neplatný záznam chyby (leaked tutor/system message): "$userSaid"');
+              continue;
+            }
+
+            // Přepis v cizím jazyce je chyba STT, ne chyba studenta
+            if (_foreignTranscriptChars.hasMatch(userSaid)) {
+              L.w('Filtrován záznam chyby s přepisem v cizím jazyce (chyba STT): "$userSaid"');
               continue;
             }
 

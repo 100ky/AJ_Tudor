@@ -30,6 +30,9 @@ class FakeApiKeyNotifier extends ApiKeyNotifier {
 
   @override
   String? build() => initialKey;
+
+  /// Simuluje dokončení asynchronního načtení klíče ze šifrovaného úložiště.
+  void emitLoadedKey(String? key) => state = key;
 }
 
 class FakeApiKeyLoadedNotifier extends ApiKeyLoadedNotifier {
@@ -226,7 +229,7 @@ void main() {
       await drainTimers(tester);
     });
 
-    testWidgets('calls topicPreparationAgent.prepareTopic on post frame callback',
+    testWidgets('calls topicPreparationAgent.prepareTopic when API key is already loaded',
         (WidgetTester tester) async {
       final topicAgent = MockTopicPreparationAgent();
 
@@ -237,6 +240,31 @@ void main() {
         ),
       );
       await tester.pump(const Duration(milliseconds: 350));
+
+      expect(topicAgent.prepareTopicCalled, isTrue);
+
+      await drainTimers(tester);
+    });
+
+    testWidgets('waits for API key to load before calling topicPreparationAgent.prepareTopic',
+        (WidgetTester tester) async {
+      final topicAgent = MockTopicPreparationAgent();
+
+      await tester.pumpWidget(
+        buildTestWidget(
+          apiKey: null,
+          isApiKeyLoaded: false,
+          topicAgent: topicAgent,
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 350));
+
+      // Klíč se ze šifrovaného úložiště ještě nenačetl
+      expect(topicAgent.prepareTopicCalled, isFalse);
+
+      final container = ProviderScope.containerOf(tester.element(find.byType(SkeletonScreen)));
+      (container.read(apiKeyProvider.notifier) as FakeApiKeyNotifier).emitLoadedKey('test-key');
+      await tester.pump();
 
       expect(topicAgent.prepareTopicCalled, isTrue);
 

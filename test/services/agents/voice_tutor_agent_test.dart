@@ -236,6 +236,57 @@ void main() {
     )).called(1);
   });
 
+  test('quiet guidance waits for the tutor to finish its turn so it does not cut the tutor off', () async {
+    void Function()? turnCompleteCallback;
+
+    when(() => mockRepo.startNewSession()).thenAnswer((_) async => Result.success(123));
+    when(() => mockProfileRepo.getUserProfile()).thenAnswer((_) async => null);
+    when(() => mockAudio.start(onAudioChunk: any(named: 'onAudioChunk'))).thenAnswer((_) async {});
+    when(() => mockAudio.isPlaying).thenReturn(false);
+    when(() => mockClient.connect(
+      modelName: any(named: 'modelName'),
+      systemPrompt: any(named: 'systemPrompt'),
+      voiceName: any(named: 'voiceName'),
+      silenceDurationMs: any(named: 'silenceDurationMs'),
+    )).thenAnswer((_) {});
+    when(() => mockClient.currentTokenCount).thenReturn(0);
+    when(() => mockClient.sendClientContent(
+      role: any(named: 'role'),
+      text: any(named: 'text'),
+      turnComplete: any(named: 'turnComplete'),
+    )).thenAnswer((_) {});
+    when(() => mockClient.onTurnComplete = any()).thenAnswer((invocation) =>
+        turnCompleteCallback = invocation.positionalArguments[0] as void Function()?);
+
+    final agent = container.read(voiceTutorAgentProvider.notifier);
+    await agent.startSession();
+
+    // Rada režiséra dorazí, zatímco tutor mluví – zpráva clientContent by ho utnula
+    agent.injectMidSessionGuidance('[DIRECTOR WHISPER] Ask about the garden.');
+    verifyNever(() => mockClient.sendClientContent(
+      role: any(named: 'role'),
+      text: any(named: 'text'),
+      turnComplete: any(named: 'turnComplete'),
+    ));
+
+    // Tutor domluvil – teprve teď se rada odešle
+    expect(turnCompleteCallback, isNotNull);
+    turnCompleteCallback!();
+    verify(() => mockClient.sendClientContent(
+      role: 'user',
+      text: any(named: 'text', that: contains('Ask about the garden.')),
+      turnComplete: false,
+    )).called(1);
+
+    // Fronta je prázdná, další konec tahu už nic neposílá
+    turnCompleteCallback!();
+    verifyNever(() => mockClient.sendClientContent(
+      role: any(named: 'role'),
+      text: any(named: 'text'),
+      turnComplete: any(named: 'turnComplete'),
+    ));
+  });
+
   test('interruptPlayback stops audio playback and returns state to listening', () async {
     when(() => mockRepo.startNewSession()).thenAnswer((_) async => Result.success(123));
     when(() => mockProfileRepo.getUserProfile()).thenAnswer((_) async => null);

@@ -4,12 +4,15 @@ import '../../../core/app_theme.dart';
 import '../../../data/database/app_database.dart';
 
 /// Hodnocení kartičky (Znovu / Těžké / Dobré / Snadné) s doporučením
-/// podle skóre výslovnosti, pokud student odpovídal hlasem.
+/// podle skóre odpovědi (výslovnost nebo shoda napsaného textu).
 class SrsRatingBar extends StatelessWidget {
   final Flashcard card;
 
-  /// Skóre poslední mluvené odpovědi (0.0–1.0), nebo null.
-  final double? pronunciationScore;
+  /// Skóre odpovědi (0.0–1.0), nebo null.
+  final double? answerScore;
+
+  /// Student odpověď nevěděl: povolené je jen „Znovu“.
+  final bool againOnly;
 
   /// Volá se s hodnocením 0 (Znovu) … 3 (Snadné).
   final ValueChanged<int> onRate;
@@ -17,7 +20,8 @@ class SrsRatingBar extends StatelessWidget {
   const SrsRatingBar({
     super.key,
     required this.card,
-    required this.pronunciationScore,
+    required this.answerScore,
+    this.againOnly = false,
     required this.onRate,
   });
 
@@ -32,7 +36,7 @@ class SrsRatingBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final recommended = recommendedRating(pronunciationScore);
+    final recommended = againOnly ? 0 : recommendedRating(answerScore);
 
     return Row(
       children: [
@@ -56,7 +60,7 @@ class SrsRatingBar extends StatelessWidget {
             sublabel: '${(card.intervalDays * 1.2).ceil()} d.',
             color: AppTheme.warning,
             isRecommended: recommended == 1,
-            onTap: () => onRate(1),
+            onTap: againOnly ? null : () => onRate(1),
           ),
         ),
         const SizedBox(width: 8),
@@ -68,7 +72,7 @@ class SrsRatingBar extends StatelessWidget {
             sublabel: '${(card.intervalDays * 2.0).ceil()} d.',
             color: AppTheme.primary,
             isRecommended: recommended == 2,
-            onTap: () => onRate(2),
+            onTap: againOnly ? null : () => onRate(2),
           ),
         ),
         const SizedBox(width: 8),
@@ -80,7 +84,7 @@ class SrsRatingBar extends StatelessWidget {
             sublabel: '${(card.intervalDays * 3.0).ceil()} d.',
             color: AppTheme.success,
             isRecommended: recommended == 3,
-            onTap: () => onRate(3),
+            onTap: againOnly ? null : () => onRate(3),
           ),
         ),
       ],
@@ -93,7 +97,9 @@ class _RatingButton extends StatelessWidget {
   final String label;
   final String sublabel;
   final Color color;
-  final VoidCallback onTap;
+
+  /// Null = tlačítko je zakázané.
+  final VoidCallback? onTap;
   final bool isRecommended;
 
   const _RatingButton({
@@ -107,7 +113,7 @@ class _RatingButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    final button = InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(14),
       child: Container(
@@ -176,5 +182,7 @@ class _RatingButton extends StatelessWidget {
         ),
       ),
     );
+
+    return onTap == null ? Opacity(opacity: 0.35, child: button) : button;
   }
 }
