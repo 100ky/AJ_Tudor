@@ -24,7 +24,8 @@ void main() {
       expect(normalPrompt.contains('SOKRATOVSKÁ METODA & SCAFFOLDING'), true);
       expect(normalPrompt.contains('přepni do češtiny'), true);
       expect(normalPrompt.contains('ABSOLUTNÍ ZÁKAZ DVOJITÉHO ÚKOLU'), true);
-      expect(normalPrompt.contains('PRAVIDLO 1 KLÍČOVÉ CHYBY NA TAH'), true);
+      expect(normalPrompt.contains('PRAVIDLO 1 OPRAVY NA TAH, NEJVÝŠ 2 OPRAVY NA PROMLUVU'), true);
+      expect(normalPrompt.contains('DRUHÁ CHYBA A NÁVRAT KE KONVERZACI'), true);
       expect(normalPrompt.contains('LIDSKÉ UZNÁNÍ PŘÍBĚHU'), true);
       expect(normalPrompt.contains('DŮSLEDNOST OPRAVOVÁNÍ'), true);
       expect(normalPrompt.contains('NEZAMĚŇUJ TÉMA ZA FRUSTRACI'), true);

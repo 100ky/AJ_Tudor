@@ -4,12 +4,14 @@ import '../../../core/app_theme.dart';
 import '../../../core/widgets/glass_container.dart';
 import '../../../data/database/app_database.dart';
 import '../../../services/gemini/pronunciation_service.dart';
+import '../typed_answer.dart';
 import 'pronunciation_result.dart';
 
-/// Rub kartičky: správné řešení, výslovnost, vysvětlení a původní věta.
+/// Rub kartičky: správné řešení, odpověď studenta, vysvětlení a původní věta.
 class FlashcardBack extends StatelessWidget {
   final Flashcard card;
   final PronunciationAnalysis? lastPronunciation;
+  final TypedAnswer? typedAnswer;
   final bool isPlayingTts;
   final VoidCallback onPlayAudio;
   final VoidCallback onDelete;
@@ -19,6 +21,7 @@ class FlashcardBack extends StatelessWidget {
     super.key,
     required this.card,
     required this.lastPronunciation,
+    this.typedAnswer,
     required this.isPlayingTts,
     required this.onPlayAudio,
     required this.onDelete,
@@ -29,6 +32,7 @@ class FlashcardBack extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final lastPronunciation = this.lastPronunciation;
+    final typedAnswer = this.typedAnswer;
 
     return GlassContainer(
       padding: const EdgeInsets.all(22),
@@ -123,6 +127,10 @@ class FlashcardBack extends StatelessWidget {
                             ),
                           ),
                         ],
+                        if (typedAnswer != null) ...[
+                          const SizedBox(height: 14),
+                          _typedAnswer(context, isDark, typedAnswer),
+                        ],
                         // Nápověda a vysvětlení správného tvaru
                         if (card.explanation.isNotEmpty) ...[
                           const SizedBox(height: 14),
@@ -176,6 +184,46 @@ class FlashcardBack extends StatelessWidget {
                 color: AppTheme.success,
                 letterSpacing: 0.5,
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _typedAnswer(BuildContext context, bool isDark, TypedAnswer answer) {
+    final percent = (answer.score * 100).round();
+    final color = answerScoreColor(percent);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.black.withValues(alpha: 0.25)
+            : Colors.white.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Column(
+        children: [
+          Text(
+            'TVOJE ODPOVĚĎ · SHODA $percent %',
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: color,
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            answer.text,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.textColor(context),
             ),
           ),
         ],

@@ -6,6 +6,8 @@ import '../../../services/gemini/pronunciation_service.dart';
 import 'pronunciation_result.dart';
 
 /// Líc kartičky: české zadání a mluvená odpověď s hodnocením výslovnosti.
+///
+/// Písemnou odpověď a „Nevím“ nabízí spodní lišta obrazovky.
 class FlashcardFront extends StatelessWidget {
   /// České zadání (nebo text o probíhajícím překladu, pokud [isTranslating]).
   final String frontText;
@@ -57,11 +59,7 @@ class FlashcardFront extends StatelessWidget {
                         if (lastPronunciation != null)
                           PronunciationBadge(lastPronunciation)
                         else
-                          Tooltip(
-                            message: 'Klepnutím otočíte kartičku',
-                            child: Icon(Icons.flip_rounded,
-                                size: 20, color: AppTheme.mutedTextColor(context)),
-                          ),
+                          const SizedBox(height: 20),
                       ],
                     ),
 
@@ -314,20 +312,11 @@ class FlashcardFront extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 2),
-        TextButton(
-          onPressed: onFlip,
-          style: TextButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-            minimumSize: Size.zero,
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          ),
-          child: Text(
-            'nebo otočit bez mluvení',
-            style: GoogleFonts.plusJakartaSans(
-              fontSize: 11,
-              color: AppTheme.mutedTextColor(context),
-              decoration: TextDecoration.underline,
-            ),
+        Text(
+          'nebo napište odpověď dole',
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 11,
+            color: AppTheme.mutedTextColor(context),
           ),
         ),
       ],

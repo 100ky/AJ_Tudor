@@ -339,6 +339,56 @@ void main() {
       expect(card.sourceSentence, 'Running clears my head.');
       expect(card.explanation.contains("clear one's head"), true);
     });
+
+    test('analyzeSession skips errors whose transcript STT rendered in a foreign language', () async {
+      final s = (await repo.startNewSession()).getOrThrow();
+      await repo.addTranscript(sessionId: s, speaker: 'tutor', content: 'How has your week been?');
+      await repo.addTranscript(sessionId: s, speaker: 'user', content: '¿Mi semana fue muy buena, y la tuya?');
+      await repo.addTranscript(sessionId: s, speaker: 'tutor', content: 'Glad to hear that! What did you do?');
+      await repo.addTranscript(sessionId: s, speaker: 'user', content: 'मैंने बहुत काम किया');
+
+      final mockJson = jsonEncode({
+        "topicSummary": "Týden",
+        "fluencyScore": 0.7,
+        "estimatedLevel": "B1",
+        "totalErrors": 2,
+        "briefing": "",
+        "resolvedErrors": [],
+        "vocabulary": [],
+        "newLearnedUserFacts": [],
+        "errors": [
+          {
+            "type": "vocabulary",
+            "userSaid": "¿Mi semana fue muy buena, y la tuya?",
+            "targetWordOrPhrase": "my week was great",
+            "czechCue": "můj týden byl skvělý",
+            "correctForm": "My week was great, and yours?",
+            "explanation": "Student přepnul do španělštiny.",
+            "czechTranslation": "můj týden byl skvělý"
+          },
+          {
+            "type": "vocabulary",
+            "userSaid": "मैंने बहुत काम किया",
+            "targetWordOrPhrase": "work a lot",
+            "czechCue": "hodně pracovat",
+            "correctForm": "I worked a lot.",
+            "explanation": "Student přepnul do hindštiny.",
+            "czechTranslation": "hodně pracovat"
+          }
+        ]
+      });
+
+      when(() => mockGemini.sendMessage(
+        any(),
+        responseSchema: any(named: 'responseSchema'),
+        systemPrompt: any(named: 'systemPrompt'),
+      )).thenAnswer((_) async => mockJson);
+
+      final agent = container.read(memoryManagerAgentProvider);
+      await agent.analyzeSession(s);
+
+      expect(await flashcardRepo.getAllFlashcards(), isEmpty);
+    });
   });
 }
 

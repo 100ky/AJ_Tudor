@@ -52,10 +52,16 @@ class _SkeletonScreenState extends ConsumerState<SkeletonScreen>
       duration: const Duration(seconds: 10),
     )..repeat(reverse: true);
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Probrání agenta pro přípravu konverzačního tématu z historie při startu aplikace
-      ref.read(topicPreparationAgentProvider.notifier).prepareTopic();
-    });
+    // Probrání agenta pro přípravu konverzačního tématu z historie při startu aplikace.
+    // API klíč se načítá ze šifrovaného úložiště asynchronně, proto čekáme,
+    // až bude k dispozici (spustí se i po prvním zadání klíče v Settings).
+    ref.listenManual<String?>(apiKeyProvider, (previous, next) {
+      final hadKey = previous != null && previous.isNotEmpty;
+      final hasKey = next != null && next.isNotEmpty;
+      if (hasKey && !hadKey) {
+        ref.read(topicPreparationAgentProvider.notifier).prepareTopic();
+      }
+    }, fireImmediately: true);
   }
 
   @override

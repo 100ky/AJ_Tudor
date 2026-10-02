@@ -25,7 +25,7 @@ test/
 │       └── flashcard_repository_test.dart        # Kartičky: duplicity, SRS hodnocení, statistiky, heuristiky
 ├── features/                                     # Testy obrazovek a modulů aplikace
 │   ├── skeleton/
-│   │   └── skeleton_screen_test.dart             # Hlavní shell, navigace (5 tabů), API klíč warning
+│   │   └── skeleton_screen_test.dart             # Hlavní shell, navigace (5 tabů), API klíč warning, téma až po načtení klíče
 │   ├── conversation/
 │   │   ├── conversation_screen_test.dart         # Gramatická cvičebna a interaktivní dril
 │   │   ├── grammar_drill_controller_test.dart    # Controller drilu (výběr chyb, start, odeslání, reset)
@@ -44,19 +44,20 @@ test/
 │   ├── progress/
 │   │   └── progress_screen_test.dart             # Přehled pokroku, grafy (plynulost, chyby), paměť, statistiky
 │   ├── flashcards/
-│   │   ├── flashcards_screen_test.dart           # Cvičebna kartiček, 3D otočení, SRS hodnocení, TTS
+│   │   ├── flashcards_screen_test.dart           # Cvičebna kartiček, otočení až po odpovědi, „Nevím“, SRS hodnocení, TTS
 │   │   ├── review_session_test.dart              # Průběh opakování (pořadí, počítadla, odebrání karty)
+│   │   ├── typed_answer_test.dart                # Porovnání napsané odpovědi (normalizace, varianty, skóre)
 │   │   └── card_front_resolver_test.dart         # Česká zadání karet a překlad starých zadání
 │   └── settings/
 │       ├── settings_screen_test.dart             # Nastavení API klíče, motivy, připomínky, chytré bubliny
 │       └── settings_screen_layout_test.dart      # Responzivita a prvky v nastavení
 ├── services/                                     # Testy aplikačních služeb a agentů
 │   ├── agents/
-│   │   ├── memory_manager_agent_test.dart        # Analýza session, Structured Outputs, memory pruning, fakta
+│   │   ├── memory_manager_agent_test.dart        # Analýza session, Structured Outputs, memory pruning, fakta, přepis v cizím jazyce
 │   │   ├── scenario_planner_agent_test.dart      # Plánování scénářů, integrace slabých kartiček, custom scénáře
 │   │   ├── topic_preparation_agent_test.dart     # Příprava témat, 12h čerstvost, wildcard, facts bootstrap
 │   │   ├── voice_director_agent_test.dart        # Režisér konverzace (cooldown, tipy, briefing pro reconnect)
-│   │   ├── voice_tutor_agent_test.dart           # Stavový automat tutora, VAD, reconnect, nudge
+│   │   ├── voice_tutor_agent_test.dart           # Stavový automat tutora, VAD, reconnect, nudge, fronta skrytých pokynů
 │   │   └── voice_tutor/
 │   │       ├── speech_activity_detector_test.dart # Detekce řeči (prahy, hystereze, adaptace na šum)
 │   │       ├── tutor_text_analysis_test.dart     # Čištění přepisu, počet slov, opakování tutora

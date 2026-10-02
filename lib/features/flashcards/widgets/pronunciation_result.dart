@@ -3,6 +3,11 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/app_theme.dart';
 import '../../../services/gemini/pronunciation_service.dart';
 
+/// Barva skóre odpovědi v procentech (zelená / oranžová / červená).
+Color answerScoreColor(int percent) => percent >= 85
+    ? const Color(0xFF10B981)
+    : (percent >= 65 ? const Color(0xFFF59E0B) : const Color(0xFFEF4444));
+
 /// Celkové skóre výslovnosti (zelená / oranžová / červená).
 class PronunciationBadge extends StatelessWidget {
   final PronunciationAnalysis analysis;
@@ -12,9 +17,7 @@ class PronunciationBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final score = (analysis.overallScore * 100).round();
-    final Color scoreColor = score >= 85
-        ? const Color(0xFF10B981)
-        : (score >= 65 ? const Color(0xFFF59E0B) : const Color(0xFFEF4444));
+    final scoreColor = answerScoreColor(score);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
