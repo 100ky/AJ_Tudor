@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mocktail/mocktail.dart';
@@ -14,6 +16,7 @@ import 'package:aj_tudor/services/system/wakelock_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:aj_tudor/core/utils/result.dart';
+import 'package:aj_tudor/data/database/app_database.dart';
 
 class MockGeminiLiveClient extends Mock implements GeminiLiveClient {}
 class MockAudioSessionController extends Mock implements AudioSessionController {}
@@ -462,6 +465,114 @@ void main() {
     }
     // Must remain in thinking state despite background noise
     expect(container.read(voiceTutorAgentProvider).status, TutorState.thinking);
+  });
+
+  test('stop while the session is being created in DB cancels the start and closes the new session', () async {
+    final sessionCreated = Completer<Result<int>>();
+    when(() => mockRepo.startNewSession()).thenAnswer((_) => sessionCreated.future);
+
+    final agent = container.read(voiceTutorAgentProvider.notifier);
+    final start = agent.startSession();
+
+    await agent.stopSession('test');
+    sessionCreated.complete(Result.success(123));
+    await start;
+
+    expect(container.read(voiceTutorAgentProvider).status, TutorState.idle);
+    verify(() => mockRepo.closeSession(123)).called(1);
+    verifyNever(() => mockClient.connect(
+      modelName: any(named: 'modelName'),
+      systemPrompt: any(named: 'systemPrompt'),
+      voiceName: any(named: 'voiceName'),
+      silenceDurationMs: any(named: 'silenceDurationMs'),
+    ));
+  });
+
+  test('stop while the profile is loading does not leave a call running without a DB session', () async {
+    final profileLoaded = Completer<UserProfile?>();
+    when(() => mockRepo.startNewSession()).thenAnswer((_) async => Result.success(123));
+    when(() => mockProfileRepo.getUserProfile()).thenAnswer((_) => profileLoaded.future);
+
+    final agent = container.read(voiceTutorAgentProvider.notifier);
+    final start = agent.startSession();
+    await Future<void>.delayed(Duration.zero);
+
+    await agent.stopSession('test');
+    profileLoaded.complete(null);
+    await start;
+
+    expect(container.read(voiceTutorAgentProvider).status, TutorState.idle);
+    verify(() => mockRepo.closeSession(123)).called(1);
+    verify(() => mockMemory.analyzeSession(123)).called(1);
+    verifyNever(() => mockClient.connect(
+      modelName: any(named: 'modelName'),
+      systemPrompt: any(named: 'systemPrompt'),
+      voiceName: any(named: 'voiceName'),
+      silenceDurationMs: any(named: 'silenceDurationMs'),
+    ));
+  });
+
+  test('connection error closes the session and starts the analysis, error stays visible', () async {
+    Function(String)? errorCallback;
+
+    when(() => mockRepo.startNewSession()).thenAnswer((_) async => Result.success(123));
+    when(() => mockProfileRepo.getUserProfile()).thenAnswer((_) async => null);
+    when(() => mockAudio.start(onAudioChunk: any(named: 'onAudioChunk'))).thenAnswer((_) async {});
+    when(() => mockClient.connect(
+      modelName: any(named: 'modelName'),
+      systemPrompt: any(named: 'systemPrompt'),
+      voiceName: any(named: 'voiceName'),
+      silenceDurationMs: any(named: 'silenceDurationMs'),
+    )).thenAnswer((_) {});
+    // stopSession callbacky nuluje, proto si držíme ten poslední nenulový
+    when(() => mockClient.onError = any()).thenAnswer((invocation) => errorCallback =
+        (invocation.positionalArguments[0] as Function(String)?) ?? errorCallback);
+
+    final agent = container.read(voiceTutorAgentProvider.notifier);
+    await agent.startSession();
+
+    expect(errorCallback, isNotNull);
+    errorCallback!('Nepodařilo se obnovit spojení po 5 pokusech.');
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+
+    verify(() => mockRepo.closeSession(123)).called(1);
+    verify(() => mockMemory.analyzeSession(123)).called(1);
+    final state = container.read(voiceTutorAgentProvider);
+    expect(state.status, TutorState.error);
+    expect(state.errorMessage, 'Nepodařilo se obnovit spojení po 5 pokusech.');
+  });
+
+  test('start during an unfinished stop waits for it and keeps saving into the new session', () async {
+    final audioStopped = Completer<void>();
+    var audioStopCalls = 0;
+    var nextSessionId = 123;
+
+    when(() => mockRepo.startNewSession()).thenAnswer((_) async => Result.success(nextSessionId++));
+    when(() => mockProfileRepo.getUserProfile()).thenAnswer((_) async => null);
+    when(() => mockAudio.start(onAudioChunk: any(named: 'onAudioChunk'))).thenAnswer((_) async {});
+    when(() => mockAudio.stop()).thenAnswer((_) => audioStopCalls++ == 0 ? audioStopped.future : Future.value());
+    when(() => mockClient.connect(
+      modelName: any(named: 'modelName'),
+      systemPrompt: any(named: 'systemPrompt'),
+      voiceName: any(named: 'voiceName'),
+      silenceDurationMs: any(named: 'silenceDurationMs'),
+    )).thenAnswer((_) {});
+    when(() => mockClient.sendText(any())).thenAnswer((_) {});
+
+    final agent = container.read(voiceTutorAgentProvider.notifier);
+    await agent.startSession();
+
+    final stop = agent.stopSession('test');
+    final restart = agent.startSession();
+    audioStopped.complete();
+    await stop;
+    await restart;
+
+    verify(() => mockRepo.closeSession(123)).called(1);
+    expect(container.read(voiceTutorAgentProvider).status, TutorState.listening);
+
+    agent.sendText('Hello');
+    verify(() => mockRepo.addTranscript(sessionId: 124, speaker: 'user', content: 'Hello')).called(1);
   });
 }
 

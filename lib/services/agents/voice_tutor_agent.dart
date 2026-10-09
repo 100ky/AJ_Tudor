@@ -107,6 +107,13 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   bool _isStarting = false;
   bool _isObserverRegistered = false;
 
+  // Probíhající ukončování lekce; start na něj počká, jinak by mu stop vynuloval ID nové lekce.
+  Future<void>? _pendingStop;
+
+  // Zvyšuje se s každým ukončením. Start podle ní pozná, že byl během čekání zrušen,
+  // a nespustí hovor, ke kterému už neexistuje lekce v databázi (přepis by se neukládal).
+  int _sessionGeneration = 0;
+
   // Průběžný nashromážděný přepis řeči uživatele pro aktuální repliku.
   String _currentUserTranscript = '';
 
@@ -239,10 +246,18 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     }
     _isStarting = true;
 
+    final pendingStop = _pendingStop;
+    if (pendingStop != null) {
+      L.i('startSession čeká na dokončení ukončování předchozí session...');
+      await pendingStop;
+    }
+
     if (_currentSessionId != null) {
       L.w('Pokus o startSession, ale předchozí session ($_currentSessionId) nebyla uzavřena. Uzavírám a odesílám k analýze.');
       await stopSession('forced_restart');
     }
+
+    final generation = _sessionGeneration;
 
     state = state.copyWith(
       status: TutorState.connecting,
@@ -260,6 +275,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         status: TutorState.error,
         errorMessage: 'Chybí API klíč. Nastavte jej v Settings.'
       );
+      _isStarting = false;
       return;
     }
 
@@ -275,7 +291,13 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         );
         return;
       }
-      _currentSessionId = sessionResult.getOrThrow();
+      final newSessionId = sessionResult.getOrThrow();
+      if (_isStartCancelled(generation)) {
+        // Stop proběhl dřív, než lekce v DB vznikla, takže ji neuzavřel – uzavřeme ji sami.
+        await _repo.closeSession(newSessionId);
+        return;
+      }
+      _currentSessionId = newSessionId;
       _currentUserTranscript = '';
 
       // Reset session metrik
@@ -297,6 +319,8 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       _targetLevelSnapshot = targetLevel;
       _userFactsSnapshot = userProfile?.userFacts;
       _recentTopicsSnapshot = userProfile?.topicPreferences;
+      // Stop během čekání na DB už lekci uzavřel – hovor bez lekce by se neuložil ani nevyhodnotil
+      if (_isStartCancelled(generation)) return;
       final voice = ref.read(voiceProvider);
       final isImmersive = ref.read(immersiveModeProvider);
 
@@ -391,6 +415,12 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         return;
       }
 
+      if (_isStartCancelled(generation)) {
+        // Stop mohl vypnout mikrofon dřív, než se stihl zapnout
+        await _audio.stop();
+        return;
+      }
+
       state = state.copyWith(status: TutorState.listening, currentTranscript: '');
       _resetWatchdog();
 
@@ -428,10 +458,20 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     }
   }
 
+  /// Zda byla lekce během spouštění ukončena (nebo agent zanikl).
+  bool _isStartCancelled(int generation) {
+    if (generation == _sessionGeneration && ref.mounted) return false;
+    L.w('Spouštění session bylo přerušeno jejím ukončením – hovor nespouštím.');
+    return true;
+  }
+
   /// Uloží repliku do přepisu aktuální lekce v databázi (pokud lekce běží).
   void _saveTranscript(String speaker, String content) {
     final sessionId = _currentSessionId;
-    if (sessionId == null) return;
+    if (sessionId == null) {
+      L.w('Replika ($speaker) se neuložila – neběží žádná session v DB.');
+      return;
+    }
     _repo.addTranscript(sessionId: sessionId, speaker: speaker, content: content);
   }
 
@@ -721,8 +761,16 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   }
 
   /// Příjem chybové zprávy z WebSocketu.
+  ///
+  /// Chyba hovor ukončí (UI pak nabízí jen nový start), proto lekci rovnou uzavřeme,
+  /// aby se přepis uložil a spustila se analýza – jinak by zůstala otevřená a nevyhodnocená.
   void _onError(String error) {
     state = state.copyWith(status: TutorState.error, errorMessage: error);
+    stopSession('error: $error').then((_) {
+      if (ref.mounted) {
+        state = state.copyWith(status: TutorState.error, errorMessage: error);
+      }
+    });
   }
 
   /// Po výpadku a znovupřipojení WebSocketu injektuje do nové relace Gemini
@@ -750,10 +798,16 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   /// Bezpečně ukončí aktuální hlasové sezení a spustí asynchronní vyhodnocení.
   ///
   /// [reason] označuje důvod odpojení (pro účely logování).
-  Future<void> stopSession([String reason = 'unknown']) async {
-    if (_isStopping) return;
+  /// Souběžná volání čekají na jedno společné ukončení.
+  Future<void> stopSession([String reason = 'unknown']) {
+    return _pendingStop ??=
+        _stopSession(reason).whenComplete(() => _pendingStop = null);
+  }
+
+  Future<void> _stopSession(String reason) async {
     L.i('Ukončování session (Důvod: $reason)');
     _isStopping = true;
+    _sessionGeneration++;
 
     try {
       // Zrušení časovačů
