@@ -10,6 +10,8 @@ Tato složka obsahuje komplexní sadu automatizovaných unit, widget a integrač
 test/
 ├── core/                                         # Testy jádra aplikace a utilit
 │   ├── result_test.dart                          # Typ Result<T> a zpracování chyb
+│   ├── utils/
+│   │   └── logger_test.dart                      # Log lekce (bez šumu, přežije restart), mazání starých logů
 │   └── widgets/
 │       └── glass_container_test.dart             # Skleněný kontejner (blur, specular bordery, margin)
 ├── data/                                         # Testy datové vrstvy a repozitářů
@@ -19,7 +21,7 @@ test/
 │   │   ├── chat_message_test.dart                # ChatMessage a opravy pro chytré bubliny
 │   │   └── srs_scheduler_test.dart               # SRS plánovač (intervaly, mastery, meze)
 │   └── repositories/
-│       ├── session_repository_test.dart          # Lekce, transkripty, chyby, kaskádový delete
+│       ├── session_repository_test.dart          # Lekce, transkripty, chyby, nahlášené problémy, kaskádový delete
 │       ├── profile_repository_test.dart          # Paměť, slovní zásoba, chyby, fakta „O mně“, připravené téma
 │       ├── scenario_repository_test.dart         # Scénáře (náhrada, vlastní scénář, použití)
 │       └── flashcard_repository_test.dart        # Kartičky: duplicity, SRS hodnocení, statistiky, heuristiky
@@ -32,13 +34,15 @@ test/
 │   │   ├── voice_tutor_screen_test.dart          # Hlasový tutor (režimy, transkript, volání, audio)
 │   │   └── widgets/
 │   │       ├── fluid_voice_wave_test.dart        # Vykreslování audio křivky (waveform, plynulé animace)
+│   │       ├── drill_input_bar_test.dart         # Bublina „tutor přemýšlí“ nepřeteče na úzkém displeji
 │   │       ├── chat_bubble_test.dart             # Konverzační bublina (uživatel vs tutor, clipboard)
 │   │       ├── smart_chat_bubble_test.dart       # Chytrá bublina (kartička opravy, akordeon, TTS, uložení)
-│   │       ├── interactive_tutor_text_test.dart  # Výběr textu a extrakce frází
+│   │       ├── interactive_tutor_text_test.dart  # Klepnutí, výběr fráze podržením, scroll přes text, čeština
+│   │       ├── tutor_text_tokens_test.dart       # Dělení textu na slova, tučný text, které slovo je česky
 │   │       └── word_translation_sheet_test.dart  # Bottom sheet kontextového překladu a rozšiřování frází
 │   ├── history/
 │   │   ├── history_screen_test.dart              # Historie lekcí, filtry, detail lekce, mazání
-│   │   └── session_detail_controller_test.dart   # Chat nad lekcí (kontext posledních 10 replik), mazání lekce
+│   │   └── session_detail_controller_test.dart   # Chat nad lekcí (kontext posledních 10 replik), nahlášení problému, mazání lekce
 │   ├── agents/
 │   │   └── agents_screen_test.dart               # Multi-agentní přehled, generování scénářů na míru
 │   ├── progress/
@@ -57,7 +61,7 @@ test/
 │   │   ├── scenario_planner_agent_test.dart      # Plánování scénářů, integrace slabých kartiček, custom scénáře
 │   │   ├── topic_preparation_agent_test.dart     # Příprava témat, 12h čerstvost, wildcard, facts bootstrap
 │   │   ├── voice_director_agent_test.dart        # Režisér konverzace (cooldown, tipy, briefing pro reconnect)
-│   │   ├── voice_tutor_agent_test.dart           # Stavový automat tutora, VAD, reconnect, nudge, fronta skrytých pokynů
+│   │   ├── voice_tutor_agent_test.dart           # Stavový automat tutora, VAD, reconnect, nudge, fronta skrytých pokynů, start/stop, pauza
 │   │   └── voice_tutor/
 │   │       ├── speech_activity_detector_test.dart # Detekce řeči (prahy, hystereze, adaptace na šum)
 │   │       ├── tutor_text_analysis_test.dart     # Čištění přepisu, počet slov, opakování tutora

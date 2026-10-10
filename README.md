@@ -155,18 +155,41 @@ adb exec-out run-as com.tudor.aj_tudor cat app_flutter/logs/latest.log > latest.
 
 Každé spuštění aplikace začne nový `latest.log`, předchozí běh zůstane v `previous.log`.
 
+Každá hlasová lekce má navíc vlastní log `logs/sessions/session_<id>.log`, který restarty aplikace přežije (drží se posledních 30 lekcí). Problém, který se v lekci projevil, jde popsat v detailu lekce tlačítkem „Nahlásit problém“, nebo dlouhým stiskem repliky, u které se projevil. Popis se uloží do tabulky `session_issues`. Postup rozboru je v `CLAUDE.md`.
+
 ### Ruční test na zařízení
 Automatické testy nepokryjí mikrofon, přehrávání zvuku ani skutečné volání Gemini. Po větších změnách projděte na telefonu:
 
 - [ ] Hlasová lekce: start, pauza a obnovení (i přes překlad slova), stop
+- [ ] Nahlášení problému v detailu lekce (tlačítkem i dlouhým stiskem repliky)
 - [ ] Hlasová lekce: věta se dvěma chybami (tutor je opraví postupně, vždy jednu), tutor se neutíná uprostřed věty
-- [ ] Překlad slova a uložení do kartiček
+- [ ] Překlad slova (klepnutí) a fráze (podržení a tažení), uložení do kartiček tlačítkem
+- [ ] Scroll přes text tutora v drilu i v hlasové lekci, česká slova nejdou označit
 - [ ] Tlačítko „Do kartiček“ u opravy v chatové bublině
 - [ ] Opakování kartiček: odpověď hlasem, napsáním i „Nevím“ (pak jde jen „Znovu“), přehrání nahlas
 - [ ] Chat nad lekcí (detail lekce v záložce Pokrok) a gramatický dril
 - [ ] Nastavení: přepínače, úroveň angličtiny, přidání a smazání faktu „O mně“
 - [ ] Záloha a import
 - [ ] Reset paměti, jen pokud vám nevadí přijít o to, co si Tudor pamatuje
+
+---
+
+## 🛠️ Úpravy po ručním testu (9.–10. 10. 2026)
+
+Úpravy vzešly z rozboru logů hlasových lekcí z telefonu a z gramatického drilu. Počet testů vzrostl z 333 na 362.
+
+- **Ukončení a spuštění lekce se nepřekříží:** start počká na rozběhnuté ukončení, a když lekci během spouštění někdo ukončí, hovor se nespustí. Dřív mohl hovor běžet bez lekce v databázi, takže se přepis neukládal ani nevyhodnotil.
+- **Chyba spojení lekci uzavře:** po chybě (např. „Nepodařilo se obnovit spojení“) se lekce uloží a spustí se rozbor. Dřív zůstala otevřená a nevyhodnocená.
+- **Popostrčení modelu přes `audioStreamEnd`:** po 2 s ticha aplikace dřív posílala prázdný `clientContent` s `turnComplete`. Ten na server dorazil dřív než přepis studenta a model odpověděl na prázdný tah („Take your time...“, nebo i 16 s mumlání přepsaného jako „...“). Skutečná odpověď přišla až potom. Teď aplikace posílá `realtimeInput.audioStreamEnd`, které řeč studenta na serveru uzavře. Dokumentace Live API výslovně neříká, že model po něm vždy odpoví. Na telefonu to zatím funguje.
+- **Mikrofon při čekání na odpověď:** ve stavu „přemýšlí“ se zvuk na server posílá, jen když student znovu promluví. Šum by jinak proud znovu otevřel.
+- **Repliky bez slov:** tah tutora přepsaný jen jako „...“ se nezobrazí ani neuloží.
+- **Pauza:** dokončený tah tutora ani přerušení pauzu nezruší. Zbytek rozpracované odpovědi se během pauzy nepřehraje.
+- **Log lekce a nahlášení problému:** viz *Log z telefonu*.
+- **Scroll vs. výběr textu tutora:** tah prstem přes text tutora dřív skoro vždy zapnul výběr fráze, protože výběr se zapínal po 8 px do strany nebo po přejetí na sousední slovo, tedy dřív než scroll (18 px). Teď tah vždycky scrolluje. Klepnutí na slovo ho přeloží a frázi označí podržení slova (`kLongPressTimeout`) a tažení. Rozpoznávač je v `tutor_text_selection_recognizer.dart`.
+- **Kartička až na přání:** překlad se do kartiček uloží tlačítkem „+ Uložit“, ne hned po otevření. Rovnou se uloží jen slovíčko vybrané z přeložené věty a rozšířená fráze, pokud byla předchozí fráze uložená.
+- **Čeština nejde označit:** `tokenizeTutorText` (`tutor_text_tokens.dart`) dělí text na úseky. Každý tučný či kurzivní text a každé uvozovky jsou samostatný úsek, zbytek věty tvoří jeden úsek. Úsek se dvěma českými slovy, nebo s převahou českých slov, je obyčejný text. Anglický příklad v tučném textu nebo v uvozovkách uvnitř české věty jde označit. Tučný text přes víc slov se zobrazí bez hvězdiček.
+- **Čistý překlad:** model občas vrátí v překladu zbytek formátování, např. „Jak to, že</code>“. `WordTranslationService.cleanTranslationText` z odpovědi odstraní HTML/XML tagy, markdown a uvozovky. Stejně se vyčistí i starší záznamy v mezipaměti překladů při jejím načtení.
+- **Bublina „Tutor vyhodnocuje…“ v drilu** na úzkém displeji (360 dp) přetékala o 24 px. Text se teď zalomí.
 
 ---
 
@@ -204,14 +227,13 @@ Refaktoring proběhl ve větvi `refactor/structure` ve čtyřech fázích. Sché
 
 ### Otevřené body a doporučení
 1. **Ruční test na zařízení** (oddíl *Kontrola změn*) projít před sloučením do `main`.
-2. **`voice_tutor_agent.dart` má pořád 1262 řádků.** Dalším krokem je vyčlenit do `services/agents/voice_tutor/` spuštění a ukončení lekce (`startSession` má asi 200 řádků, `stopSession` asi 120) a zpracování zvuku z mikrofonu (`_handleIncomingAudioChunk`, `_processAudioChunkForVAD` a časovače, asi 190 řádků). Dělat to až po úspěšném ručním testu. Jde o řízení živého hovoru a reálný zvuk automatické testy nepokryjí.
+2. **`voice_tutor_agent.dart` má po opravách z 9.–10. 10. už 1341 řádků.** Dalším krokem je vyčlenit do `services/agents/voice_tutor/` spuštění a ukončení lekce (`startSession` má asi 200 řádků, `stopSession` asi 120) a zpracování zvuku z mikrofonu (`_handleIncomingAudioChunk`, `_processAudioChunkForVAD` a časovače, asi 190 řádků). Dělat to až po úspěšném ručním testu. Jde o řízení živého hovoru a reálný zvuk automatické testy nepokryjí.
 3. **Další soubory nad 600 řádků.** Rozdělit je, až se na nich bude pracovat:
    - `core/app_theme.dart` (781): oddělit barvy od `ThemeData` a `TextTheme`.
-   - `features/conversation/widgets/word_translation_sheet.dart` (750): překlad, uložení do kartiček a vrácení zpět přesunout ze stavu widgetu do controlleru. Metodu `build` (přes 400 řádků) rozdělit na menší widgety.
-   - `features/conversation/widgets/interactive_tutor_text.dart` (639): rozpoznávač gest dát do vlastního souboru. Rozdělení textu na slova (včetně `**tučně**` a `*kurzívy*`) vytáhnout do čisté funkce a otestovat.
-   - `services/gemini/gemini_live_client.dart` (630): zpracování zpráv ze serveru (`_handleIncomingMessage`, asi 190 řádků) přesunout do samostatného parseru. Klientovi zůstane připojení, reconnect a odesílání.
+   - `features/conversation/widgets/word_translation_sheet.dart` (753): překlad, uložení do kartiček a vrácení zpět přesunout ze stavu widgetu do controlleru. Metodu `build` (přes 400 řádků) rozdělit na menší widgety.
+   - `services/gemini/gemini_live_client.dart` (634): zpracování zpráv ze serveru (`_handleIncomingMessage`, asi 190 řádků) přesunout do samostatného parseru. Klientovi zůstane připojení, reconnect a odesílání.
 4. **`features/history/history_screen.dart` se v aplikaci nepoužívá**, a to už před refaktoringem. Odkazují na ni jen testy, historie lekcí je v záložce Pokrok. Je potřeba rozhodnout, jestli ji smazat i s testem, nebo vrátit do navigace.
-5. **Migrace databáze (zatím odloženo).** Opravy schématu a deduplikace kartiček v `beforeOpen` (`data/database/app_database.dart`) běží při každém startu aplikace. Doporučený postup: zvýšit `schemaVersion` na 4, opravy přesunout do `onUpgrade` a přidat test migrace na starší databázi. Změna se týká dat uložených v zařízení, proto zatím počkala.
+5. **Migrace databáze (zatím odloženo).** Opravy schématu a deduplikace kartiček v `beforeOpen` (`data/database/app_database.dart`) běží při každém startu aplikace. `schemaVersion` je od přidání tabulky `session_issues` 4. Doporučený postup: zvýšit ji na 5, opravy přesunout do `onUpgrade` a přidat test migrace na starší databázi. Změna se týká dat uložených v zařízení, proto zatím počkala.
 6. **Kartičky smazané chybnou deduplikací se samy nevrátí.** Jejich chyby mají dál příznak `in_flashcard`, takže z nich nové kartičky nevzniknou a detail lekce u nich ukazuje, že už v kartičkách jsou. Příznaky by šlo vynulovat u chyb, ke kterým žádná kartička neexistuje. Tím by se ale vrátily i chyby záměrně vyřazené z generování a chyby, jejichž kartičky byly smazané ručně, proto to zatím neproběhlo.
 7. **Zaseknutí po přerušení tutora (nevyřešeno).** Na konci jedné lekce tutor zachytil vlastní hlas a dvakrát se utnul. Pak aplikace ukazovala zelenou vlnu, ale nic nepřepisovala a neodpovídala. Nejpravděpodobnější spouštěč, tedy skryté pokyny uprostřed odpovědi, je opravený. Samotná příčina zaseknutí ale bez celého logu potvrzená není. Když se to zopakuje, stáhnout `latest.log` (viz *Kontrola změn*).
 8. **Tutor občas pochválí špatně zopakovanou opravu**, např. „I will call.“ místo „I will code.“ → „Exactly!“. Nejspíš studenta špatně slyší. Zatím neřešeno.

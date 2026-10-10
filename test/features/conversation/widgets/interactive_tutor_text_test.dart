@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:aj_tudor/features/conversation/widgets/interactive_tutor_text.dart';
@@ -90,7 +91,7 @@ void main() {
       expect(selected, 'look forward to');
     });
 
-    testWidgets('drag selection across words joins them into a phrase', (tester) async {
+    testWidgets('holding a word and dragging selects a phrase', (tester) async {
       String? selected;
 
       await tester.pumpWidget(
@@ -111,9 +112,7 @@ void main() {
       );
 
       final gesture = await tester.startGesture(tester.getCenter(find.text('look')));
-      await tester.pump();
-      await gesture.moveBy(const Offset(40, 0));
-      await tester.pump();
+      await tester.pump(kLongPressTimeout + const Duration(milliseconds: 50));
       await gesture.moveTo(tester.getCenter(find.text('meeting')));
       await tester.pump();
       await gesture.up();
@@ -122,7 +121,7 @@ void main() {
       expect(selected, 'look forward to meeting');
     });
 
-    testWidgets('multi-line drag selection seamlessly selects words across lines', (tester) async {
+    testWidgets('holding and dragging selects words across lines', (tester) async {
       String? selected;
 
       await tester.pumpWidget(
@@ -144,9 +143,7 @@ void main() {
 
       // Start drag on 'First'
       final gesture = await tester.startGesture(tester.getCenter(find.text('First')));
-      await tester.pump();
-      await gesture.moveBy(const Offset(30, 0));
-      await tester.pump();
+      await tester.pump(kLongPressTimeout + const Duration(milliseconds: 50));
       // Drag down onto 'second' on the next line
       await gesture.moveTo(tester.getCenter(find.text('second')));
       await tester.pump();
@@ -154,6 +151,61 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(selected, 'First line and second');
+    });
+
+    testWidgets('dragging without holding scrolls the list instead of selecting', (tester) async {
+      String? selected;
+      final controller = ScrollController();
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ListView(
+              controller: controller,
+              children: [
+                for (var i = 0; i < 20; i++)
+                  InteractiveTutorText(
+                    text: 'Line $i with quite a few English words to read.',
+                    autoOpenTranslationSheet: false,
+                    onSelection: (phrase, fullSentence) => selected = phrase,
+                  ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      // Diagonální tah začínající na slově (dřív hned zapnul výběr)
+      await tester.dragFrom(tester.getCenter(find.text('English').at(5)), const Offset(-15, -200));
+      await tester.pumpAndSettle();
+
+      expect(controller.offset, greaterThan(0));
+      expect(selected, isNull);
+    });
+
+    testWidgets('Czech words are plain text, the English example stays tappable', (tester) async {
+      String? selected;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: InteractiveTutorText(
+              text: 'Správně je **I have been working** od rána.',
+              autoOpenTranslationSheet: false,
+              onSelection: (phrase, fullSentence) => selected = phrase,
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Správně'));
+      await tester.pumpAndSettle();
+      expect(selected, isNull);
+
+      await tester.tap(find.text('working'));
+      await tester.pumpAndSettle();
+      expect(selected, 'working');
     });
   });
 }

@@ -82,7 +82,7 @@ void main() {
   }
 
   group('WordTranslationSheet Tests', () {
-    testWidgets('shows loading state then displays translation and auto-saves to flashcards',
+    testWidgets('shows loading state, displays translation and saves to flashcards only on tap',
         (WidgetTester tester) async {
       final completer = Completer<String>();
       when(() => mockTranslationService.translate(
@@ -106,11 +106,20 @@ void main() {
       completer.complete('jablko');
       await tester.pumpAndSettle();
 
-      // Verify translation is displayed
+      // Verify translation is displayed, nothing saved yet
       expect(find.text('apple'), findsOneWidget);
       expect(find.text('jablko'), findsOneWidget);
-      expect(find.text('Uloženo do Smart Flashcards! 🃏'), findsOneWidget);
+      expect(find.text('Není v kartičkách'), findsOneWidget);
+      verifyNever(() => mockTranslationService.saveToFlashcards(
+            englishText: any(named: 'englishText'),
+            czechText: any(named: 'czechText'),
+            contextSentence: any(named: 'contextSentence'),
+          ));
 
+      await tester.tap(find.text('+ Uložit'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Uloženo do Smart Flashcards! 🃏'), findsOneWidget);
       verify(() => mockTranslationService.saveToFlashcards(
             englishText: 'apple',
             czechText: 'jablko',
@@ -206,6 +215,8 @@ void main() {
 
       await tester.pumpAndSettle();
 
+      await tester.tap(find.text('+ Uložit'));
+      await tester.pumpAndSettle();
       expect(find.text('Vrátit ↩'), findsOneWidget);
 
       // Tap Vrátit ↩

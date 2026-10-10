@@ -69,6 +69,12 @@ final sessionErrorLogsProvider =
   return ref.watch(sessionRepositoryProvider).watchErrorLogs(sessionId);
 });
 
+/// Problémy, které student nahlásil u lekce.
+final sessionIssuesProvider =
+    StreamProvider.autoDispose.family<List<SessionIssue>, int>((ref, sessionId) {
+  return ref.watch(sessionRepositoryProvider).watchSessionIssues(sessionId);
+});
+
 /// Kartičky připravené k dnešnímu opakování.
 final dueFlashcardsProvider = StreamProvider<List<Flashcard>>((ref) {
   return ref.watch(flashcardRepositoryProvider).watchDueFlashcards();

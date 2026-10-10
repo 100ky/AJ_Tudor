@@ -10,6 +10,19 @@ void main() {
     });
   });
 
+  group('hasSpokenWords', () {
+    test('a turn transcribed only as dots has no words', () {
+      expect(hasSpokenWords('...'), isFalse);
+      expect(hasSpokenWords(' … '), isFalse);
+      expect(hasSpokenWords(''), isFalse);
+    });
+
+    test('real speech in English or Czech has words', () {
+      expect(hasSpokenWords('Take your time...'), isTrue);
+      expect(hasSpokenWords('To je v pořádku.'), isTrue);
+    });
+  });
+
   group('meaningfulWordCount', () {
     test('counts words longer than one character', () {
       expect(meaningfulWordCount('I like it, really!'), 3);

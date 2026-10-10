@@ -3524,6 +3524,370 @@ class FlashcardsCompanion extends UpdateCompanion<Flashcard> {
   }
 }
 
+class $SessionIssuesTable extends SessionIssues
+    with TableInfo<$SessionIssuesTable, SessionIssue> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SessionIssuesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _sessionIdMeta = const VerificationMeta(
+    'sessionId',
+  );
+  @override
+  late final GeneratedColumn<int> sessionId = GeneratedColumn<int>(
+    'session_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES sessions (id)',
+    ),
+  );
+  static const VerificationMeta _transcriptIdMeta = const VerificationMeta(
+    'transcriptId',
+  );
+  @override
+  late final GeneratedColumn<int> transcriptId = GeneratedColumn<int>(
+    'transcript_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES transcripts (id)',
+    ),
+  );
+  static const VerificationMeta _noteMeta = const VerificationMeta('note');
+  @override
+  late final GeneratedColumn<String> note = GeneratedColumn<String>(
+    'note',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    sessionId,
+    transcriptId,
+    note,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'session_issues';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SessionIssue> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('session_id')) {
+      context.handle(
+        _sessionIdMeta,
+        sessionId.isAcceptableOrUnknown(data['session_id']!, _sessionIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sessionIdMeta);
+    }
+    if (data.containsKey('transcript_id')) {
+      context.handle(
+        _transcriptIdMeta,
+        transcriptId.isAcceptableOrUnknown(
+          data['transcript_id']!,
+          _transcriptIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('note')) {
+      context.handle(
+        _noteMeta,
+        note.isAcceptableOrUnknown(data['note']!, _noteMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_noteMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  SessionIssue map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SessionIssue(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      sessionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}session_id'],
+      )!,
+      transcriptId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}transcript_id'],
+      ),
+      note: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}note'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $SessionIssuesTable createAlias(String alias) {
+    return $SessionIssuesTable(attachedDatabase, alias);
+  }
+}
+
+class SessionIssue extends DataClass implements Insertable<SessionIssue> {
+  final int id;
+  final int sessionId;
+
+  /// Replika, u které se problém projevil (nepovinné).
+  final int? transcriptId;
+  final String note;
+  final DateTime createdAt;
+  const SessionIssue({
+    required this.id,
+    required this.sessionId,
+    this.transcriptId,
+    required this.note,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['session_id'] = Variable<int>(sessionId);
+    if (!nullToAbsent || transcriptId != null) {
+      map['transcript_id'] = Variable<int>(transcriptId);
+    }
+    map['note'] = Variable<String>(note);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  SessionIssuesCompanion toCompanion(bool nullToAbsent) {
+    return SessionIssuesCompanion(
+      id: Value(id),
+      sessionId: Value(sessionId),
+      transcriptId: transcriptId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(transcriptId),
+      note: Value(note),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory SessionIssue.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SessionIssue(
+      id: serializer.fromJson<int>(json['id']),
+      sessionId: serializer.fromJson<int>(json['sessionId']),
+      transcriptId: serializer.fromJson<int?>(json['transcriptId']),
+      note: serializer.fromJson<String>(json['note']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'sessionId': serializer.toJson<int>(sessionId),
+      'transcriptId': serializer.toJson<int?>(transcriptId),
+      'note': serializer.toJson<String>(note),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  SessionIssue copyWith({
+    int? id,
+    int? sessionId,
+    Value<int?> transcriptId = const Value.absent(),
+    String? note,
+    DateTime? createdAt,
+  }) => SessionIssue(
+    id: id ?? this.id,
+    sessionId: sessionId ?? this.sessionId,
+    transcriptId: transcriptId.present ? transcriptId.value : this.transcriptId,
+    note: note ?? this.note,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  SessionIssue copyWithCompanion(SessionIssuesCompanion data) {
+    return SessionIssue(
+      id: data.id.present ? data.id.value : this.id,
+      sessionId: data.sessionId.present ? data.sessionId.value : this.sessionId,
+      transcriptId: data.transcriptId.present
+          ? data.transcriptId.value
+          : this.transcriptId,
+      note: data.note.present ? data.note.value : this.note,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SessionIssue(')
+          ..write('id: $id, ')
+          ..write('sessionId: $sessionId, ')
+          ..write('transcriptId: $transcriptId, ')
+          ..write('note: $note, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, sessionId, transcriptId, note, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SessionIssue &&
+          other.id == this.id &&
+          other.sessionId == this.sessionId &&
+          other.transcriptId == this.transcriptId &&
+          other.note == this.note &&
+          other.createdAt == this.createdAt);
+}
+
+class SessionIssuesCompanion extends UpdateCompanion<SessionIssue> {
+  final Value<int> id;
+  final Value<int> sessionId;
+  final Value<int?> transcriptId;
+  final Value<String> note;
+  final Value<DateTime> createdAt;
+  const SessionIssuesCompanion({
+    this.id = const Value.absent(),
+    this.sessionId = const Value.absent(),
+    this.transcriptId = const Value.absent(),
+    this.note = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  });
+  SessionIssuesCompanion.insert({
+    this.id = const Value.absent(),
+    required int sessionId,
+    this.transcriptId = const Value.absent(),
+    required String note,
+    required DateTime createdAt,
+  }) : sessionId = Value(sessionId),
+       note = Value(note),
+       createdAt = Value(createdAt);
+  static Insertable<SessionIssue> custom({
+    Expression<int>? id,
+    Expression<int>? sessionId,
+    Expression<int>? transcriptId,
+    Expression<String>? note,
+    Expression<DateTime>? createdAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (sessionId != null) 'session_id': sessionId,
+      if (transcriptId != null) 'transcript_id': transcriptId,
+      if (note != null) 'note': note,
+      if (createdAt != null) 'created_at': createdAt,
+    });
+  }
+
+  SessionIssuesCompanion copyWith({
+    Value<int>? id,
+    Value<int>? sessionId,
+    Value<int?>? transcriptId,
+    Value<String>? note,
+    Value<DateTime>? createdAt,
+  }) {
+    return SessionIssuesCompanion(
+      id: id ?? this.id,
+      sessionId: sessionId ?? this.sessionId,
+      transcriptId: transcriptId ?? this.transcriptId,
+      note: note ?? this.note,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (sessionId.present) {
+      map['session_id'] = Variable<int>(sessionId.value);
+    }
+    if (transcriptId.present) {
+      map['transcript_id'] = Variable<int>(transcriptId.value);
+    }
+    if (note.present) {
+      map['note'] = Variable<String>(note.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SessionIssuesCompanion(')
+          ..write('id: $id, ')
+          ..write('sessionId: $sessionId, ')
+          ..write('transcriptId: $transcriptId, ')
+          ..write('note: $note, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -3533,6 +3897,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $ErrorLogsTable errorLogs = $ErrorLogsTable(this);
   late final $ScenariosTable scenarios = $ScenariosTable(this);
   late final $FlashcardsTable flashcards = $FlashcardsTable(this);
+  late final $SessionIssuesTable sessionIssues = $SessionIssuesTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -3544,6 +3909,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     errorLogs,
     scenarios,
     flashcards,
+    sessionIssues,
   ];
 }
 
@@ -3603,6 +3969,24 @@ final class $$SessionsTableReferences
     ).filter((f) => f.sessionId.id.sqlEquals($_itemColumn<int>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_errorLogsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$SessionIssuesTable, List<SessionIssue>>
+  _sessionIssuesRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.sessionIssues,
+    aliasName: 'sessions__id__session_issues__session_id',
+  );
+
+  $$SessionIssuesTableProcessedTableManager get sessionIssuesRefs {
+    final manager = $$SessionIssuesTableTableManager(
+      $_db,
+      $_db.sessionIssues,
+    ).filter((f) => f.sessionId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_sessionIssuesRefsTable($_db));
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -3694,6 +4078,31 @@ class $$SessionsTableFilterComposer
           }) => $$ErrorLogsTableFilterComposer(
             $db: $db,
             $table: $db.errorLogs,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> sessionIssuesRefs(
+    Expression<bool> Function($$SessionIssuesTableFilterComposer f) f,
+  ) {
+    final $$SessionIssuesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.sessionIssues,
+      getReferencedColumn: (t) => t.sessionId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SessionIssuesTableFilterComposer(
+            $db: $db,
+            $table: $db.sessionIssues,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -3836,6 +4245,31 @@ class $$SessionsTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> sessionIssuesRefs<T extends Object>(
+    Expression<T> Function($$SessionIssuesTableAnnotationComposer a) f,
+  ) {
+    final $$SessionIssuesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.sessionIssues,
+      getReferencedColumn: (t) => t.sessionId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SessionIssuesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.sessionIssues,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$SessionsTableTableManager
@@ -3851,7 +4285,11 @@ class $$SessionsTableTableManager
           $$SessionsTableUpdateCompanionBuilder,
           (Session, $$SessionsTableReferences),
           Session,
-          PrefetchHooks Function({bool transcriptsRefs, bool errorLogsRefs})
+          PrefetchHooks Function({
+            bool transcriptsRefs,
+            bool errorLogsRefs,
+            bool sessionIssuesRefs,
+          })
         > {
   $$SessionsTableTableManager(_$AppDatabase db, $SessionsTable table)
     : super(
@@ -3909,12 +4347,17 @@ class $$SessionsTableTableManager
               )
               .toList(),
           prefetchHooksCallback:
-              ({transcriptsRefs = false, errorLogsRefs = false}) {
+              ({
+                transcriptsRefs = false,
+                errorLogsRefs = false,
+                sessionIssuesRefs = false,
+              }) {
                 return PrefetchHooks(
                   db: db,
                   explicitlyWatchedTables: [
                     if (transcriptsRefs) db.transcripts,
                     if (errorLogsRefs) db.errorLogs,
+                    if (sessionIssuesRefs) db.sessionIssues,
                   ],
                   addJoins: null,
                   getPrefetchedDataCallback: (items) async {
@@ -3961,6 +4404,27 @@ class $$SessionsTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (sessionIssuesRefs)
+                        await $_getPrefetchedData<
+                          Session,
+                          $SessionsTable,
+                          SessionIssue
+                        >(
+                          currentTable: table,
+                          referencedTable: $$SessionsTableReferences
+                              ._sessionIssuesRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$SessionsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).sessionIssuesRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.sessionId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -3981,7 +4445,11 @@ typedef $$SessionsTableProcessedTableManager =
       $$SessionsTableUpdateCompanionBuilder,
       (Session, $$SessionsTableReferences),
       Session,
-      PrefetchHooks Function({bool transcriptsRefs, bool errorLogsRefs})
+      PrefetchHooks Function({
+        bool transcriptsRefs,
+        bool errorLogsRefs,
+        bool sessionIssuesRefs,
+      })
     >;
 typedef $$TranscriptsTableCreateCompanionBuilder =
     TranscriptsCompanion Function({
@@ -4022,6 +4490,24 @@ final class $$TranscriptsTableReferences
     if (item == null) return manager;
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static MultiTypedResultKey<$SessionIssuesTable, List<SessionIssue>>
+  _sessionIssuesRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.sessionIssues,
+    aliasName: 'transcripts__id__session_issues__transcript_id',
+  );
+
+  $$SessionIssuesTableProcessedTableManager get sessionIssuesRefs {
+    final manager = $$SessionIssuesTableTableManager(
+      $_db,
+      $_db.sessionIssues,
+    ).filter((f) => f.transcriptId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_sessionIssuesRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
     );
   }
 }
@@ -4086,6 +4572,31 @@ class $$TranscriptsTableFilterComposer
           ),
     );
     return composer;
+  }
+
+  Expression<bool> sessionIssuesRefs(
+    Expression<bool> Function($$SessionIssuesTableFilterComposer f) f,
+  ) {
+    final $$SessionIssuesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.sessionIssues,
+      getReferencedColumn: (t) => t.transcriptId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SessionIssuesTableFilterComposer(
+            $db: $db,
+            $table: $db.sessionIssues,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
   }
 }
 
@@ -4205,6 +4716,31 @@ class $$TranscriptsTableAnnotationComposer
     );
     return composer;
   }
+
+  Expression<T> sessionIssuesRefs<T extends Object>(
+    Expression<T> Function($$SessionIssuesTableAnnotationComposer a) f,
+  ) {
+    final $$SessionIssuesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.sessionIssues,
+      getReferencedColumn: (t) => t.transcriptId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SessionIssuesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.sessionIssues,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$TranscriptsTableTableManager
@@ -4220,7 +4756,7 @@ class $$TranscriptsTableTableManager
           $$TranscriptsTableUpdateCompanionBuilder,
           (Transcript, $$TranscriptsTableReferences),
           Transcript,
-          PrefetchHooks Function({bool sessionId})
+          PrefetchHooks Function({bool sessionId, bool sessionIssuesRefs})
         > {
   $$TranscriptsTableTableManager(_$AppDatabase db, $TranscriptsTable table)
     : super(
@@ -4277,47 +4813,74 @@ class $$TranscriptsTableTableManager
                 ),
               )
               .toList(),
-          prefetchHooksCallback: ({sessionId = false}) {
-            return PrefetchHooks(
-              db: db,
-              explicitlyWatchedTables: [],
-              addJoins:
-                  <
-                    T extends TableManagerState<
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic
-                    >
-                  >(state) {
-                    if (sessionId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.sessionId,
-                                referencedTable: $$TranscriptsTableReferences
-                                    ._sessionIdTable(db),
-                                referencedColumn: $$TranscriptsTableReferences
-                                    ._sessionIdTable(db)
-                                    .id,
-                              )
-                              as T;
-                    }
+          prefetchHooksCallback:
+              ({sessionId = false, sessionIssuesRefs = false}) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (sessionIssuesRefs) db.sessionIssues,
+                  ],
+                  addJoins:
+                      <
+                        T extends TableManagerState<
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic
+                        >
+                      >(state) {
+                        if (sessionId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.sessionId,
+                                    referencedTable:
+                                        $$TranscriptsTableReferences
+                                            ._sessionIdTable(db),
+                                    referencedColumn:
+                                        $$TranscriptsTableReferences
+                                            ._sessionIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
 
-                    return state;
+                        return state;
+                      },
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (sessionIssuesRefs)
+                        await $_getPrefetchedData<
+                          Transcript,
+                          $TranscriptsTable,
+                          SessionIssue
+                        >(
+                          currentTable: table,
+                          referencedTable: $$TranscriptsTableReferences
+                              ._sessionIssuesRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$TranscriptsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).sessionIssuesRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.transcriptId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
                   },
-              getPrefetchedDataCallback: (items) async {
-                return [];
+                );
               },
-            );
-          },
         ),
       );
 }
@@ -4334,7 +4897,7 @@ typedef $$TranscriptsTableProcessedTableManager =
       $$TranscriptsTableUpdateCompanionBuilder,
       (Transcript, $$TranscriptsTableReferences),
       Transcript,
-      PrefetchHooks Function({bool sessionId})
+      PrefetchHooks Function({bool sessionId, bool sessionIssuesRefs})
     >;
 typedef $$UserProfilesTableCreateCompanionBuilder =
     UserProfilesCompanion Function({
@@ -5875,6 +6438,408 @@ typedef $$FlashcardsTableProcessedTableManager =
       Flashcard,
       PrefetchHooks Function({bool errorLogId})
     >;
+typedef $$SessionIssuesTableCreateCompanionBuilder =
+    SessionIssuesCompanion Function({
+      Value<int> id,
+      required int sessionId,
+      Value<int?> transcriptId,
+      required String note,
+      required DateTime createdAt,
+    });
+typedef $$SessionIssuesTableUpdateCompanionBuilder =
+    SessionIssuesCompanion Function({
+      Value<int> id,
+      Value<int> sessionId,
+      Value<int?> transcriptId,
+      Value<String> note,
+      Value<DateTime> createdAt,
+    });
+
+final class $$SessionIssuesTableReferences
+    extends BaseReferences<_$AppDatabase, $SessionIssuesTable, SessionIssue> {
+  $$SessionIssuesTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $SessionsTable _sessionIdTable(_$AppDatabase db) =>
+      db.sessions.createAlias('session_issues__session_id__sessions__id');
+
+  $$SessionsTableProcessedTableManager get sessionId {
+    final $_column = $_itemColumn<int>('session_id')!;
+
+    final manager = $$SessionsTableTableManager(
+      $_db,
+      $_db.sessions,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_sessionIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $TranscriptsTable _transcriptIdTable(_$AppDatabase db) => db
+      .transcripts
+      .createAlias('session_issues__transcript_id__transcripts__id');
+
+  $$TranscriptsTableProcessedTableManager? get transcriptId {
+    final $_column = $_itemColumn<int>('transcript_id');
+    if ($_column == null) return null;
+    final manager = $$TranscriptsTableTableManager(
+      $_db,
+      $_db.transcripts,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_transcriptIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$SessionIssuesTableFilterComposer
+    extends Composer<_$AppDatabase, $SessionIssuesTable> {
+  $$SessionIssuesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$SessionsTableFilterComposer get sessionId {
+    final $$SessionsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.sessionId,
+      referencedTable: $db.sessions,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SessionsTableFilterComposer(
+            $db: $db,
+            $table: $db.sessions,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$TranscriptsTableFilterComposer get transcriptId {
+    final $$TranscriptsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.transcriptId,
+      referencedTable: $db.transcripts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TranscriptsTableFilterComposer(
+            $db: $db,
+            $table: $db.transcripts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$SessionIssuesTableOrderingComposer
+    extends Composer<_$AppDatabase, $SessionIssuesTable> {
+  $$SessionIssuesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$SessionsTableOrderingComposer get sessionId {
+    final $$SessionsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.sessionId,
+      referencedTable: $db.sessions,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SessionsTableOrderingComposer(
+            $db: $db,
+            $table: $db.sessions,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$TranscriptsTableOrderingComposer get transcriptId {
+    final $$TranscriptsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.transcriptId,
+      referencedTable: $db.transcripts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TranscriptsTableOrderingComposer(
+            $db: $db,
+            $table: $db.transcripts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$SessionIssuesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SessionIssuesTable> {
+  $$SessionIssuesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get note =>
+      $composableBuilder(column: $table.note, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  $$SessionsTableAnnotationComposer get sessionId {
+    final $$SessionsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.sessionId,
+      referencedTable: $db.sessions,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SessionsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.sessions,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$TranscriptsTableAnnotationComposer get transcriptId {
+    final $$TranscriptsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.transcriptId,
+      referencedTable: $db.transcripts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TranscriptsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.transcripts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$SessionIssuesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $SessionIssuesTable,
+          SessionIssue,
+          $$SessionIssuesTableFilterComposer,
+          $$SessionIssuesTableOrderingComposer,
+          $$SessionIssuesTableAnnotationComposer,
+          $$SessionIssuesTableCreateCompanionBuilder,
+          $$SessionIssuesTableUpdateCompanionBuilder,
+          (SessionIssue, $$SessionIssuesTableReferences),
+          SessionIssue,
+          PrefetchHooks Function({bool sessionId, bool transcriptId})
+        > {
+  $$SessionIssuesTableTableManager(_$AppDatabase db, $SessionIssuesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SessionIssuesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SessionIssuesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SessionIssuesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int> sessionId = const Value.absent(),
+                Value<int?> transcriptId = const Value.absent(),
+                Value<String> note = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => SessionIssuesCompanion(
+                id: id,
+                sessionId: sessionId,
+                transcriptId: transcriptId,
+                note: note,
+                createdAt: createdAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required int sessionId,
+                Value<int?> transcriptId = const Value.absent(),
+                required String note,
+                required DateTime createdAt,
+              }) => SessionIssuesCompanion.insert(
+                id: id,
+                sessionId: sessionId,
+                transcriptId: transcriptId,
+                note: note,
+                createdAt: createdAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$SessionIssuesTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({sessionId = false, transcriptId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (sessionId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.sessionId,
+                                referencedTable: $$SessionIssuesTableReferences
+                                    ._sessionIdTable(db),
+                                referencedColumn: $$SessionIssuesTableReferences
+                                    ._sessionIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+                    if (transcriptId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.transcriptId,
+                                referencedTable: $$SessionIssuesTableReferences
+                                    ._transcriptIdTable(db),
+                                referencedColumn: $$SessionIssuesTableReferences
+                                    ._transcriptIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$SessionIssuesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $SessionIssuesTable,
+      SessionIssue,
+      $$SessionIssuesTableFilterComposer,
+      $$SessionIssuesTableOrderingComposer,
+      $$SessionIssuesTableAnnotationComposer,
+      $$SessionIssuesTableCreateCompanionBuilder,
+      $$SessionIssuesTableUpdateCompanionBuilder,
+      (SessionIssue, $$SessionIssuesTableReferences),
+      SessionIssue,
+      PrefetchHooks Function({bool sessionId, bool transcriptId})
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -5891,4 +6856,6 @@ class $AppDatabaseManager {
       $$ScenariosTableTableManager(_db, _db.scenarios);
   $$FlashcardsTableTableManager get flashcards =>
       $$FlashcardsTableTableManager(_db, _db.flashcards);
+  $$SessionIssuesTableTableManager get sessionIssues =>
+      $$SessionIssuesTableTableManager(_db, _db.sessionIssues);
 }

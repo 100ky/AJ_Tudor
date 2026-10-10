@@ -107,6 +107,21 @@ void main() {
       expect(prompt, contains('Student: Hi!'));
     });
 
+    test('reportIssue saves the note at the chosen reply', () async {
+      final session = await createSession();
+      await repo.addTranscript(sessionId: session.id, speaker: 'user', content: 'My answer');
+      final reply = (await repo.getTranscripts(session.id)).single;
+
+      final result = await container
+          .read(sessionDetailControllerProvider)
+          .reportIssue(session.id, 'Tudor did not answer', transcript: reply);
+
+      expect(result.isSuccess, true);
+      final issue = (await repo.watchSessionIssues(session.id).first).single;
+      expect(issue.note, 'Tudor did not answer');
+      expect(issue.transcriptId, reply.id);
+    });
+
     test('deleteSession removes the lesson and replans scenarios', () async {
       final session = await createSession();
 

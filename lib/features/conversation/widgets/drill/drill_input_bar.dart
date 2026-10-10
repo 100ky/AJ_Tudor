@@ -123,11 +123,14 @@ class DrillThinkingBubble extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 10),
-              Text(
-                'Tutor vyhodnocuje a připravuje cvičení...',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 13,
-                  color: AppTheme.mutedTextColor(context),
+              // Na úzkém displeji se text zalomí, místo aby přetekl
+              Flexible(
+                child: Text(
+                  'Tutor vyhodnocuje a připravuje cvičení...',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 13,
+                    color: AppTheme.mutedTextColor(context),
+                  ),
                 ),
               ),
             ],

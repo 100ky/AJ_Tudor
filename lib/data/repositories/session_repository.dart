@@ -169,6 +169,37 @@ class SessionRepository {
     return await (_db.select(_db.errorLogs)..where((t) => t.sessionId.equals(sessionId))).get();
   }
 
+  /// Uloží problém, který student nahlásil u lekce, volitelně u konkrétní repliky [transcriptId].
+  Future<Result<int>> addSessionIssue({
+    required int sessionId,
+    required String note,
+    int? transcriptId,
+  }) async {
+    try {
+      final id = await _db.into(_db.sessionIssues).insert(
+        SessionIssuesCompanion.insert(
+          sessionId: sessionId,
+          transcriptId: Value(transcriptId),
+          note: note,
+          createdAt: DateTime.now(),
+        ),
+      );
+      L.i('Nahlášen problém u session $sessionId${transcriptId != null ? ' (replika $transcriptId)' : ''}: "$note"');
+      return Result.success(id);
+    } catch (e, stack) {
+      L.e('Chyba při ukládání nahlášeného problému', e, stack);
+      return Result.failure(DatabaseFailure('Nepodařilo se uložit popis problému.'));
+    }
+  }
+
+  /// Sleduje problémy nahlášené u lekce (nejstarší první).
+  Stream<List<SessionIssue>> watchSessionIssues(int sessionId) {
+    return (_db.select(_db.sessionIssues)
+          ..where((t) => t.sessionId.equals(sessionId))
+          ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
+        .watch();
+  }
+
   /// Sleduje všechny zaznamenané chyby (např. pro zobrazení v dashboardu statistik).
   Stream<List<ErrorLog>> watchAllErrorLogs() {
     return (_db.select(_db.errorLogs)..orderBy([(t) => OrderingTerm.desc(t.timestamp)])).watch();
@@ -191,6 +222,8 @@ class SessionRepository {
           .getSingleOrNull();
 
       await _db.transaction(() async {
+        // Smazání nahlášených problémů (odkazují na lekci i na repliky)
+        await (_db.delete(_db.sessionIssues)..where((t) => t.sessionId.equals(sessionId))).go();
         // Smazání transkriptů
         await (_db.delete(_db.transcripts)..where((t) => t.sessionId.equals(sessionId))).go();
         // Smazání logů chyb

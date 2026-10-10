@@ -9,10 +9,11 @@ import '../../../data/database/app_database.dart';
 import '../session_detail_controller.dart';
 import 'chat_input_bar.dart';
 import 'delete_session_dialog.dart';
+import 'report_issue_dialog.dart';
 import 'session_detail_header.dart';
 import 'transcript_bubble.dart';
 
-/// Detail lekce: přepis s opravami chyb a textové pokračování konverzace.
+/// Detail lekce: přepis s opravami chyb, nahlášené problémy a textové pokračování konverzace.
 class SessionDetailSheet extends ConsumerStatefulWidget {
   final Session session;
 
@@ -207,6 +208,9 @@ class _SessionDetailSheetState extends ConsumerState<SessionDetailSheet> {
             widget.transcripts;
     final errors = ref.watch(sessionErrorLogsProvider(widget.session.id)).value ??
         widget.errors;
+    final issues =
+        ref.watch(sessionIssuesProvider(widget.session.id)).value ?? const <SessionIssue>[];
+    final generalIssues = issues.where((i) => i.transcriptId == null).toList();
 
     return DraggableScrollableSheet(
       initialChildSize: 0.85,
@@ -256,9 +260,42 @@ class _SessionDetailSheetState extends ConsumerState<SessionDetailSheet> {
                       isGeneratingCards: _isGeneratingCards,
                       onAnalyze: _analyzeSession,
                       onGenerateCards: _generateCardsForSession,
+                      onReportIssue: () =>
+                          showReportIssueDialog(context, ref, widget.session),
                       onDelete: _confirmDelete,
                     ),
                   ),
+                  if (generalIssues.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          for (final issue in generalIssues)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 4),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Icon(Icons.flag_rounded,
+                                      size: 14, color: AppTheme.warning),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      issue.note,
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppTheme.warning,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
                   const SizedBox(height: 8),
                   Expanded(
                     child: ListView.builder(
@@ -280,6 +317,12 @@ class _SessionDetailSheetState extends ConsumerState<SessionDetailSheet> {
                           transcript: t,
                           error: error,
                           onAddToFlashcards: () => _addToFlashcards(t, error!),
+                          onLongPress: () => showReportIssueDialog(
+                              context, ref, widget.session,
+                              transcript: t),
+                          issues: issues
+                              .where((i) => i.transcriptId == t.id)
+                              .toList(),
                         );
                       },
                     ),

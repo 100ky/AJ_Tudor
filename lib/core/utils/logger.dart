@@ -13,9 +13,20 @@ import 'package:flutter/foundation.dart';
 /// - **Session separátory** pro oddělení lekcí v logu.
 /// - **Metrický řádek** pro jednotný formát metrik.
 /// - **JSON pretty print** pro strukturovaná data.
-/// - **Zápis do souboru** při ladění ([startFileLog]).
+/// - **Zápis do souboru** při ladění ([startFileLog]) a samostatný log každé lekce ([startSessionLog]).
 class L {
   static IOSink? _fileSink;
+  static Directory? _logDir;
+  static IOSink? _sessionSink;
+  static int? _sessionLogId;
+
+  /// Kolik logů lekcí se drží v `logs/sessions` (starší se při startu aplikace mažou).
+  static const int keptSessionLogs = 30;
+
+  /// Řádky, které v logu lekce jen překáží: oznámení o každém audio chunku
+  /// a kousky přepisu tutora zalogované dvakrát.
+  static final RegExp _sessionLogNoise = RegExp(
+      r'WebSocket KEYS: \[(serverContent)?\]$|sub-keys: \[(modelTurn(, outputTranscription)?)?\]$|STT \(Tutor kousek\)|\[STT Tutor\]');
 
   /// Začne zapisovat log i do `logs/latest.log` v [directory]; předchozí běh zůstane v `previous.log`.
   ///
@@ -30,8 +41,69 @@ class L {
         await latest.rename('${logDir.path}/previous.log');
       }
       _fileSink = latest.openWrite();
+      _logDir = logDir;
+      await _pruneSessionLogs(Directory('${logDir.path}/sessions'));
     } catch (e) {
       debugPrint('Nepodařilo se otevřít soubor logu: $e');
+    }
+  }
+
+  /// Začne zapisovat i do logu lekce `logs/sessions/session_<id>.log`.
+  ///
+  /// Log lekce přežije restarty aplikace, takže se k problému nahlášenému v historii
+  /// dá dohledat i po dnech podle ID lekce. Funguje jen se zápisem do souboru ([startFileLog]).
+  static Future<void> startSessionLog(int sessionId) async {
+    final logDir = _logDir;
+    if (logDir == null) return;
+    await endSessionLog();
+    try {
+      final dir = Directory('${logDir.path}/sessions');
+      await dir.create(recursive: true);
+      final sink = File('${dir.path}/session_$sessionId.log').openWrite(mode: FileMode.append);
+      sink.writeln('=== Lekce #$sessionId — ${DateTime.now().toIso8601String()} ===');
+      _sessionSink = sink;
+      _sessionLogId = sessionId;
+    } catch (e) {
+      debugPrint('Nepodařilo se otevřít log lekce: $e');
+    }
+  }
+
+  /// Přestane zapisovat do logu lekce (s [sessionId] jen tehdy, když se zapisuje právě do něj).
+  static Future<void> endSessionLog([int? sessionId]) async {
+    final sink = _sessionSink;
+    if (sink == null || (sessionId != null && sessionId != _sessionLogId)) return;
+    _sessionSink = null;
+    _sessionLogId = null;
+    try {
+      await sink.flush();
+      await sink.close();
+    } catch (e) {
+      debugPrint('Nepodařilo se uzavřít log lekce: $e');
+    }
+  }
+
+  /// Přestane zapisovat do souborů (log běhu i log lekce).
+  static Future<void> stopFileLog() async {
+    await endSessionLog();
+    final sink = _fileSink;
+    _fileSink = null;
+    _logDir = null;
+    await sink?.flush();
+    await sink?.close();
+  }
+
+  /// Smaže nejstarší logy lekcí nad limit [keptSessionLogs] (podle ID lekce v názvu).
+  static Future<void> _pruneSessionLogs(Directory dir) async {
+    if (!await dir.exists()) return;
+    final logs = <int, File>{};
+    await for (final entity in dir.list()) {
+      final match = RegExp(r'session_(\d+)\.log$').firstMatch(entity.path);
+      if (entity is File && match != null) logs[int.parse(match.group(1)!)] = entity;
+    }
+    if (logs.length <= keptSessionLogs) return;
+    final ids = logs.keys.toList()..sort();
+    for (final id in ids.take(ids.length - keptSessionLogs)) {
+      await logs[id]!.delete();
     }
   }
 
@@ -43,7 +115,12 @@ class L {
     final now = DateTime.now();
     String two(int n) => n.toString().padLeft(2, '0');
     final ms = now.millisecond.toString().padLeft(3, '0');
-    sink.writeln('${two(now.hour)}:${two(now.minute)}:${two(now.second)}.$ms $line');
+    final stamped = '${two(now.hour)}:${two(now.minute)}:${two(now.second)}.$ms $line';
+    sink.writeln(stamped);
+    final sessionSink = _sessionSink;
+    if (sessionSink != null && !_sessionLogNoise.hasMatch(line)) {
+      sessionSink.writeln(stamped);
+    }
   }
 
   // ─────────────── ZÁKLADNÍ ÚROVNĚ ───────────────

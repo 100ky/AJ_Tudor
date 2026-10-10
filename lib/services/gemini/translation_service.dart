@@ -53,6 +53,12 @@ class WordTranslationService {
   /// Volitelné přepsání souboru mezipaměti (pro testy)
   static File? diskCacheFileOverride;
 
+  /// Poslední zápis mezipaměti na disk (běží na pozadí, testy na něj čekají přes [diskCacheSaved]).
+  static Future<void>? _pendingDiskSave;
+
+  /// Dokončí se, až doběhne poslední zápis mezipaměti na disk.
+  static Future<void> get diskCacheSaved => _pendingDiskSave ?? Future.value();
+
   /// [api] lze v testech nahradit vlastním REST jádrem.
   WordTranslationService(this._ref, {GeminiRestCore? api})
       : _api = api ??
@@ -94,8 +100,10 @@ class WordTranslationService {
         final content = await file.readAsString();
         final Map<String, dynamic> jsonMap = jsonDecode(content);
         for (final entry in jsonMap.entries) {
-          if (entry.value is String) {
-            _translationCache[entry.key] = entry.value as String;
+          // Starší záznamy mohly uložit i zbytky formátování z odpovědi modelu
+          final value = entry.value is String ? cleanTranslationText(entry.value as String) : '';
+          if (value.isNotEmpty) {
+            _translationCache[entry.key] = value;
           }
         }
         L.i('WordTranslationService: Načteno ${_translationCache.length} překladů z diskové mezipaměti.');
@@ -129,6 +137,16 @@ class WordTranslationService {
     } catch (e) {
       L.w('WordTranslationService: Chyba při mazání souboru mezipaměti překladů: $e');
     }
+  }
+
+  /// Odstraní z překladu od modelu uvozovky, HTML/XML tagy (např. `</code>`) a markdown
+  /// (`**`, `*`, `` ` ``), které model občas přidá, a sjednotí mezery do jednoho řádku.
+  static String cleanTranslationText(String raw) {
+    return raw
+        .replaceAll(RegExp(r'<[^<>]*>'), '')
+        .replaceAll(RegExp(r'[`*"„“”]'), '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
   }
 
   /// Vyčistí interpunkci a bílé znaky ze začátku a konce slova/fráze
@@ -194,17 +212,12 @@ class WordTranslationService {
         );
 
         final rawText = GeminiRestCore.extractText(data) ?? '';
-        final cleanTranslation = rawText
-            .replaceAll('"', '')
-            .replaceAll('„', '')
-            .replaceAll('“', '')
-            .replaceAll('\n', ' ')
-            .trim();
+        final cleanTranslation = cleanTranslationText(rawText);
 
         if (cleanTranslation.isNotEmpty && !cleanTranslation.startsWith('❌')) {
           _cooldowns.markSuccess(modelName);
           _translationCache[cacheKey] = cleanTranslation;
-          unawaited(_saveDiskCache());
+          unawaited(_pendingDiskSave = _saveDiskCache());
           stopwatch.stop();
           L.i('Bleskový překlad "$cleaned" -> "$cleanTranslation" ($modelName, ${stopwatch.elapsedMilliseconds}ms)');
           return cleanTranslation;

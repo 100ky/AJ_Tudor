@@ -4,7 +4,7 @@ import '../../../core/app_theme.dart';
 import '../../../data/database/app_database.dart';
 
 /// Jedna replika přepisu lekce, u studenta případně s opravou chyby
-/// a tlačítkem pro přidání do kartiček.
+/// a tlačítkem pro přidání do kartiček. Dlouhý stisk nahlásí problém u repliky.
 class TranscriptBubble extends StatelessWidget {
   final Transcript transcript;
 
@@ -14,11 +14,19 @@ class TranscriptBubble extends StatelessWidget {
   /// Volá se po klepnutí na „Přidat do kartiček“.
   final VoidCallback onAddToFlashcards;
 
+  /// Volá se po dlouhém stisku bubliny (nahlášení problému u této repliky).
+  final VoidCallback? onLongPress;
+
+  /// Problémy nahlášené u této repliky.
+  final List<SessionIssue> issues;
+
   const TranscriptBubble({
     super.key,
     required this.transcript,
     required this.error,
     required this.onAddToFlashcards,
+    this.onLongPress,
+    this.issues = const [],
   });
 
   @override
@@ -35,7 +43,9 @@ class TranscriptBubble extends StatelessWidget {
         crossAxisAlignment:
             isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
-          Container(
+          GestureDetector(
+            onLongPress: onLongPress,
+            child: Container(
             margin: const EdgeInsets.only(bottom: 4, top: 12),
             padding: const EdgeInsets.all(14),
             constraints: BoxConstraints(maxWidth: maxWidth),
@@ -110,6 +120,8 @@ class TranscriptBubble extends StatelessWidget {
               ],
             ),
           ),
+          ),
+          for (final issue in issues) _issueNote(context, issue, maxWidth),
           if (error != null)
             Container(
               margin: const EdgeInsets.only(bottom: 8),
@@ -160,6 +172,31 @@ class TranscriptBubble extends StatelessWidget {
                 ],
               ),
             ),
+        ],
+      ),
+    );
+  }
+
+  Widget _issueNote(BuildContext context, SessionIssue issue, double maxWidth) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      constraints: BoxConstraints(maxWidth: maxWidth),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.flag_rounded, size: 13, color: AppTheme.warning),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              issue.note,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.warning,
+              ),
+            ),
+          ),
         ],
       ),
     );

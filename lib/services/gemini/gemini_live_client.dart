@@ -48,6 +48,9 @@ class GeminiLiveClient {
   /// Přístup k audio playback službě.
   AudioPlaybackService get playbackService => _playbackService;
 
+  /// Při pozastaveném hovoru se příchozí audio tutora nepřehrává (přepis se dál přijímá).
+  bool muteOutput = false;
+
   // Callbacky pro předávání událostí do UI/agenta
   
   /// Vyvoláno při přijetí části textové odpovědi od tutora.
@@ -307,19 +310,20 @@ class GeminiLiveClient {
 
   /// Popostrčí model k vygenerování odpovědi (pokud VAD na serveru nezareagovalo na konec řeči).
   ///
-  /// Popostrčí model k vygenerování odpovědi uzavřením tahu (turnComplete: true).
-  ///
-  /// Posílá čistý signál turnComplete bez falešného textu,
-  /// aby model reagoval výhradně na přijatý audio proud ze sendAudioChunk.
+  /// Posílá `audioStreamEnd`: server vyprázdní nahrané audio a uzavře řeč studenta,
+  /// takže model odpoví na to, co student řekl. Prázdný `clientContent` s `turnComplete`
+  /// dorazil dřív než přepis studenta, model odpověděl na prázdný tah ("Take your time...",
+  /// dlouhé mumlání přepsané jako "...") a skutečná odpověď přišla až po něm.
+  /// Další audio chunk proud zase otevře.
   void nudgeModel([String? fallbackText]) {
     if (_channel == null || _isReconnecting) return;
-    L.vad('Popostrkuji Gemini Live k dokončení tahu (turnComplete: true)');
-    final clientContent = {
-      'clientContent': {
-        'turnComplete': true
+    L.vad('Popostrkuji Gemini Live k dokončení tahu (audioStreamEnd)');
+    final realtimeInput = {
+      'realtimeInput': {
+        'audioStreamEnd': true
       }
     };
-    _safeSend(jsonEncode(clientContent));
+    _safeSend(jsonEncode(realtimeInput));
   }
 
   /// Odešle textový vstup od uživatele (např. při psaní na klávesnici v UI).
@@ -469,9 +473,9 @@ class GeminiLiveClient {
                 if (mimeType.startsWith('audio/pcm')) {
                   _consecutiveControlTokens = 0; // Resetujeme pocitadlo pri prijmu realnych audio dat
                   final audioBytes = base64Decode(inlineData['data']);
-                  if (onAudioReceived != null) onAudioReceived!(); 
-                  // Přehrání audia přes audio playback service
-                  _playbackService.playPcmData(audioBytes);
+                  if (onAudioReceived != null) onAudioReceived!();
+                  // Přehrání audia přes audio playback service (při pauze hovoru ztlumeno)
+                  if (!muteOutput) _playbackService.playPcmData(audioBytes);
                 }
               } 
               else if (part.containsKey('text')) {

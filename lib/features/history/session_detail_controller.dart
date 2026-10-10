@@ -91,6 +91,15 @@ class SessionDetailController {
         );
   }
 
+  /// Uloží popis problému, který se v lekci projevil, volitelně u repliky [transcript].
+  Future<Result<int>> reportIssue(int sessionId, String note, {Transcript? transcript}) {
+    return _ref.read(sessionRepositoryProvider).addSessionIssue(
+          sessionId: sessionId,
+          note: note,
+          transcriptId: transcript?.id,
+        );
+  }
+
   /// Smaže lekci. Po úspěchu přeplánuje scénáře, aby nenavazovaly na smazanou lekci.
   Future<Result<void>> deleteSession(int sessionId) async {
     final result = await _ref.read(sessionRepositoryProvider).deleteSession(sessionId);

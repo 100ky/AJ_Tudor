@@ -218,6 +218,40 @@ void main() {
     });
   });
 
+  group('SessionRepository - Reported issues', () {
+    test('addSessionIssue stores notes for the session and its reply', () async {
+      final s = (await repo.startNewSession()).getOrThrow();
+      await repo.addTranscript(sessionId: s, speaker: 'user', content: 'My answer');
+      final reply = (await repo.getTranscripts(s)).single;
+
+      final general = await repo.addSessionIssue(sessionId: s, note: 'Tudor got stuck');
+      final atReply = await repo.addSessionIssue(
+        sessionId: s,
+        note: 'This sentence was not answered',
+        transcriptId: reply.id,
+      );
+      expect(general.isSuccess, true);
+      expect(atReply.isSuccess, true);
+
+      final issues = await repo.watchSessionIssues(s).first;
+      expect(issues.map((i) => i.note), ['Tudor got stuck', 'This sentence was not answered']);
+      expect(issues.map((i) => i.transcriptId), [null, reply.id]);
+    });
+
+    test('deleteSession also removes reported issues', () async {
+      final s = (await repo.startNewSession()).getOrThrow();
+      await repo.addTranscript(sessionId: s, speaker: 'user', content: 'My answer');
+      final reply = (await repo.getTranscripts(s)).single;
+      await repo.addSessionIssue(sessionId: s, note: 'Lost sentence', transcriptId: reply.id);
+
+      final deleteRes = await repo.deleteSession(s);
+
+      expect(deleteRes.isSuccess, true);
+      expect(await repo.watchSessionIssues(s).first, isEmpty);
+      expect(await repo.watchAllSessions().first, isEmpty);
+    });
+  });
+
   group('SessionRepository - Cascading deleteSession', () {
     test('deleting latest session removes data and clears memoryBriefing', () async {
       await profileRepo.updateUserMemory('Latest briefing notes');

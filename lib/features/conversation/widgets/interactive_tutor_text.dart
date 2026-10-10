@@ -1,13 +1,12 @@
-import 'dart:async';
 import 'dart:math' as math;
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/app_theme.dart';
+import 'tutor_text_selection_recognizer.dart';
+import 'tutor_text_tokens.dart';
 import 'word_translation_sheet.dart';
-import '../../../services/gemini/translation_service.dart';
 
 /// Pomocná třída reprezentující geometrii jednoho slova pro 2D hit-testing.
 class _WordGeometry {
@@ -28,177 +27,15 @@ class _TextLineGeometry {
   void add(_WordGeometry g) => words.add(g);
 }
 
-/// Vlastní rozpoznávač gest pro výběr textu tahem i podržením.
-///
-/// Zajišťuje, že při označování více slov tahem (nebo podržením a tažením)
-/// rodičovský ListView nikdy nescroluje a uživatel může hladce označit celou frázi:
-/// 1. Pokud uživatel podrží prst na slově (200 ms), okamžitě uzamkne arénu gest (accepted)
-///    a zabrání jakémukoliv scrollu chatu.
-/// 2. Pokud uživatel pohne prstem a přejede na jakékoliv jiné slovo (i na jiném řádku),
-///    okamžitě přijme gesto a uzamkne scroll.
-/// 3. Scroll chatu je povolen pouze tehdy, pokud dotyk nezačal na slově nebo se prst
-///    pohybuje čistě svisle ven z textu bez zasažení dalších slov.
-class _TutorTextSelectionGestureRecognizer extends OneSequenceGestureRecognizer {
-  _TutorTextSelectionGestureRecognizer();
-
-  ValueChanged<Offset>? onDragStart;
-  ValueChanged<Offset>? onDragUpdate;
-  VoidCallback? onDragEnd;
-  VoidCallback? onDragCancel;
-  int? Function(Offset globalPos)? getWordIndex;
-
-  Offset? _startPosition;
-  int? _startWordIndex;
-  bool _hasResolved = false;
-  bool _isSelecting = false;
-  Timer? _longPressTimer;
-
-  @override
-  void addAllowedPointer(PointerDownEvent event) {
-    startTrackingPointer(event.pointer, event.transform);
-    _startPosition = event.position;
-    _hasResolved = false;
-    _isSelecting = false;
-    _longPressTimer?.cancel();
-
-    _startWordIndex = getWordIndex?.call(event.position);
-
-    // Pokud dotyk začal na slově, spustíme rychlý časovač pro podržení (200 ms).
-    // Pokud uživatel na slově setrvá, okamžitě uzamkneme arénu gest pro výběr a zamezíme scrollu.
-    if (_startWordIndex != null) {
-      _longPressTimer = Timer(const Duration(milliseconds: 200), () {
-        if (!_hasResolved && _startPosition != null) {
-          _hasResolved = true;
-          _isSelecting = true;
-          resolve(GestureDisposition.accepted);
-          HapticFeedback.mediumImpact();
-          onDragStart?.call(_startPosition!);
-        }
-      });
-    }
-  }
-
-  @override
-  void handleEvent(PointerEvent event) {
-    if (event is PointerMoveEvent) {
-      if (_isSelecting) {
-        onDragUpdate?.call(event.position);
-        return;
-      }
-
-      if (!_hasResolved && _startPosition != null) {
-        final dx = (event.position.dx - _startPosition!.dx).abs();
-        final dy = (event.position.dy - _startPosition!.dy).abs();
-
-        // Pokud se prst pohnul o více než 8 px, long-press timer zrušíme a vyhodnotíme tah
-        if (dx > 8 || dy > 8) {
-          _longPressTimer?.cancel();
-        }
-
-        final currentWordIndex = getWordIndex?.call(event.position);
-
-        // 1. ZÁSADNÍ: Pokud prst přejel na jiné slovo v textu (i na dalším řádku),
-        // jedná se 100% o označování fráze -> přijmout a okamžitě zablokovat scroll!
-        if (_startWordIndex != null &&
-            currentWordIndex != null &&
-            currentWordIndex != _startWordIndex) {
-          _hasResolved = true;
-          _isSelecting = true;
-          _longPressTimer?.cancel();
-          resolve(GestureDisposition.accepted);
-          HapticFeedback.selectionClick();
-          onDragStart?.call(_startPosition!);
-          onDragUpdate?.call(event.position);
-          return;
-        }
-
-        // 2. Horizontální tah po řádku -> přijmout a uzamknout scroll
-        if (_startWordIndex != null && (dx > 8 || (dx > 4 && dy < 6))) {
-          _hasResolved = true;
-          _isSelecting = true;
-          _longPressTimer?.cancel();
-          resolve(GestureDisposition.accepted);
-          HapticFeedback.selectionClick();
-          onDragStart?.call(_startPosition!);
-          onDragUpdate?.call(event.position);
-          return;
-        }
-
-        // 3. Scroll chatu: pouze pokud dotyk nezačal na slově, nebo pokud uživatel táhne
-        // výrazně svisle ven z textu bez zasažení jakéhokoliv dalšího slova
-        if (_startWordIndex == null && dy > 12) {
-          _hasResolved = true;
-          _longPressTimer?.cancel();
-          resolve(GestureDisposition.rejected);
-          return;
-        }
-
-        if (dy > 25 && dy > dx * 2.0 && currentWordIndex == null) {
-          _hasResolved = true;
-          _longPressTimer?.cancel();
-          resolve(GestureDisposition.rejected);
-          return;
-        }
-      }
-    } else if (event is PointerUpEvent) {
-      _longPressTimer?.cancel();
-      if (_isSelecting) {
-        onDragEnd?.call();
-      }
-      stopTrackingPointer(event.pointer);
-    } else if (event is PointerCancelEvent) {
-      _longPressTimer?.cancel();
-      if (_isSelecting) {
-        onDragCancel?.call();
-      }
-      stopTrackingPointer(event.pointer);
-    }
-  }
-
-  @override
-  String get debugDescription => 'tutor_text_selection';
-
-  @override
-  void didStopTrackingLastPointer(int pointer) {
-    _longPressTimer?.cancel();
-    _hasResolved = false;
-    _isSelecting = false;
-    _startWordIndex = null;
-  }
-
-  @override
-  void dispose() {
-    _longPressTimer?.cancel();
-    super.dispose();
-  }
-}
-
-/// Model reprezentující jeden token v textu (slovo, interpunkci nebo mezeru).
-class _TextToken {
-  final String rawText;
-  final String cleanWord;
-  final bool isSelectableWord;
-  final bool isBold;
-  final bool isItalic;
-  final int wordIndex;
-
-  const _TextToken({
-    required this.rawText,
-    required this.cleanWord,
-    required this.isSelectableWord,
-    required this.isBold,
-    required this.isItalic,
-    required this.wordIndex,
-  });
-}
-
 /// Interaktivní textový widget pro zprávy tutora.
 ///
 /// Umožňuje:
-/// 1. Klepnutí na libovolné slovo pro okamžitý překlad do češtiny.
-/// 2. Přejetí prstem (drag) přes více slov pro výběr celé fráze.
+/// 1. Klepnutí na anglické slovo pro okamžitý překlad do češtiny.
+/// 2. Podržení slova a tažení přes další slova pro výběr celé fráze. Tah bez podržení scrolluje.
 /// 3. Klepnutí na první a následně na poslední slovo pro přesný výběr fráze.
-/// 4. Automatické otevření [WordTranslationSheet] s uložením do Smart Flashcards.
+/// 4. Otevření [WordTranslationSheet], kde jde překlad uložit do kartiček.
+///
+/// Slova českých vět jsou obyčejný text (viz [tokenizeTutorText]).
 class InteractiveTutorText extends ConsumerStatefulWidget {
   final String text;
   final TextStyle? style;
@@ -222,7 +59,7 @@ class InteractiveTutorText extends ConsumerStatefulWidget {
 }
 
 class _InteractiveTutorTextState extends ConsumerState<InteractiveTutorText> {
-  late List<_TextToken> _tokens;
+  late List<TutorTextToken> _tokens;
   final Map<int, GlobalKey> _wordKeys = {};
 
   int? _selectedStartIndex;
@@ -253,79 +90,34 @@ class _InteractiveTutorTextState extends ConsumerState<InteractiveTutorText> {
   }
 
   void _parseTokens() {
-    _tokens = [];
-    _wordKeys.clear();
+    _tokens = tokenizeTutorText(widget.text);
+    _wordKeys
+      ..clear()
+      ..addEntries(_tokens
+          .where((t) => t.isSelectableWord)
+          .map((t) => MapEntry(t.wordIndex, GlobalKey())));
+  }
 
-    // Regulární výraz pro rozdělení textu na slova, interpunkci, mezery a nové řádky
-    final regex = RegExp(r'(\n|\s+|[^\s\n]+)');
-    final matches = regex.allMatches(widget.text);
+  /// Obdélník slova [index] v globálních souřadnicích (null, pokud ještě není vykreslené).
+  Rect? _wordRect(int index) {
+    final renderBox = _wordKeys[index]?.currentContext?.findRenderObject() as RenderBox?;
+    if (renderBox == null || !renderBox.hasSize || !renderBox.attached) return null;
+    return renderBox.localToGlobal(Offset.zero) & renderBox.size;
+  }
 
-    int wordIndexCounter = 0;
-
-    for (final match in matches) {
-      final raw = match.group(0) ?? '';
-      if (raw.isEmpty) continue;
-
-      if (raw == '\n' || raw.trim().isEmpty) {
-        // Bílé znaky / mezery / zalomení řádku
-        _tokens.add(_TextToken(
-          rawText: raw,
-          cleanWord: '',
-          isSelectableWord: false,
-          isBold: false,
-          isItalic: false,
-          wordIndex: -1,
-        ));
-      } else {
-        // Kontrola základního markdown formátování (**bold**, *italic*)
-        bool isBold = false;
-        bool isItalic = false;
-        String displayText = raw;
-
-        if (displayText.startsWith('**') && displayText.endsWith('**') && displayText.length > 4) {
-          isBold = true;
-          displayText = displayText.substring(2, displayText.length - 2);
-        } else if (displayText.startsWith('*') && displayText.endsWith('*') && displayText.length > 2) {
-          isItalic = true;
-          displayText = displayText.substring(1, displayText.length - 1);
-        }
-
-        final clean = WordTranslationService.cleanWord(displayText);
-        final isSelectable = clean.isNotEmpty && RegExp(r'[a-zA-Z0-9]').hasMatch(clean);
-
-        final currentIndex = isSelectable ? wordIndexCounter++ : -1;
-        if (isSelectable) {
-          _wordKeys[currentIndex] = GlobalKey();
-        }
-
-        _tokens.add(_TextToken(
-          rawText: displayText,
-          cleanWord: clean,
-          isSelectableWord: isSelectable,
-          isBold: isBold,
-          isItalic: isItalic,
-          wordIndex: currentIndex,
-        ));
-      }
-    }
+  /// Zda dotyk míří přímo na některé označitelné slovo.
+  bool _isOnWord(Offset globalPosition) {
+    return _wordKeys.keys
+        .any((index) => _wordRect(index)?.inflate(4).contains(globalPosition) ?? false);
   }
 
   int? _findWordIndexAtPosition(Offset globalPosition) {
     if (_wordKeys.isEmpty) return null;
 
     final geometries = <_WordGeometry>[];
-    for (final entry in _wordKeys.entries) {
-      final renderBox = entry.value.currentContext?.findRenderObject() as RenderBox?;
-      if (renderBox != null && renderBox.hasSize && renderBox.attached) {
-        final topLeft = renderBox.localToGlobal(Offset.zero);
-        final rect = Rect.fromLTWH(
-          topLeft.dx,
-          topLeft.dy,
-          renderBox.size.width,
-          renderBox.size.height,
-        );
-        geometries.add(_WordGeometry(entry.key, rect));
-      }
+    for (final index in _wordKeys.keys) {
+      final rect = _wordRect(index);
+      if (rect != null) geometries.add(_WordGeometry(index, rect));
     }
 
     if (geometries.isEmpty) return null;
@@ -503,12 +295,12 @@ class _InteractiveTutorTextState extends ConsumerState<InteractiveTutorText> {
 
     return RawGestureDetector(
       gestures: {
-        _TutorTextSelectionGestureRecognizer:
-            GestureRecognizerFactoryWithHandlers<_TutorTextSelectionGestureRecognizer>(
-          () => _TutorTextSelectionGestureRecognizer(),
-          (_TutorTextSelectionGestureRecognizer instance) {
+        TutorTextSelectionGestureRecognizer:
+            GestureRecognizerFactoryWithHandlers<TutorTextSelectionGestureRecognizer>(
+          () => TutorTextSelectionGestureRecognizer(),
+          (TutorTextSelectionGestureRecognizer instance) {
             instance
-              ..getWordIndex = _findWordIndexAtPosition
+              ..isOnWord = _isOnWord
               ..onDragStart = (pos) {
                 final targetIndex = _findWordIndexAtPosition(pos);
                 if (targetIndex != null) {
@@ -558,7 +350,9 @@ class _InteractiveTutorTextState extends ConsumerState<InteractiveTutorText> {
             else if (!token.isSelectableWord)
               Text(
                 token.rawText,
-                style: baseStyle,
+                style: token.isBold
+                    ? strongStyle
+                    : (token.isItalic ? emStyle : baseStyle),
               )
             else
               _buildSelectableWord(
@@ -577,7 +371,7 @@ class _InteractiveTutorTextState extends ConsumerState<InteractiveTutorText> {
   }
 
   Widget _buildSelectableWord({
-    required _TextToken token,
+    required TutorTextToken token,
     required TextStyle baseStyle,
     required bool isSelected,
     required bool isDark,

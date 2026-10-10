@@ -4,7 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/app_theme.dart';
 import '../../../data/database/app_database.dart';
 
-/// Rozbalovací hlavička detailu lekce s akcemi (analýza, kartičky z chyb, smazání).
+/// Rozbalovací hlavička detailu lekce s akcemi (analýza, kartičky z chyb, nahlášení problému, smazání).
 class SessionDetailHeader extends StatelessWidget {
   final Session session;
   final bool expanded;
@@ -13,6 +13,7 @@ class SessionDetailHeader extends StatelessWidget {
   final bool isGeneratingCards;
   final VoidCallback onAnalyze;
   final VoidCallback onGenerateCards;
+  final VoidCallback onReportIssue;
   final VoidCallback onDelete;
 
   const SessionDetailHeader({
@@ -24,6 +25,7 @@ class SessionDetailHeader extends StatelessWidget {
     required this.isGeneratingCards,
     required this.onAnalyze,
     required this.onGenerateCards,
+    required this.onReportIssue,
     required this.onDelete,
   });
 
@@ -169,6 +171,12 @@ class SessionDetailHeader extends StatelessWidget {
                       label: const Text('Kartičky z chyb'),
                       style: _actionStyle(),
                       onPressed: isGeneratingCards ? null : onGenerateCards,
+                    ),
+                    TextButton.icon(
+                      icon: const Icon(Icons.flag_outlined, size: 15),
+                      label: const Text('Nahlásit problém'),
+                      style: _actionStyle(),
+                      onPressed: onReportIssue,
                     ),
                   ],
                 ),

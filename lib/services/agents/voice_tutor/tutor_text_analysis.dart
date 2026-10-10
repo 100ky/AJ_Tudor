@@ -6,7 +6,13 @@ final RegExp _cjkCharacters = RegExp(
 /// Odstraní asijské znaky (např. korejské 응), které STT někdy halucinuje na tichý povzdech.
 String stripCjkCharacters(String text) => text.replaceAll(_cjkCharacters, '');
 
-const Set<String> _fillerWords = {'uh', 'um', 'em', 'ehm', 'er', 'ah', 'hmm', 'hm', 'well'};
+final RegExp _letter = RegExp(r'\p{L}', unicode: true);
+
+/// Zda promluva tutora obsahuje slova – Live API přepisuje neartikulovaný zvuk
+/// (povzdech, ticho, mumlání) jen jako "...", taková replika do přepisu nepatří.
+bool hasSpokenWords(String text) => _letter.hasMatch(text);
+
+const Set<String> _fillerWords ={'uh', 'um', 'em', 'ehm', 'er', 'ah', 'hmm', 'hm', 'well'};
 
 /// Počet slov odpovědi studenta (jen slova delší než 1 znak, bez interpunkce).
 ///

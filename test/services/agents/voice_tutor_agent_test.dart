@@ -465,6 +465,65 @@ void main() {
     }
     // Must remain in thinking state despite background noise
     expect(container.read(voiceTutorAgentProvider).status, TutorState.thinking);
+    // ...and the noise must not reopen the audio stream while waiting for the tutor
+    verify(() => mockClient.sendAudioChunk(noiseChunk)).called(10);
+  });
+
+  group('tutor turns', () {
+    void Function()? turnCompleteCallback;
+    Function(String)? textCallback;
+
+    setUp(() {
+      turnCompleteCallback = null;
+      textCallback = null;
+      when(() => mockRepo.startNewSession()).thenAnswer((_) async => Result.success(123));
+      when(() => mockProfileRepo.getUserProfile()).thenAnswer((_) async => null);
+      when(() => mockAudio.start(onAudioChunk: any(named: 'onAudioChunk'))).thenAnswer((_) async {});
+      when(() => mockAudio.isPlaying).thenReturn(false);
+      when(() => mockClient.connect(
+        modelName: any(named: 'modelName'),
+        systemPrompt: any(named: 'systemPrompt'),
+        voiceName: any(named: 'voiceName'),
+        silenceDurationMs: any(named: 'silenceDurationMs'),
+      )).thenAnswer((_) {});
+      when(() => mockClient.currentTokenCount).thenReturn(0);
+      when(() => mockClient.onTurnComplete = any()).thenAnswer((invocation) => turnCompleteCallback =
+          (invocation.positionalArguments[0] as void Function()?) ?? turnCompleteCallback);
+      when(() => mockClient.onTextReceived = any()).thenAnswer((invocation) => textCallback =
+          (invocation.positionalArguments[0] as Function(String)?) ?? textCallback);
+    });
+
+    test('a finished tutor turn does not cancel the pause set by the student', () async {
+      final agent = container.read(voiceTutorAgentProvider.notifier);
+      await agent.startSession();
+
+      textCallback!('Tell me more about the app.');
+      await agent.pauseSession();
+      expect(container.read(voiceTutorAgentProvider).status, TutorState.paused);
+
+      turnCompleteCallback!();
+
+      final state = container.read(voiceTutorAgentProvider);
+      expect(state.status, TutorState.paused);
+      expect(state.messages.last.text, 'Tell me more about the app.');
+    });
+
+    test('a turn transcribed only as "..." is not added to the conversation', () async {
+      final agent = container.read(voiceTutorAgentProvider.notifier);
+      await agent.startSession();
+
+      textCallback!('...');
+      turnCompleteCallback!();
+
+      final state = container.read(voiceTutorAgentProvider);
+      expect(state.messages, isEmpty);
+      expect(state.currentTranscript, isEmpty);
+      verifyNever(() => mockRepo.addTranscript(
+        sessionId: any(named: 'sessionId'),
+        speaker: 'tutor',
+        content: any(named: 'content'),
+      ));
+    });
   });
 
   test('stop while the session is being created in DB cancels the start and closes the new session', () async {

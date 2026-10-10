@@ -55,6 +55,23 @@ void main() {
       expect(WordTranslationService.cleanWord('keep in mind'), 'keep in mind');
     });
 
+    test('cleanTranslationText removes tags, markdown and quotes the model added', () {
+      expect(WordTranslationService.cleanTranslationText('Jak to, že</code>'), 'Jak to, že');
+      expect(WordTranslationService.cleanTranslationText('<b>**pracovat**</b> jako `programátor`'),
+          'pracovat jako programátor');
+      expect(WordTranslationService.cleanTranslationText('„jablko“\n'), 'jablko');
+    });
+
+    test('translations from the disk cache are cleaned when loaded', () async {
+      final tempDir = Directory.systemTemp.createTempSync('trans_dirty_');
+      final tempFile = File('${tempDir.path}/cache.json');
+      await tempFile.writeAsString(jsonEncode({'how does having__': 'Jak to, že</code>'}));
+      WordTranslationService.diskCacheFileOverride = tempFile;
+      addTearDown(() => tempDir.deleteSync(recursive: true));
+
+      expect(await service.translate(text: 'How does having'), 'Jak to, že');
+    });
+
     test('translate returns empty string for empty input', () async {
       final result = await service.translate(text: '   ');
       expect(result, '');
@@ -156,6 +173,30 @@ void main() {
           model: any(named: 'model'),
           body: any(named: 'body'),
         ));
+
+    test('a translation with a stray tag from the model is cleaned', () async {
+      when(() => api.generateContent(
+            apiKey: any(named: 'apiKey'),
+            model: any(named: 'model'),
+            body: any(named: 'body'),
+          )).thenAnswer((_) async => {
+            'candidates': [
+              {
+                'content': {
+                  'parts': [
+                    {'text': 'Jak to, že</code>'}
+                  ]
+                }
+              }
+            ]
+          });
+
+      expect(await service.translate(text: 'How does having'), 'Jak to, že');
+
+      await WordTranslationService.diskCacheSaved;
+      final saved = await WordTranslationService.diskCacheFileOverride!.readAsString();
+      expect(saved, isNot(contains('</code>')));
+    });
 
     test('a rejected API key stops after the first model', () async {
       failWith(401);

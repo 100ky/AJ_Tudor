@@ -9,7 +9,7 @@ import '../../../services/gemini/gemini_tts_service.dart';
 import '../../../services/agents/voice_tutor_agent.dart';
 
 /// Spodní karta pro zobrazení rychlého překladu slova/fráze, poslech výslovnosti
-/// a automatické uložení do Smart Flashcards.
+/// a uložení do Smart Flashcards tlačítkem „+ Uložit“.
 class WordTranslationSheet extends ConsumerStatefulWidget {
   final String englishText;
   final String? contextSentence;
@@ -114,7 +114,7 @@ class _WordTranslationSheetState extends ConsumerState<WordTranslationSheet> {
     _currentEnglishText = widget.englishText;
     _originalSentence = widget.contextSentence ?? widget.englishText;
     _checkAndPauseVoice();
-    _performTranslationAndSave();
+    _translate();
   }
 
   VoiceTutorAgent? _voiceTutorAgent;
@@ -197,14 +197,16 @@ class _WordTranslationSheetState extends ConsumerState<WordTranslationSheet> {
     await _updatePhrase(newText);
   }
 
-  Future<void> _updatePhrase(String newPhrase) async {
+  /// Přepne překládanou frázi. S [save] (výběr slovíčka z věty „pro kartičku“) ji rovnou uloží
+  /// do kartiček. Kartička uložená k předchozí frázi se přesune na novou.
+  Future<void> _updatePhrase(String newPhrase, {bool save = false}) async {
     final clean = WordTranslationService.cleanWord(newPhrase);
     if (clean.isEmpty || clean.toLowerCase() == _currentEnglishText.toLowerCase()) return;
 
     HapticFeedback.selectionClick();
 
-    // Pokud už byla předchozí kartička uložena tímto sheetem, smažeme ji před uložením rozšířené
-    if (_isSaved && _flashcardId != null) {
+    final hadCard = _isSaved && _flashcardId != null;
+    if (hadCard) {
       final translationService = ref.read(wordTranslationServiceProvider);
       try {
         await translationService.removeFromFlashcards(_flashcardId!);
@@ -217,10 +219,12 @@ class _WordTranslationSheetState extends ConsumerState<WordTranslationSheet> {
       _currentEnglishText = clean;
     });
 
-    await _performTranslationAndSave();
+    await _translate(saveToFlashcards: save || hadCard);
   }
 
-  Future<void> _performTranslationAndSave() async {
+  /// Přeloží aktuální frázi. Do kartiček ji uloží jen se [saveToFlashcards] –
+  /// jinak až tlačítkem „+ Uložit“, aby z náhodného označení nevznikaly kartičky.
+  Future<void> _translate({bool saveToFlashcards = false}) async {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -250,10 +254,9 @@ class _WordTranslationSheetState extends ConsumerState<WordTranslationSheet> {
       });
 
       // ZÁSADA ATOMICKÝCH KARTIČEK:
-      // Pokud byla označena celá věta (> 3 slova), automaticky ji do kartiček neukládáme!
-      // Celou větu uživateli přeložíme pro porozumění rozhovoru, ale do kartiček
-      // mu níže nabídneme výběr konkrétního slovíčka s kontextem této věty.
-      if (!_isSentence) {
+      // Celou větu (> 3 slova) do kartiček sami neukládáme. Přeložíme ji pro porozumění
+      // a níže nabídneme výběr konkrétního slovíčka s kontextem této věty.
+      if (saveToFlashcards && !_isSentence) {
         final saveResult = await translationService.saveToFlashcards(
           englishText: _currentEnglishText,
           czechText: translation,
@@ -558,7 +561,7 @@ class _WordTranslationSheetState extends ConsumerState<WordTranslationSheet> {
                       ),
                     ),
                     InkWell(
-                      onTap: _performTranslationAndSave,
+                      onTap: _translate,
                       borderRadius: BorderRadius.circular(8),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -642,7 +645,7 @@ class _WordTranslationSheetState extends ConsumerState<WordTranslationSheet> {
                   children: [
                     for (final word in _sentenceWords)
                       InkWell(
-                        onTap: () => _updatePhrase(word),
+                        onTap: () => _updatePhrase(word, save: true),
                         borderRadius: BorderRadius.circular(8),
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
