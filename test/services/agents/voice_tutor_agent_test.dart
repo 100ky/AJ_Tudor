@@ -421,19 +421,20 @@ void main() {
     agent.sendText('Thinking test');
     expect(container.read(voiceTutorAgentProvider).status, TutorState.thinking);
 
-    // User speaks again (100 ms blocks of audible 16-bit PCM) – 200 ms do not interrupt the tutor yet
+    // User speaks again (100 ms blocks of audible 16-bit PCM) – 600 ms do not interrupt the tutor yet
     final audioBuffer = List<int>.filled(3200, 50);
-    audioChunkCallback!(audioBuffer);
-    audioChunkCallback!(audioBuffer);
+    for (var i = 0; i < 6; i++) {
+      audioChunkCallback!(audioBuffer);
+    }
     expect(container.read(voiceTutorAgentProvider).status, TutorState.thinking);
     verifyNever(() => mockClient.sendAudioChunk(any()));
 
     audioChunkCallback!(audioBuffer);
 
-    // After 300 ms the state reverts to listening, the speech opens and all blocks reach the server
+    // After 700 ms the state reverts to listening, the speech opens and all blocks reach the server
     expect(container.read(voiceTutorAgentProvider).status, TutorState.listening);
     verify(() => mockClient.sendActivityStart()).called(1);
-    verify(() => mockClient.sendAudioChunk(audioBuffer)).called(3);
+    verify(() => mockClient.sendAudioChunk(audioBuffer)).called(7);
   });
 
   test('ambient room noise does not trigger false speech detection or cancel silence timer', () async {
@@ -684,11 +685,17 @@ void main() {
           (invocation.positionalArguments[0] as void Function()?) ?? turnComplete);
     });
 
+    /// Student mluví [blocks] × 100 ms. Od 0,7 s je to jistě řeč a hned se posílá serveru.
+    void speak([int blocks = 7]) {
+      for (var i = 0; i < blocks; i++) {
+        mic(loud);
+      }
+    }
+
     /// Student řekne větu a odmlčí se, takže se po tichu ohlásí konec řeči.
     Future<void> speakAndPause(WidgetTester tester) async {
       mic(noise);
-      mic(loud);
-      mic(loud);
+      speak();
       mic(quiet);
       await tester.pump(const Duration(milliseconds: 2100));
       await tester.pump();
@@ -699,15 +706,15 @@ void main() {
       await agent.startSession();
 
       mic(noise);
+      speak(6);
+      // 0,6 s hlasu: replika se zatím jen nahrává
       verifyNever(() => mockClient.sendActivityStart());
-      mic(loud);
       mic(loud);
       verifyInOrder([
         () => mockClient.sendActivityStart(),
         () => mockClient.sendAudioChunk(noise),
-        () => mockClient.sendAudioChunk(loud),
-        () => mockClient.sendAudioChunk(loud),
       ]);
+      verify(() => mockClient.sendAudioChunk(loud)).called(7);
 
       mic(quiet);
       await tester.pump(const Duration(milliseconds: 1900));
@@ -715,6 +722,71 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
       verify(() => mockClient.sendActivityEnd()).called(1);
       expect(container.read(voiceTutorAgentProvider).status, TutorState.thinking);
+
+      await agent.stopSession('test');
+    });
+
+    testWidgets('a short reply goes to Tudor only after the check finds speech', (tester) async {
+      when(() => mockTranscriber.transcribe(any(), previousTutorLine: any(named: 'previousTutorLine')))
+          .thenAnswer((_) async => 'Yes.');
+      final agent = container.read(voiceTutorAgentProvider.notifier);
+      await agent.startSession();
+
+      speak(3); // „Yes.“: 0,3 s hlasu
+      mic(quiet);
+      verifyNever(() => mockClient.sendActivityStart());
+
+      await tester.pump(const Duration(milliseconds: 2100));
+      await tester.pump();
+      verifyInOrder([
+        () => mockClient.sendActivityStart(),
+        () => mockClient.sendAudioChunk(loud),
+        () => mockClient.sendActivityEnd(),
+      ]);
+      expect(container.read(voiceTutorAgentProvider).status, TutorState.thinking);
+      // Ověření poslouží jako opravný přepis, druhý požadavek se neposílá
+      verify(() => mockTranscriber.transcribe(any(), previousTutorLine: any(named: 'previousTutorLine')))
+          .called(1);
+
+      await agent.stopSession('test');
+    });
+
+    testWidgets('a short sound without speech never reaches Tudor', (tester) async {
+      when(() => mockTranscriber.transcribe(any(), previousTutorLine: any(named: 'previousTutorLine')))
+          .thenAnswer((_) async => '');
+      final agent = container.read(voiceTutorAgentProvider.notifier);
+      await agent.startSession();
+      await tester.pump(const Duration(seconds: 1)); // úvodní replika tutora
+      clearInteractions(mockClient);
+
+      speak(3); // „hm“, zakašlání nebo ruch
+      mic(quiet);
+      await tester.pump(const Duration(milliseconds: 2100));
+      await tester.pump();
+
+      verifyNever(() => mockClient.sendActivityStart());
+      verifyNever(() => mockClient.sendActivityEnd());
+      verifyNever(() => mockClient.sendAudioChunk(any()));
+      expect(container.read(voiceTutorAgentProvider).messages.where((m) => m.isUser), isEmpty);
+
+      await agent.stopSession('test');
+    });
+
+    testWidgets('a sound at the very start does not swallow the tutor opening line', (tester) async {
+      when(() => mockTranscriber.transcribe(any(), previousTutorLine: any(named: 'previousTutorLine')))
+          .thenAnswer((_) async => '');
+      final agent = container.read(voiceTutorAgentProvider.notifier);
+      await agent.startSession();
+
+      speak(3);
+      mic(quiet);
+      await tester.pump(const Duration(seconds: 1));
+      // Replika se ještě ověřuje, úvod tutora čeká
+      verifyNever(() => mockClient.sendText(any()));
+
+      await tester.pump(const Duration(milliseconds: 1100));
+      await tester.pump();
+      verify(() => mockClient.sendText(any())).called(1);
 
       await agent.stopSession('test');
     });
@@ -769,8 +841,7 @@ void main() {
       final agent = container.read(voiceTutorAgentProvider.notifier);
       await agent.startSession();
 
-      mic(loud);
-      mic(loud);
+      speak();
       mic(quiet);
       await tester.pump(const Duration(milliseconds: 1200));
       verifyNever(() => mockClient.sendActivityEnd());
@@ -783,8 +854,7 @@ void main() {
     testWidgets('a tutor turn ending while the student speaks does not keep the speech open', (tester) async {
       final agent = container.read(voiceTutorAgentProvider.notifier);
       await agent.startSession();
-      mic(loud);
-      mic(loud);
+      speak();
 
       // Přerušená odpověď tutora skončí, zatímco student mluví
       turnComplete!();
@@ -798,8 +868,7 @@ void main() {
     testWidgets('pause keeps the student speech open and silence after resume ends it', (tester) async {
       final agent = container.read(voiceTutorAgentProvider.notifier);
       await agent.startSession();
-      mic(loud);
-      mic(loud);
+      speak();
       verify(() => mockClient.sendActivityStart()).called(1);
 
       await agent.pauseSession();
@@ -871,8 +940,7 @@ void main() {
           .thenAnswer((_) => correction.future);
       final agent = container.read(voiceTutorAgentProvider.notifier);
       await agent.startSession();
-      mic(loud);
-      mic(loud);
+      speak();
 
       final stop = agent.stopSession('test');
       await tester.pump();
@@ -899,8 +967,7 @@ void main() {
         (tester) async {
       final agent = container.read(voiceTutorAgentProvider.notifier);
       await agent.startSession();
-      mic(loud);
-      mic(loud);
+      speak();
 
       connectionStatus!(false);
       expect(container.read(voiceTutorAgentProvider).status, TutorState.reconnecting);
@@ -908,8 +975,7 @@ void main() {
 
       connectionStatus!(true);
       mic(quiet);
-      mic(loud);
-      mic(loud);
+      speak();
       verify(() => mockClient.sendActivityStart()).called(2);
 
       await agent.stopSession('test');

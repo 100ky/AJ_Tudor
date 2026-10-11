@@ -9,6 +9,15 @@ abstract final class TaskPrompts {
   static String translateToCzech(String english) =>
       'Přelož tuto anglickou větu/frázi do přirozené češtiny (vrať VÝHRADNĚ čistý český překlad bez uvozovek a bez vysvětlování): "$english"';
 
+  /// Kratke ceske vysvetleni vyrazu z karticky (rub karticky), volitelne v kontextu vety.
+  static String explainExpression({
+    required String english,
+    required String czech,
+    String? sentence,
+  }) =>
+      '''Vysvětli českému studentovi angličtiny stručně česky (nejvýš 2 krátké věty), co znamená anglický výraz "$english" (překlad: "$czech")${sentence != null && sentence.trim().isNotEmpty ? ' v této větě: "${sentence.trim()}"' : ''} a jak se používá – např. o jaký tvar nebo čas jde, s čím se pojí, kdy se říká.
+Nepřekládej celou větu, neopakuj zadání, nepiš úvod ani markdown. Vrať jen samotné vysvětlení.''';
+
   /// Vydestiluje z dlouhé opravené věty cílové slovíčko/kolokaci a její překlad.
   /// Odpověď: JSON `{"target": ..., "czech": ...}`.
   static String extractTargetPhrase({

@@ -71,11 +71,24 @@ void main() {
       expect(prompt.contains('Má psa Maxe'), true);
       expect(prompt.contains('SLOVÍČKA, KTERÁ STUDENT ZNÁ'), true);
       expect(prompt.contains('reservation'), true);
-      expect(prompt.contains('POZNÁMKA PRO TUTORA O CHYBÁCH'), true);
+      expect(prompt.contains('CHYBY Z MINULÝCH LEKCÍ'), true);
       expect(prompt.contains('Past tense of regular verbs'), true);
       expect(prompt.contains('KONTEXT Z MINULÉ LEKCE (PAMĚŤ):'), true);
       expect(prompt.contains('Student struggled with past simple last time.'), true);
       expect(prompt.contains('že zrovna pije zelený čaj'), true);
+    });
+
+    test('errors from past lessons are marked as past so the tutor does not correct them now', () {
+      final prompt = SystemPromptBuilder.buildTutorPrompt(
+        targetLevel: 'B1',
+        isImmersive: false,
+        recurringErrors: '["Řekl: \\"the supervisor transcribe\\", ale správně je: \\"transcribed\\""]',
+        personalFact: 'že zrovna pije zelený čaj',
+      );
+
+      expect(prompt, contains('V minulé lekci řekl: \\"the supervisor transcribe\\"'));
+      expect(prompt, isNot(contains('"Řekl: ')));
+      expect(prompt, contains('OPRAVUJ JEN TENTO HOVOR'));
     });
   });
 

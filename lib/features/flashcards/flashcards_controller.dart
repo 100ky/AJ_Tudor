@@ -9,6 +9,7 @@ import '../../services/gemini/gemini_providers.dart';
 import '../../services/gemini/gemini_tts_service.dart';
 import '../../services/gemini/pronunciation_service.dart';
 import 'answer_recorder.dart';
+import 'card_explanation_resolver.dart';
 import 'card_front_resolver.dart';
 
 /// Akce cvičebny kartiček: údržba balíčku, hodnocení, mazání, výslovnost a TTS.
@@ -66,6 +67,16 @@ class FlashcardsController {
 
   /// Nový nahrávač mluvené odpovědi.
   AnswerRecorder createRecorder() => AnswerRecorder(_ref.read(audioCaptureServiceProvider));
+
+  /// Novy resolver vysvetleni na rubu karticek.
+  CardExplanationResolver createExplanationResolver({required void Function() onExplained}) {
+    return CardExplanationResolver(
+      saveExplanation: (id, text) =>
+          _ref.read(flashcardRepositoryProvider).updateFlashcardExplanation(id, text),
+      geminiClient: () => gemini,
+      onExplained: onExplained,
+    );
+  }
 
   /// Nový resolver českých zadání na líci kartiček.
   CardFrontResolver createFrontResolver({required void Function() onTranslated}) {

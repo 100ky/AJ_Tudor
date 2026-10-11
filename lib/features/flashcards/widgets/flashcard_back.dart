@@ -4,12 +4,15 @@ import '../../../core/app_theme.dart';
 import '../../../core/widgets/glass_container.dart';
 import '../../../data/database/app_database.dart';
 import '../../../services/gemini/pronunciation_service.dart';
+import '../sentence_highlight.dart';
 import '../typed_answer.dart';
 import 'pronunciation_result.dart';
 
 /// Rub kartičky: správné řešení, odpověď studenta, vysvětlení a původní věta.
 class FlashcardBack extends StatelessWidget {
   final Flashcard card;
+  /// Vysvetleni vyrazu (z CardExplanationResolver); null = box se nezobrazi.
+  final String? explanation;
   final PronunciationAnalysis? lastPronunciation;
   final TypedAnswer? typedAnswer;
   final bool isPlayingTts;
@@ -20,6 +23,7 @@ class FlashcardBack extends StatelessWidget {
   const FlashcardBack({
     super.key,
     required this.card,
+    this.explanation,
     required this.lastPronunciation,
     this.typedAnswer,
     required this.isPlayingTts,
@@ -33,6 +37,7 @@ class FlashcardBack extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final lastPronunciation = this.lastPronunciation;
     final typedAnswer = this.typedAnswer;
+    final explanation = this.explanation;
 
     return GlassContainer(
       padding: const EdgeInsets.all(22),
@@ -131,10 +136,9 @@ class FlashcardBack extends StatelessWidget {
                           const SizedBox(height: 14),
                           _typedAnswer(context, isDark, typedAnswer),
                         ],
-                        // Nápověda a vysvětlení správného tvaru
-                        if (card.explanation.isNotEmpty) ...[
+                        if (explanation != null && explanation.isNotEmpty) ...[
                           const SizedBox(height: 14),
-                          _explanation(context, isDark),
+                          _explanation(context, isDark, explanation),
                         ],
                         if (card.sourceSentence != null &&
                             card.sourceSentence!.trim().isNotEmpty) ...[
@@ -231,7 +235,7 @@ class FlashcardBack extends StatelessWidget {
     );
   }
 
-  Widget _explanation(BuildContext context, bool isDark) {
+  Widget _explanation(BuildContext context, bool isDark, String explanation) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -252,7 +256,7 @@ class FlashcardBack extends StatelessWidget {
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  'NÁPOVĚDA A VYSVĚTLENÍ:',
+                  'VYSVĚTLENÍ:',
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 11,
@@ -266,7 +270,7 @@ class FlashcardBack extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            card.explanation,
+            explanation,
             style: GoogleFonts.plusJakartaSans(
               fontSize: 12.5,
               color: AppTheme.textColor(context),
@@ -291,19 +295,42 @@ class FlashcardBack extends StatelessWidget {
         children: [
           Icon(Icons.history_rounded, size: 14, color: AppTheme.mutedTextColor(context)),
           const SizedBox(width: 6),
-          Expanded(
-            child: Text(
-              'Původně v konverzaci: "${card.sourceSentence}"',
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 11,
-                fontStyle: FontStyle.italic,
-                color: AppTheme.mutedTextColor(context),
-              ),
-            ),
-          ),
+          Expanded(child: _highlightedSentence(context, isDark)),
         ],
       ),
     );
+  }
+
+  /// Puvodni veta s podtrzenymi slovy z karticky, at je student ve vete hned najde.
+  Widget _highlightedSentence(BuildContext context, bool isDark) {
+    final sentence = card.sourceSentence!.trim();
+    final baseStyle = GoogleFonts.plusJakartaSans(
+      fontSize: 12,
+      fontStyle: FontStyle.italic,
+      color: AppTheme.mutedTextColor(context),
+      height: 1.4,
+    );
+    final markColor = isDark ? AppTheme.primaryLight : AppTheme.primaryDark;
+    final markStyle = baseStyle.copyWith(
+      fontWeight: FontWeight.w700,
+      color: markColor,
+      decoration: TextDecoration.underline,
+      decorationColor: markColor,
+      decorationThickness: 2,
+    );
+
+    final spans = <TextSpan>[const TextSpan(text: 'Původně v konverzaci: "')];
+    var position = 0;
+    for (final range in highlightRanges(sentence, card.backText)) {
+      if (range.start > position) {
+        spans.add(TextSpan(text: sentence.substring(position, range.start)));
+      }
+      spans.add(TextSpan(text: sentence.substring(range.start, range.end), style: markStyle));
+      position = range.end;
+    }
+    spans.add(TextSpan(text: '${sentence.substring(position)}"'));
+
+    return Text.rich(TextSpan(style: baseStyle, children: spans));
   }
 }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -160,6 +161,50 @@ void main() {
       expect(find.text('Těžké'), findsOneWidget);
       expect(find.text('Dobré'), findsOneWidget);
       expect(find.text('Snadné'), findsOneWidget);
+
+      await drainTimers(tester);
+    });
+
+    testWidgets('back shows a generated explanation and underlines the phrase in the sentence',
+        (WidgetTester tester) async {
+      configureViewport(tester);
+      when(() => mockBatchClient.sendMessage(any()))
+          .thenAnswer((_) async => 'Věnovat pozornost; pojí se s předložkou to.');
+      final now = DateTime.now();
+      final id = await db.into(db.flashcards).insert(
+            FlashcardsCompanion.insert(
+              frontText: 'dávat pozor',
+              backText: 'pay attention',
+              explanation: 'Z věty tutora: "You should pay attention to details."',
+              sourceSentence: const Value('You should pay attention to details.'),
+              nextReviewAt: now.subtract(const Duration(hours: 1)),
+              createdAt: now.subtract(const Duration(days: 1)),
+            ),
+          );
+
+      await tester.pumpWidget(buildTestWidget());
+      await tester.pumpAndSettle();
+      await giveUp(tester);
+
+      expect(find.text('VYSVĚTLENÍ:'), findsOneWidget);
+      expect(find.text('NÁPOVĚDA A VYSVĚTLENÍ:'), findsNothing);
+      expect(find.text('Věnovat pozornost; pojí se s předložkou to.'), findsOneWidget);
+
+      // Vysvetleni se ulozi, pristi opakovani uz Gemini nevola
+      final stored = await (db.select(db.flashcards)..where((f) => f.id.equals(id))).getSingle();
+      expect(stored.explanation, 'Věnovat pozornost; pojí se s předložkou to.');
+
+      final sentence = tester.widget<RichText>(find.byWidgetPredicate((w) =>
+          w is RichText && w.text.toPlainText().startsWith('Původně v konverzaci:')));
+      expect(sentence.text.toPlainText(), 'Původně v konverzaci: "You should pay attention to details."');
+      final underlined = <String>[];
+      sentence.text.visitChildren((span) {
+        if (span is TextSpan && span.style?.decoration == TextDecoration.underline) {
+          underlined.add(span.text ?? '');
+        }
+        return true;
+      });
+      expect(underlined, ['pay attention']);
 
       await drainTimers(tester);
     });

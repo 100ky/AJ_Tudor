@@ -8,6 +8,7 @@ import '../../data/repositories/profile_repository.dart';
 import '../../data/repositories/session_repository.dart';
 import '../gemini/gemini_batch_client.dart';
 import '../gemini/gemini_json.dart';
+import '../gemini/gemini_rest_core.dart';
 import '../prompt/task_prompts.dart';
 
 /// Tvorba a údržba kartiček pomocí AI: kartičky z chyb studenta, překlad starých
@@ -18,6 +19,22 @@ class FlashcardGenerationService {
   final ProfileRepository _profile;
 
   FlashcardGenerationService(this._sessions, this._flashcards, this._profile);
+
+  /// Kratke ceske vysvetleni vyrazu [english] pro rub karticky, volitelne v kontextu vety.
+  ///
+  /// Vrati null, pokud model nevratil pouzitelny text; chyby volani propadaji dal.
+  static Future<String?> explainExpression(
+    GeminiBatchClient geminiClient, {
+    required String english,
+    required String czech,
+    String? sentence,
+  }) async {
+    final raw = await geminiClient.sendMessage(
+      TaskPrompts.explainExpression(english: english, czech: czech, sentence: sentence),
+    );
+    final clean = stripModelFormatting(raw);
+    return (clean.isNotEmpty && !clean.startsWith('❌')) ? clean : null;
+  }
 
   /// Přeloží anglickou větu/frázi do přirozené češtiny pro líc kartičky.
   ///

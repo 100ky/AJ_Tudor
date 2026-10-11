@@ -254,6 +254,19 @@ class FlashcardRepository {
     }
   }
 
+  /// Ulozi vysvetleni vyrazu na rub karticky.
+  Future<Result<void>> updateFlashcardExplanation(int id, String explanation) async {
+    try {
+      await (_db.update(_db.flashcards)..where((t) => t.id.equals(id))).write(
+        FlashcardsCompanion(explanation: Value(explanation)),
+      );
+      return Result.success(null);
+    } catch (e, stack) {
+      L.e('Chyba při ukládání vysvětlení kartičky', e, stack);
+      return Result.failure(DatabaseFailure('Nepodařilo se uložit vysvětlení kartičky.'));
+    }
+  }
+
   /// Statická pomocná metoda pro extrakci českého překladu z vysvětlení (např. z "(jeden měsíc)").
   static String? extractCzechFromExplanation(String explanation) {
     if (explanation.isEmpty) return null;

@@ -255,14 +255,11 @@ class WordTranslationService {
       final flashcardRepo = _ref.read(flashcardRepositoryProvider);
       final profileRepo = _ref.read(profileRepositoryProvider);
 
-      final explanation = (contextSentence != null && contextSentence.trim().isNotEmpty)
-          ? 'Z věty tutora: "${contextSentence.trim()}"'
-          : 'Slovíčko z konverzace s tutorem';
-
+      // Vysvetleni vyrazu doplni CardExplanationResolver pri opakovani; veta je v sourceSentence
       final cardResult = await flashcardRepo.addFlashcard(
         frontText: cleanedCs,
         backText: cleanedEn,
-        explanation: explanation,
+        explanation: '',
         errorType: 'vocabulary',
         sourceSentence: contextSentence,
       );

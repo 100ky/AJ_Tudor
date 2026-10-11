@@ -11,6 +11,7 @@ import '../../services/gemini/gemini_batch_client.dart';
 import '../../services/gemini/gemini_providers.dart';
 import '../../services/gemini/pronunciation_service.dart';
 import 'answer_recorder.dart';
+import 'card_explanation_resolver.dart';
 import 'card_front_resolver.dart';
 import 'flashcards_controller.dart';
 import 'review_session.dart';
@@ -37,6 +38,7 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
   late final FlashcardsController _controller;
   late final AnswerRecorder _recorder;
   late final CardFrontResolver _frontResolver;
+  late final CardExplanationResolver _explanationResolver;
 
   bool _isBackVisible = false;
   bool _isPlayingTts = false;
@@ -66,6 +68,11 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
     _recorder = _controller.createRecorder();
     _frontResolver = _controller.createFrontResolver(
       onTranslated: () {
+        if (mounted) setState(() {});
+      },
+    );
+    _explanationResolver = _controller.createExplanationResolver(
+      onExplained: () {
         if (mounted) setState(() {});
       },
     );
@@ -486,6 +493,7 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
                             alignment: Alignment.center,
                             child: FlashcardBack(
                               card: currentCard,
+                              explanation: _explanationResolver.resolve(currentCard),
                               lastPronunciation: _lastPronunciation,
                               typedAnswer: _typedAnswer,
                               isPlayingTts: _isPlayingTts,
@@ -553,6 +561,8 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
 
   Widget _buildFront(Flashcard card) {
     final frontText = _frontResolver.resolve(card);
+    // Vysvetleni na rub se pripravi dopredu, at je hotove, nez student karticku otoci
+    _explanationResolver.resolve(card);
     return FlashcardFront(
       frontText: frontText,
       isTranslating: frontText == CardFrontResolver.translatingPlaceholder,

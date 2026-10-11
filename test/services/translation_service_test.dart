@@ -1,11 +1,14 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
+import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:aj_tudor/core/config/config_providers.dart';
+import 'package:aj_tudor/data/data_providers.dart';
+import 'package:aj_tudor/data/database/app_database.dart';
 import 'package:aj_tudor/services/gemini/gemini_rest_core.dart';
 import 'package:aj_tudor/services/gemini/translation_service.dart';
 
@@ -128,6 +131,30 @@ void main() {
       await WordTranslationService.clearCache();
       expect(WordTranslationService.cachedCount, 0);
       expect(await tempFile.exists(), false);
+    });
+
+    test('saveToFlashcards keeps the sentence as context, not as the explanation', () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final dbContainer = ProviderContainer(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(await SharedPreferences.getInstance()),
+          databaseProvider.overrideWithValue(db),
+        ],
+      );
+      addTearDown(dbContainer.dispose);
+
+      final result = await dbContainer.read(wordTranslationServiceProvider).saveToFlashcards(
+            englishText: 'pay attention',
+            czechText: 'dávat pozor',
+            contextSentence: 'You should pay attention to details.',
+          );
+
+      expect(result.isSuccess, isTrue);
+      final card = await db.select(db.flashcards).getSingle();
+      // Vysvetleni doplni az CardExplanationResolver, veta se na rubu neduplikuje
+      expect(card.explanation, isEmpty);
+      expect(card.sourceSentence, 'You should pay attention to details.');
     });
   });
 

@@ -77,6 +77,9 @@ class SpeechActivityDetector {
   /// Běží souvislý hlas: začal blokem řeči a ještě ho nepřerušilo ticho.
   bool get isVoicing => _voicedMs > 0;
 
+  /// Délka právě běžícího souvislého hlasu.
+  int get voicedMs => _voicedMs;
+
   /// Ticho přerušilo souvislý hlas.
   void resetVoiced() => _voicedMs = 0;
 

@@ -138,6 +138,12 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   StudentUtterance? _lastUtterance; // poslední ukončená, k ní patří živý přepis
   final List<StudentUtterance> _pendingUtterances = [];
 
+  // Úvodní replika tutora; pošle se po 1 s, pokud student nezačal mluvit sám.
+  String? _pendingOpener;
+
+  // Délka aktuálního souvislého hlasu se do repliky započítala (první blok běhu přidá celý začátek).
+  bool _voiceRunCounted = false;
+
   // Skryté pokyny (rada režiséra, odlehčení, tichá změna tématu) čekající na konec tahu tutora.
   // Zpráva clientContent podle dokumentace Live API přeruší právě generovanou odpověď,
   // proto je posíláme až po turnComplete: model nemluví a mikrofon je ještě ztlumený.
@@ -443,33 +449,20 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       _resetWatchdog();
 
       // Aktivně spustíme konverzaci ze strany AI zasláním skrytého inicializačního textu
-      Future.delayed(const Duration(milliseconds: 1000), () {
-        if (!ref.mounted) return;
-        final currentClient = ref.read(geminiLiveClientProvider);
-        // Když student mezitím začal mluvit sám, úvod tutora vynecháme – odpoví jemu
-        if (currentClient != null &&
-            currentClient.isConnected &&
-            state.status == TutorState.listening &&
-            !_activityOpen) {
-          state = state.copyWith(status: TutorState.thinking);
-          _resetThinkingTimer();
-
-          final prepTopicJson = userProfile?.preparedTopic;
-          String? preparedOpener;
-          if (prepTopicJson != null && prepTopicJson.isNotEmpty) {
-            try {
-              final data = jsonDecode(prepTopicJson);
-              preparedOpener = data['openerEn']?.toString();
-            } catch (_) {}
-          }
-
-          currentClient.sendText(LiveTutorPrompts.opening(
-            scenarioContext: state.scenarioContext,
-            preparedOpener: preparedOpener,
-            briefing: userProfile?.memoryBriefing,
-          ));
-        }
-      });
+      final prepTopicJson = userProfile?.preparedTopic;
+      String? preparedOpener;
+      if (prepTopicJson != null && prepTopicJson.isNotEmpty) {
+        try {
+          final data = jsonDecode(prepTopicJson);
+          preparedOpener = data['openerEn']?.toString();
+        } catch (_) {}
+      }
+      _pendingOpener = LiveTutorPrompts.opening(
+        scenarioContext: state.scenarioContext,
+        preparedOpener: preparedOpener,
+        briefing: userProfile?.memoryBriefing,
+      );
+      Future.delayed(const Duration(milliseconds: 1000), _trySendOpener);
 
 
     } catch (e, stack) {
@@ -564,27 +557,116 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     }
   }
 
-  /// Ohlásí serveru začátek řeči studenta a pošle úvod zachycený před zjištěnou řečí.
+  /// Pošle úvodní repliku tutora, dokud student nezačal mluvit sám.
+  void _trySendOpener() {
+    final opener = _pendingOpener;
+    if (opener == null || !ref.mounted) return;
+    final client = ref.read(geminiLiveClientProvider);
+    if (client == null ||
+        !client.isConnected ||
+        state.status != TutorState.listening ||
+        _activityOpen ||
+        _utterance != null) {
+      return;
+    }
+    _pendingOpener = null;
+    state = state.copyWith(status: TutorState.thinking);
+    _resetThinkingTimer();
+    client.sendText(opener);
+  }
+
+  /// Začne nahrávat repliku studenta i s úvodem zachyceným před zjištěnou řečí.
+  /// Serveru se zatím nic neposílá – to až u dost dlouhé, nebo ověřené řeči.
+  void _beginUtterance() {
+    if (_utterance != null) return;
+    final sessionId = _currentSessionId;
+    if (sessionId == null) return;
+    final utterance = StudentUtterance(sessionId: sessionId)..previousTutorLine = _lastTutorLine();
+    _pendingUtterances.add(utterance);
+    _utterance = utterance;
+    for (final chunk in _preRoll.drain()) {
+      utterance.addUnsent(chunk);
+    }
+  }
+
+  /// Ohlásí serveru začátek řeči studenta a pošle vše, co se z repliky zatím nahrálo.
   void _openActivity(GeminiLiveClient client) {
-    if (_activityOpen || !client.sendActivityStart()) return;
+    final pending = _utterance;
+    if (_activityOpen || pending == null || !client.sendActivityStart()) return;
     _activityOpen = true;
+    _pendingOpener = null; // student začal sám, úvod tutora už nepatří
+
+    final unsent = pending.takeUnsent();
+    for (final chunk in unsent) {
+      client.sendAudioChunk(chunk);
+    }
 
     final previous = _lastUtterance;
-    final sessionId = _currentSessionId;
-    if (previous != null && !previous.liveDone && !previous.saved) {
+    if (previous != null && !identical(previous, pending) && !previous.liveDone && !previous.saved) {
       // Tutor ještě neodpověděl: pokračování patří do stejného tahu i stejné repliky
       previous.reopen();
+      previous.voicedMs += pending.voicedMs;
+      for (final chunk in unsent) {
+        previous.addAudio(chunk);
+      }
+      _pendingUtterances.remove(pending);
+      pending.markSettled();
       _utterance = previous;
-    } else if (sessionId != null) {
-      final utterance = StudentUtterance(sessionId: sessionId)..previousTutorLine = _lastTutorLine();
-      _pendingUtterances.add(utterance);
-      _utterance = utterance;
     }
 
-    for (final chunk in _preRoll.drain()) {
-      client.sendAudioChunk(chunk);
-      _utterance?.addAudio(chunk);
+    if (state.status == TutorState.thinking) {
+      // Rozpracovanou odpověď tutora activityStart zruší
+      L.i('Student přerušil přemýšlení tutora hlasovým vstupem.');
+      state = state.copyWith(status: TutorState.listening);
+      _timers.cancel(TutorTimer.thinking);
+      _timers.cancel(TutorTimer.responseSilence);
     }
+  }
+
+  /// Zahodí nahranou repliku, která se serveru nikdy neposlala.
+  void _discardPendingUtterance(String reason) {
+    final utterance = _utterance;
+    if (utterance == null || _activityOpen) return;
+    L.i('🔇 $reason');
+    _utterance = null;
+    utterance.cancelVerification();
+    _pendingUtterances.remove(utterance);
+    utterance.saved = true;
+    utterance.markSettled();
+  }
+
+  /// Ohlásí konec řeči studenta – model začne odpovídat.
+  void _endStudentSpeech(GeminiLiveClient client) {
+    _closeActivity(client);
+    state = state.copyWith(status: TutorState.thinking);
+    _resetThinkingTimer();
+    _resetResponseSilenceTimer();
+  }
+
+  /// Krátká replika doběhla tichem a ověření je hotové: řeč (nebo nejasný výsledek)
+  /// se Tudorovi pošle, ruch bez řeči se zahodí – Tudor na něj nereaguje.
+  void _finishShortUtterance(StudentUtterance pending, int round, String? text, GeminiLiveClient client) {
+    if (!ref.mounted ||
+        !identical(_utterance, pending) ||
+        _activityOpen ||
+        !pending.isVerificationCurrent(round) ||
+        _isPaused) {
+      return;
+    }
+    if (text != null && text.isEmpty) {
+      _discardPendingUtterance('Krátký ruch bez řeči (${pending.voicedMs} ms), Tudorovi ho neposílám.');
+      _trySendOpener();
+      return;
+    }
+    // Ověření poslouží rovnou jako opravný přepis
+    if (text != null) {
+      pending
+        ..correctedText = text
+        ..correctionDone = true;
+    }
+    L.vad('Krátká replika (${pending.voicedMs} ms) je řeč, posílám ji Tudorovi.');
+    _openActivity(client);
+    _endStudentSpeech(client);
   }
 
   /// Ohlásí konec řeči studenta (model začne odpovídat) a pošle repliku k opravnému přepisu.
@@ -600,7 +682,13 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     if (utterance == null) return;
     utterance.endedAt = DateTime.now();
     _lastUtterance = utterance;
-    _startCorrection(utterance);
+    if (utterance.correctionDone) {
+      // Krátká replika má přepis už z ověření
+      _showUtteranceText(utterance);
+      _trySaveUtterance(utterance);
+    } else {
+      _startCorrection(utterance);
+    }
   }
 
   /// Přepíše zvuk repliky znovu (živý přepis občas zapíše řeč jiným jazykem)
@@ -705,6 +793,8 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   /// Výchozí stav ruční detekce řeči a replik studenta (nová lekce nebo konec lekce).
   void _resetSpeechActivity() {
     _activityOpen = false;
+    _pendingOpener = null;
+    _voiceRunCounted = false;
     _utterance = null;
     _lastUtterance = null;
     _pendingUtterances.clear();
@@ -812,6 +902,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   /// (např. skočil tutorovi do přemýšlení) to ale nesmí přerušit – po tichu se musí ukončit.
   void _resetSpeechDetectionUnlessSpeaking() {
     if (_activityOpen) return;
+    _discardPendingUtterance('Tutor začal mluvit dřív, než se krátká replika ověřila – zahazuji ji.');
     _timers.cancel(TutorTimer.vadSilence);
     _userSpokeInCurrentTurn = false;
   }
@@ -1155,7 +1246,17 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   /// Uloží všechny rozpracované repliky studenta. Na opravný přepis počká nejvýš 8 s,
   /// potom se uloží živý přepis.
   Future<void> _settleStudentUtterances() async {
-    if (_activityOpen) _closeActivity(null);
+    final unsent = _utterance;
+    if (_activityOpen) {
+      _closeActivity(null);
+    } else if (unsent != null) {
+      // Krátká replika, která se Tudorovi nestihla poslat: uloží se, jen když je v ní řeč
+      unsent.cancelVerification();
+      _utterance = null;
+      unsent.endedAt = DateTime.now();
+      _lastUtterance = unsent;
+      _startCorrection(unsent);
+    }
     for (final utterance in List.of(_pendingUtterances)) {
       utterance.liveDone = true;
       _trySaveUtterance(utterance);
@@ -1192,7 +1293,8 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     _turnCompleteReceived = false;
     // Rozpracovaná řeč studenta zůstane otevřená: po obnovení může větu dokončit,
     // a když bude mlčet, konec řeči se ohlásí po obvyklém tichu.
-    _userSpokeInCurrentTurn = _activityOpen;
+    _userSpokeInCurrentTurn = _activityOpen || _utterance != null;
+    _utterance?.cancelVerification();
     _preRoll.clear();
 
     // Zbytek rozpracované odpovědi tutora se během pauzy nepřehraje
@@ -1275,6 +1377,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     if (client != null && state.status != TutorState.idle && state.status != TutorState.error && state.status != TutorState.paused) {
       // Rozpracovaná řeč se uzavře, napsaný text je samostatný tah
       _closeActivity(client);
+      _discardPendingUtterance('Student píše, neodeslaná krátká replika se zahazuje.');
       _userSpokeInCurrentTurn = false;
       _flushUserTranscript(); // Flush voice transcript if any was in progress
 
@@ -1362,6 +1465,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
 
       // 3. Uzavření rozpracované řeči a flush transkriptu uživatele
       _closeActivity(client);
+      _discardPendingUtterance('Změna tématu, neodeslaná krátká replika se zahazuje.');
       _userSpokeInCurrentTurn = false;
       _flushUserTranscript();
 
@@ -1425,6 +1529,9 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         if (_activityOpen) {
           client.sendAudioChunk(data);
           _utterance?.addAudio(data);
+        } else if (_utterance != null) {
+          // Krátká replika se nahrává a serveru se pošle až po ověření
+          _utterance!.addUnsent(data);
         } else {
           _preRoll.add(data);
         }
@@ -1446,8 +1553,10 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   /// dozvuk reproduktoru, 80–160 ms) ji otevíraly a živý přepis z nich dělal „¿Qué?“.
   static const int _minSpeechMs = 200;
 
-  /// Přerušit přemýšlení tutora (a tím zrušit jeho rozpracovanou odpověď) chce víc jistoty.
-  static const int _bargeInSpeechMs = 300;
+  /// Od kolika souvislého hlasu je to jistě řeč a pošle se serveru hned. Kratší replika
+  /// („yes“, ale i zakašlání nebo „hm“) se nejdřív ověří opravným přepisem – jinak Tudor
+  /// reagoval i na ruch a živý přepis z něj dělal „¿Qué?“.
+  static const int _confirmedSpeechMs = 700;
 
   /// Lokální detekce hlasové aktivity (VAD) z PCM 16-bit audio proudu.
   ///
@@ -1467,47 +1576,48 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     // Hlas začíná blokem řeči, doznívání (sustain) ho jen prodlužuje
     final voiced = level == VoiceLevel.speech || (level == VoiceLevel.sustain && _vad.isVoicing);
 
-    // Pokud jsme ve stavu thinking (čekáme na odpověď AI):
-    // Šum ani krátké ruchy přemýšlení nepřeruší. Teprve souvislá řeč studenta
-    // vrátí stav do listening a otevře novou řeč (rozpracovanou odpověď tím zruší).
-    if (state.status == TutorState.thinking) {
-      if (!voiced) {
-        _vad.resetVoiced();
-      } else if (_vad.addVoiced(durationMs, minSpeechMs: _bargeInSpeechMs)) {
-        L.i('Student přerušil přemýšlení tutora hlasovým vstupem (vol: ${volume.toStringAsFixed(3)} >= ${_vad.startThreshold.toStringAsFixed(3)}).');
-        state = state.copyWith(status: TutorState.listening);
-        _userSpokeInCurrentTurn = true;
-        _timers.cancel(TutorTimer.thinking);
-        _timers.cancel(TutorTimer.responseSilence);
-        _resetWatchdog();
-        _openActivity(client);
-      }
-      return;
-    }
-
     if (voiced) {
       if (_vad.addVoiced(durationMs, minSpeechMs: _minSpeechMs)) {
-        if (!_userSpokeInCurrentTurn) {
-          _userSpokeInCurrentTurn = true;
-          L.vad('Detekována řeč studenta (hlasitost: ${volume.toStringAsFixed(3)}, start práh: ${_vad.startThreshold.toStringAsFixed(3)}, šum: ${_vad.noiseFloor.toStringAsFixed(3)})');
-        }
-        _openActivity(client);
-        // Student aktivně mluví – zrušíme všechny časovače čekání na odpověď či ticho
-        if (_timers.isActive(TutorTimer.vadSilence)) {
-          L.vad('Student pokračuje v mluvení, ruším časovač ticha');
-          _timers.cancel(TutorTimer.vadSilence);
-        }
-        _timers.cancel(TutorTimer.responseSilence);
-        _timers.cancel(TutorTimer.thinking);
-        _resetWatchdog();
+        _onStudentVoice(durationMs, volume, client);
       }
     } else if (level == VoiceLevel.silence) {
       _vad.resetVoiced();
+      _voiceRunCounted = false;
       if (_userSpokeInCurrentTurn && !_timers.isActive(TutorTimer.vadSilence)) {
         _startEndOfSpeechTimer(volume, client);
       }
     }
     // Měkké doznění bez předchozí řeči: časovač ticha nezačínáme, ale ani nerušíme běžící.
+  }
+
+  /// Student mluví: nahrává se replika a když má dost hlasu, otevře se řeč na serveru.
+  void _onStudentVoice(int durationMs, double volume, GeminiLiveClient client) {
+    if (!_userSpokeInCurrentTurn) {
+      _userSpokeInCurrentTurn = true;
+      L.vad('Detekována řeč studenta (hlasitost: ${volume.toStringAsFixed(3)}, start práh: ${_vad.startThreshold.toStringAsFixed(3)}, šum: ${_vad.noiseFloor.toStringAsFixed(3)})');
+    }
+    // Student aktivně mluví – zrušíme časovač ticha
+    if (_timers.isActive(TutorTimer.vadSilence)) {
+      L.vad('Student pokračuje v mluvení, ruším časovač ticha');
+      _timers.cancel(TutorTimer.vadSilence);
+    }
+    _resetWatchdog();
+
+    _beginUtterance();
+    final utterance = _utterance;
+    if (utterance == null) return;
+    // Mluví dál: ověření ticha z předchozí pauzy už neplatí
+    utterance.cancelVerification();
+    utterance.voicedMs += _voiceRunCounted ? durationMs : _vad.voicedMs;
+    _voiceRunCounted = true;
+
+    if (!_activityOpen && utterance.voicedMs >= _confirmedSpeechMs) {
+      _openActivity(client);
+    }
+    if (_activityOpen) {
+      _timers.cancel(TutorTimer.responseSilence);
+      _timers.cancel(TutorTimer.thinking);
+    }
   }
 
   /// Po nastavené době ticha od domluvení studenta ohlásí konec řeči – model začne odpovídat.
@@ -1517,15 +1627,27 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     final configuredPatience = ref.read(speechPatienceProvider);
     final vadWaitMs = configuredPatience + 500;
     L.vad('Hlasitost klesla pod práh (vol: ${volume.toStringAsFixed(3)} < ${_vad.holdThreshold.toStringAsFixed(3)}), spouštím časovač ticha ${vadWaitMs}ms...');
+    // Krátká replika se ověřuje už během ticha, ať je výsledek hotový, než ticho doběhne
+    final pending = _utterance;
+    if (pending != null && !_activityOpen) {
+      pending.startVerification(_correctedTranscript(pending));
+    }
     _timers.start(TutorTimer.vadSilence, Duration(milliseconds: vadWaitMs), () {
       if ((state.status == TutorState.listening || state.status == TutorState.thinking) && _userSpokeInCurrentTurn) {
         _userSpokeInCurrentTurn = false;
 
+        final unsent = _utterance;
+        if (unsent != null && !_activityOpen) {
+          final verification = unsent.verification ??
+              (unsent..startVerification(_correctedTranscript(unsent))).verification!;
+          final round = unsent.verificationRound;
+          L.vad('Konec krátké řeči (${unsent.voicedMs} ms hlasu). Čekám na ověření, že jde o řeč...');
+          verification.then((text) => _finishShortUtterance(unsent, round, text, client));
+          return;
+        }
+
         L.vad('Konec řeči studenta (${vadWaitMs}ms ticho po domluvení). Ohlašuji konec řeči...');
-        _closeActivity(client);
-        state = state.copyWith(status: TutorState.thinking);
-        _resetThinkingTimer();
-        _resetResponseSilenceTimer();
+        _endStudentSpeech(client);
       }
     });
   }

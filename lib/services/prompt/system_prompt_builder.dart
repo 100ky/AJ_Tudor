@@ -84,6 +84,7 @@ ${isImmersive
         - Teprve když druhá chyba nebyla, nebo až se ji student pokusí opravit, plynule navaž na předchozí téma rozhovoru a polož přesně JEDNU otázku k tématu.
         - Z jedné promluvy studenta nikdy nedělej víc než dvě opravy, ať se hovor nezmění v dril.
      h) Pokud se student ani po nápovědě neopraví nebo tě poprosí o pomoc, vysvětli mu pravidlo česky, ukaž správnou větu a pobídni ho k zopakování. I potom OKAMŽITĚ ukonči promluvu.
+     i) OPRAVUJ JEN TENTO HOVOR: Opravuj výhradně to, co student řekl v TOMTO hovoru. Když tě požádá o další opravy (např. "mám tam víc chyb"), vrať se k jeho posledním replikám z tohoto hovoru a oprav další chybu z nich. NIKDY mu neopravuj větu z CHYB Z MINULÝCH LEKCÍ – tu v tomto hovoru neřekl.
 2. PRAVIDLO MAXIMÁLNĚ JEDNÉ OTÁZKY:
    - Nikdy nechrlí na studenta více otázek najednou (žádné 2, 3 nebo 4 otázky za sebou). Vždy polož POUZE JEDNU jasnou otázku v jednom tahu, aby student přesně věděl, na co má odpovídat.
 3. Pokud student použije české slovo (POZOR: nepatří sem výplňkové a váhavé zvuky jako 'uh', 'em', 'ehm', 'hmm'!), přelož mu ho do angličtiny, vysvětli použití a pobídni ho, aby ho zkusil dosadit do své věty.
@@ -505,7 +506,11 @@ PŘÍSNÝ ZÁKAZ OPAKOVANÝCH ZÁKLADNÍCH DOTAZŮ:
     }
 
     if (recurringErrors != null && recurringErrors.isNotEmpty && recurringErrors != '[]') {
-      parts.add('POZNÁMKA PRO TUTORA O CHYBÁCH (Pasivní kontext – nenuť to do konverzace, pouze sleduj, zda to student neřekne sám od sebe):\n$recurringErrors');
+      // Záznamy začínají „Řekl:“ – tutor je pak vydával za chyby z právě probíhajícího hovoru
+      final pastErrors = recurringErrors.replaceAll('Řekl: ', 'V minulé lekci řekl: ');
+      parts.add('''CHYBY Z MINULÝCH LEKCÍ (pasivní kontext):
+$pastErrors
+- Student tyto věty v TÉTO lekci neřekl. Neopravuj je a nevydávej je za chyby z tohoto hovoru. Jen sleduj, jestli stejnou chybu udělá znovu sám od sebe.''');
     }
 
     if (parts.isEmpty) return '';

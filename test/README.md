@@ -48,10 +48,12 @@ test/
 │   ├── progress/
 │   │   └── progress_screen_test.dart             # Přehled pokroku, grafy (plynulost, chyby), paměť, statistiky
 │   ├── flashcards/
-│   │   ├── flashcards_screen_test.dart           # Cvičebna kartiček, otočení až po odpovědi, „Nevím“, SRS hodnocení, TTS
+│   │   ├── flashcards_screen_test.dart           # Cvičebna kartiček, otočení až po odpovědi, „Nevím“, SRS hodnocení, TTS, rub s vysvětlením
 │   │   ├── review_session_test.dart              # Průběh opakování (pořadí, počítadla, odebrání karty)
 │   │   ├── typed_answer_test.dart                # Porovnání napsané odpovědi (normalizace, varianty, skóre)
-│   │   └── card_front_resolver_test.dart         # Česká zadání karet a překlad starých zadání
+│   │   ├── card_front_resolver_test.dart         # Česká zadání karet a překlad starých zadání
+│   │   ├── card_explanation_resolver_test.dart   # Vysvětlení výrazu na rubu (zástupné texty, příprava, selhání)
+│   │   └── sentence_highlight_test.dart          # Podtržení slov z kartičky v původní větě
 │   └── settings/
 │       ├── settings_screen_test.dart             # Nastavení API klíče, motivy, připomínky, chytré bubliny
 │       └── settings_screen_layout_test.dart      # Responzivita a prvky v nastavení

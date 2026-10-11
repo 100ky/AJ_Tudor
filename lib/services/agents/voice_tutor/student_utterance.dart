@@ -40,8 +40,18 @@ class StudentUtterance {
 
   bool saved = false;
 
+  /// Kolik souvislého hlasu replika zatím má (krátké repliky se před odesláním ověřují).
+  int voicedMs = 0;
+
   // Pořadí opravného přepisu; výsledek staršího přepisu po znovuotevření repliky se zahodí.
   int _correctionRound = 0;
+
+  // Zvuk nahraný před odesláním serveru (krátká replika čeká na ověření, že jde o řeč).
+  final List<List<int>> _unsent = [];
+
+  // Ověření krátké repliky opravným přepisem; při další řeči se zruší.
+  Future<String?>? _verification;
+  int _verificationRound = 0;
 
   StudentUtterance({required this.sessionId});
 
@@ -53,6 +63,37 @@ class StudentUtterance {
     }
     _audio.add(chunk);
   }
+
+  /// Nahraje blok zvuku, který se serveru pošle, až replika projde ověřením.
+  void addUnsent(List<int> chunk) {
+    addAudio(chunk);
+    _unsent.add(chunk);
+  }
+
+  /// Vrátí dosud neodeslané bloky (od nejstaršího) a zapomene je.
+  List<List<int>> takeUnsent() {
+    final chunks = List<List<int>>.of(_unsent);
+    _unsent.clear();
+    return chunks;
+  }
+
+  /// Rozběhnuté ověření, že krátká replika je řeč (výsledek jako u opravného přepisu).
+  Future<String?>? get verification => _verification;
+  int get verificationRound => _verificationRound;
+
+  void startVerification(Future<String?> verification) {
+    _verificationRound++;
+    _verification = verification;
+  }
+
+  /// Student mluví dál: ověření z předchozí pauzy už neplatí.
+  void cancelVerification() {
+    if (_verification == null) return;
+    _verificationRound++;
+    _verification = null;
+  }
+
+  bool isVerificationCurrent(int round) => _verification != null && round == _verificationRound;
 
   /// Celý dosavadní zvuk k opravnému přepisu; prázdný, když replika byla moc dlouhá.
   Uint8List audioBytes() => _audioTooLong ? Uint8List(0) : _audio.toBytes();

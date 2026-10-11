@@ -116,7 +116,7 @@ Po prvním spuštění přejděte na záložku **Settings** (Nastavení) a vlož
    }
    ```
 3. **Výstup z AI**: Model v reálném čase vrací 24 000 Hz PCM audio chunky a STT textový přepis.
-4. **Ruční detekce řeči**: Serverová detekce řeči je vypnutá (`automaticActivityDetection.disabled`). Začátek a konec řeči studenta určuje místní detekce (`SpeechActivityDetector`) a aplikace je serveru ohlašuje zprávami `activityStart` a `activityEnd`. Řeč začne až po 200 ms souvislého hlasu (přerušit přemýšlení tutora chce 300 ms), takže ji krátký ruch jako klepnutí, nádech nebo dozvuk reproduktoru neotevře. Zvuk se posílá jen mezi `activityStart` a `activityEnd`, zhruba půl sekundy úvodu před zjištěnou řečí doplní `PreRollBuffer`. Konec řeči nastane po tichu „trpělivost učitele + 0,5 s“ a model pak hned odpoví. Pauza rozpracovanou řeč neukončí, po obnovení může student větu dokončit. Když model do 11 s neodpoví, spojení se obnoví.
+4. **Ruční detekce řeči**: Serverová detekce řeči je vypnutá (`automaticActivityDetection.disabled`). Začátek a konec řeči studenta určuje místní detekce (`SpeechActivityDetector`) a aplikace je serveru ohlašuje zprávami `activityStart` a `activityEnd`. Replika se začne nahrávat po 200 ms souvislého hlasu, krátký ruch (klepnutí, nádech, dozvuk reproduktoru) ji tedy ani nezačne. Serveru se pošle (`activityStart` a dosud nahraný zvuk) až od 0,7 s hlasu. Kratší replika („yes“, ale i zakašlání nebo „hm“) se během ticha po ní ověří opravným přepisem. Tudorovi se pošle, jen když v ní je řeč, jinak se zahodí, takže na ruch nereaguje a živý přepis z něj neudělá „¿Qué?“. Zvuk se posílá jen mezi `activityStart` a `activityEnd`, zhruba půl sekundy úvodu před zjištěnou řečí doplní `PreRollBuffer`. Konec řeči nastane po tichu „trpělivost učitele + 0,5 s“ a model pak hned odpoví. Pauza rozpracovanou řeč neukončí, po obnovení může student větu dokončit. Když model do 11 s neodpoví, spojení se obnoví.
 5. **Opravný přepis**: Živý přepis Gemini Live občas zapíše řeč studenta jiným jazykem („¿Qué?“). Zvuk každé repliky (`StudentUtterance`) se proto po jejím konci přepíše znovu přes `SpeechTranscriptionService` s pokynem, že student mluví česky nebo anglicky. Výsledek nahradí text v bublině a do databáze se uloží až ten. Když přepis selže, uloží se živý přepis. Když opravný přepis v nahrávce řeč neslyší, krátký živý přepis (nejvýš dvě slova, typicky „¿Qué?“ na ruch) se zahodí i z bubliny. Konec lekce na rozpracované přepisy počká nejvýš 8 s.
 6. **Skryté pokyny**: Rady režiséra (`VoiceDirectorAgent`) a další pokyny během hovoru jdou jako `clientContent`. Taková zpráva podle dokumentace Live API přeruší odpověď, kterou model právě generuje, proto pokyny čekají ve frontě a odešlou se až po `turnComplete` tutora. Hned se posílá jen „Změnit téma“, kde je přerušení záměr.
 
@@ -176,14 +176,15 @@ Automatické testy nepokryjí mikrofon, přehrávání zvuku ani skutečné vol�
 
 ---
 
-## 🛠️ Úpravy po ručním testu (9.–10. 10. 2026)
+## 🛠️ Úpravy po ručním testu (9.–11. 10. 2026)
 
-Úpravy vzešly z rozboru logů hlasových lekcí z telefonu a z gramatického drilu. Počet testů vzrostl z 333 na 385.
+Úpravy vzešly z rozboru logů hlasových lekcí z telefonu a z gramatického drilu. Počet testů vzrostl z 333 na 405.
 
 - **Ukončení a spuštění lekce se nepřekříží:** start počká na rozběhnuté ukončení, a když lekci během spouštění někdo ukončí, hovor se nespustí. Dřív mohl hovor běžet bez lekce v databázi, takže se přepis neukládal ani nevyhodnotil.
 - **Chyba spojení lekci uzavře:** po chybě (např. „Nepodařilo se obnovit spojení“) se lekce uloží a spustí se rozbor. Dřív zůstala otevřená a nevyhodnocená.
 - **Ruční detekce řeči místo popostrčení:** po 2 s ticha aplikace dřív posílala prázdný `clientContent` s `turnComplete`. Ten dorazil dřív než přepis studenta a model odpověděl na prázdný tah („Take your time...“, nebo i 16 s mumlání přepsaného jako „...“). Náhrada přes `audioStreamEnd` řeč na serveru často neuzavřela vůbec: ve 14 pobídkách lekce 8 server 5× nereagoval a jednou to skončilo obnovením spojení. Serverová detekce řeči je teď vypnutá a začátek i konec řeči ohlašuje aplikace (viz *Jak funguje Gemini Live Audio Pipeline*, bod 4). Trpělivost učitele teď přímo určuje délku ticha (dřív se čekalo vždy aspoň 2 s).
 - **Opravný přepis replik studenta:** viz *Jak funguje Gemini Live Audio Pipeline*, bod 5.
+- **Chyby z minulých lekcí:** v promptu tutora byly zapsané jako „Řekl: …“ a tutor je na žádost o další opravy vydával za chyby z právě probíhajícího hovoru. Teď jsou v sekci *CHYBY Z MINULÝCH LEKCÍ* jako „V minulé lekci řekl: …“ a pravidlo *Opravuj jen tento hovor* určuje, že další opravy patří jen k replikám z tohoto hovoru.
 - **Repliky bez slov:** tah tutora přepsaný jen jako „...“ se nezobrazí ani neuloží.
 - **Pauza:** dokončený tah tutora ani přerušení pauzu nezruší. Zbytek rozpracované odpovědi se během pauzy nepřehraje.
 - **Log lekce a nahlášení problému:** viz *Log z telefonu*.
@@ -192,6 +193,7 @@ Automatické testy nepokryjí mikrofon, přehrávání zvuku ani skutečné vol�
 - **Čeština nejde označit:** `tokenizeTutorText` (`tutor_text_tokens.dart`) dělí text na úseky. Každý tučný či kurzivní text a každé uvozovky jsou samostatný úsek, zbytek věty tvoří jeden úsek. Úsek se dvěma českými slovy, nebo s převahou českých slov, je obyčejný text. Anglický příklad v tučném textu nebo v uvozovkách uvnitř české věty jde označit. Tučný text přes víc slov se zobrazí bez hvězdiček.
 - **Čistý překlad:** model občas vrátí v překladu zbytek formátování, např. „Jak to, že</code>“. `WordTranslationService.cleanTranslationText` z odpovědi odstraní HTML/XML tagy, markdown a uvozovky. Stejně se vyčistí i starší záznamy v mezipaměti překladů při jejím načtení.
 - **Bublina „Tutor vyhodnocuje…“ v drilu** na úzkém displeji (360 dp) přetékala o 24 px. Text se teď zalomí.
+- **Rub kartičky:** slovíčko uložené z překladu mělo jako „Nápovědu a vysvětlení“ jen větu tutora („Z věty tutora: …“), a ta se na rubu ukázala ještě jednou. Teď se ukládá bez vysvětlení. Rub ukazuje „Vysvětlení“: krátké české vysvětlení výrazu, které při prvním opakování připraví Gemini (`CardExplanationResolver`) a uloží ho ke kartičce. Stejně se doplní i starší kartičky se zástupným textem. Původní věta zůstává dole a slova z kartičky jsou v ní podtržená (`highlightRanges` v `sentence_highlight.dart` najde celý výraz, nebo jednotlivá slova i v běžných tvarech jako *takes* nebo *taking*).
 
 ---
 
