@@ -79,6 +79,25 @@ Vrať VÝHRADNĚ validní JSON pole objektů bez formátování:
           ? 'Kontext věty: "${contextSentence.trim()}"\nPřelož výraz: "$word"'
           : 'Přelož výraz: "$word"';
 
+  // ── Opravný přepis repliky studenta ─────────────────────────────────────
+
+  /// Odpověď modelu, když v nahrávce žádná řeč není.
+  static const String speechTranscriptionSilence = '(ticho)';
+
+  /// Systémová instrukce pro doslovný přepis nahrávky studenta v češtině i angličtině.
+  static const String speechTranscriptionSystem =
+      'Jsi přesný přepisovač řeči. Přepisuješ nahrávku českého studenta, který se učí anglicky '
+      'a mluví anglicky, česky, nebo obojím v jedné větě. Přepiš doslova, co řekl: anglické části '
+      'anglicky, české části česky s diakritikou. Nic nepřekládej a neopravuj gramatické chyby ani '
+      'výběr slov – chyby jsou pro rozbor lekce důležité. Nic nevysvětluj a nic nepřidávej, vrať '
+      'jen přepis. Pokud v nahrávce žádná řeč není, odpověz přesně: $speechTranscriptionSilence';
+
+  /// Dotaz na přepis, volitelně s poslední replikou tutora [previousTutorLine] jako kontextem.
+  static String speechTranscriptionRequest({String? previousTutorLine}) =>
+      (previousTutorLine != null && previousTutorLine.trim().isNotEmpty)
+          ? 'Tutor předtím řekl: "${previousTutorLine.trim()}"\nPřepiš nahrávku studenta.'
+          : 'Přepiš nahrávku studenta.';
+
   // ── Výslovnost a TTS ────────────────────────────────────────────────────
 
   /// Kontext kartičky pro hodnocení mluvené odpovědi studenta.

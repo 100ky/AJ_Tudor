@@ -41,7 +41,7 @@ class SpeechActivityDetector {
   static const double initialNoiseFloor = 0.050;
 
   double _noiseFloor = initialNoiseFloor;
-  int _consecutiveSpeechChunks = 0;
+  int _voicedMs = 0;
 
   /// Aktuální odhad okolního šumu.
   double get noiseFloor => _noiseFloor;
@@ -66,18 +66,23 @@ class SpeechActivityDetector {
     return VoiceLevel.sustain;
   }
 
-  /// Započítá blok řeči; vrátí true, jakmile jde o souvislou řeč (aspoň 2 bloky po sobě).
-  bool countSpeechChunk() => ++_consecutiveSpeechChunks >= 2;
+  /// Započítá [durationMs] hlasu (blok řeči, nebo doznívání po ní). Vrátí true, jakmile
+  /// hlas trvá souvisle aspoň [minSpeechMs] – krátký ruch (klepnutí, nádech, dozvuk
+  /// reproduktoru) řeč nezačne. Živý přepis takový ruch přepisoval jako „¿Qué?“.
+  bool addVoiced(int durationMs, {required int minSpeechMs}) {
+    _voicedMs += durationMs;
+    return _voicedMs >= minSpeechMs;
+  }
 
-  /// Řeč už je zjištěná jedním blokem (např. student přerušil přemýšlení tutora).
-  void markSpeechChunk() => _consecutiveSpeechChunks = 1;
+  /// Běží souvislý hlas: začal blokem řeči a ještě ho nepřerušilo ticho.
+  bool get isVoicing => _voicedMs > 0;
 
-  /// Ticho přerušilo souvislou řeč.
-  void resetSpeechChunks() => _consecutiveSpeechChunks = 0;
+  /// Ticho přerušilo souvislý hlas.
+  void resetVoiced() => _voicedMs = 0;
 
   /// Výchozí stav pro novou lekci.
   void reset() {
     _noiseFloor = initialNoiseFloor;
-    _consecutiveSpeechChunks = 0;
+    _voicedMs = 0;
   }
 }

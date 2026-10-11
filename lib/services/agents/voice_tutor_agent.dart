@@ -19,11 +19,14 @@ import '../prompt/system_prompt_builder.dart';
 import '../audio/audio_session_controller.dart';
 import '../system/wakelock_service.dart';
 import '../gemini/gemini_live_client.dart';
+import '../gemini/speech_transcription_service.dart';
 
 import 'memory_manager_agent.dart';
 import 'voice_director_agent.dart';
+import 'voice_tutor/pre_roll_buffer.dart';
 import 'voice_tutor/session_metrics.dart';
 import 'voice_tutor/speech_activity_detector.dart';
+import 'voice_tutor/student_utterance.dart';
 import 'voice_tutor/tutor_text_analysis.dart';
 import 'voice_tutor/tutor_timers.dart';
 
@@ -124,6 +127,17 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   bool _muteLogged = false;
   bool _userSpokeInCurrentTurn = false;
 
+  // Ruční detekce řeči: začátek a konec řeči studenta serveru ohlašuje aplikace.
+  // Zvuk se posílá jen mezi activityStart a activityEnd, úvod před zjištěnou řečí
+  // drží PreRollBuffer.
+  bool _activityOpen = false;
+  final PreRollBuffer _preRoll = PreRollBuffer();
+
+  // Repliky studenta: zvuk pro opravný přepis a čekání na uložení do DB.
+  StudentUtterance? _utterance; // právě nahrávaná (mezi activityStart a activityEnd)
+  StudentUtterance? _lastUtterance; // poslední ukončená, k ní patří živý přepis
+  final List<StudentUtterance> _pendingUtterances = [];
+
   // Skryté pokyny (rada režiséra, odlehčení, tichá změna tématu) čekající na konec tahu tutora.
   // Zpráva clientContent podle dokumentace Live API přeruší právě generovanou odpověď,
   // proto je posíláme až po turnComplete: model nemluví a mikrofon je ještě ztlumený.
@@ -139,6 +153,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   late final ScenarioRepository _scenarioRepo;
   late final MemoryManagerAgent _memory;
   late final VoiceDirectorAgent _director;
+  late final SpeechTranscriptionService _transcriber;
 
   String _targetLevelSnapshot = 'B1';
   String? _userFactsSnapshot;
@@ -154,6 +169,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     _scenarioRepo = ref.read(scenarioRepositoryProvider);
     _memory = ref.read(memoryManagerAgentProvider);
     _director = ref.read(voiceDirectorAgentProvider.notifier);
+    _transcriber = ref.read(speechTranscriptionServiceProvider);
 
 
     // Registrace do životního cyklu aplikace (pro detekci pozadí/popředí)
@@ -306,6 +322,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       _metrics.start();
       _userSpokeInCurrentTurn = false;
       _vad.reset();
+      _resetSpeechActivity();
 
       // Pokud máme vybraný scénář, označíme ho jako použitý v databázi
       if (state.selectedScenarioId != null && state.selectedScenarioId! > 0) {
@@ -388,16 +405,14 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       promptLines.writeln('Délka promptu: ${systemPrompt.length} znaků');
       L.block('PROMPT', 'Parametry systémového promptu', promptLines.toString());
 
-      final speechPatience = ref.read(speechPatienceProvider);
       const liveModelName = 'models/${GeminiModels.defaultLiveModel}';
 
-      // Spuštění WebSocket připojení s nastavenou dobou ticha VAD
+      // Spuštění WebSocket připojení (konec řeči studenta určuje místní detekce řeči)
       client.muteOutput = false;
       client.connect(
         modelName: liveModelName,
         systemPrompt: systemPrompt,
         voiceName: voice,
-        silenceDurationMs: speechPatience,
       );
 
       // Zaregistrování callbacků pro zpracování zpráv z klienta
@@ -431,7 +446,11 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       Future.delayed(const Duration(milliseconds: 1000), () {
         if (!ref.mounted) return;
         final currentClient = ref.read(geminiLiveClientProvider);
-        if (currentClient != null && currentClient.isConnected && state.status == TutorState.listening) {
+        // Když student mezitím začal mluvit sám, úvod tutora vynecháme – odpoví jemu
+        if (currentClient != null &&
+            currentClient.isConnected &&
+            state.status == TutorState.listening &&
+            !_activityOpen) {
           state = state.copyWith(status: TutorState.thinking);
           _resetThinkingTimer();
 
@@ -498,8 +517,17 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     _saveTranscript('tutor', partial);
   }
 
-  /// Uloží nashromážděný transkript řeči uživatele do databáze a vymaže ho z paměti.
+  /// Uzavře živý přepis poslední repliky studenta (tutor začal odpovídat): spočítá metriky
+  /// a frustraci a předá repliku k uložení – uloží se, až doběhne i opravný přepis.
   void _flushUserTranscript() {
+    final utterance = _lastUtterance;
+    if (utterance != null && !utterance.liveDone) {
+      utterance.liveDone = true;
+      utterance.insertIndex ??= state.messages.length;
+      _showUtteranceText(utterance);
+      _trySaveUtterance(utterance);
+    }
+
     if (_currentUserTranscript.trim().isNotEmpty) {
       final userText = _currentUserTranscript.trim();
       _currentUserTranscript = '';
@@ -528,12 +556,159 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       // ─── METRIKA: timestamp konce řeči studenta (pro měření reakční doby AI) ───
       _metrics.markUserSpeechEnd();
 
-      if (_currentSessionId != null) {
-        L.i('Ukládám nashromážděný transkript uživatele do DB: "$userText"');
+      // Bez nahrané repliky se ukládá rovnou živý přepis
+      if (utterance == null && _currentSessionId != null) {
         L.i('💾 [TRANSCRIPT] Ukládám transkript uživatele do DB: "$userText"');
         _saveTranscript('user', userText);
       }
     }
+  }
+
+  /// Ohlásí serveru začátek řeči studenta a pošle úvod zachycený před zjištěnou řečí.
+  void _openActivity(GeminiLiveClient client) {
+    if (_activityOpen || !client.sendActivityStart()) return;
+    _activityOpen = true;
+
+    final previous = _lastUtterance;
+    final sessionId = _currentSessionId;
+    if (previous != null && !previous.liveDone && !previous.saved) {
+      // Tutor ještě neodpověděl: pokračování patří do stejného tahu i stejné repliky
+      previous.reopen();
+      _utterance = previous;
+    } else if (sessionId != null) {
+      final utterance = StudentUtterance(sessionId: sessionId)..previousTutorLine = _lastTutorLine();
+      _pendingUtterances.add(utterance);
+      _utterance = utterance;
+    }
+
+    for (final chunk in _preRoll.drain()) {
+      client.sendAudioChunk(chunk);
+      _utterance?.addAudio(chunk);
+    }
+  }
+
+  /// Ohlásí konec řeči studenta (model začne odpovídat) a pošle repliku k opravnému přepisu.
+  ///
+  /// Bez [client] se serveru nic neposílá (spojení spadlo nebo lekce končí).
+  void _closeActivity(GeminiLiveClient? client) {
+    if (!_activityOpen) return;
+    _activityOpen = false;
+    client?.sendActivityEnd();
+
+    final utterance = _utterance;
+    _utterance = null;
+    if (utterance == null) return;
+    utterance.endedAt = DateTime.now();
+    _lastUtterance = utterance;
+    _startCorrection(utterance);
+  }
+
+  /// Přepíše zvuk repliky znovu (živý přepis občas zapíše řeč jiným jazykem)
+  /// a výsledek ukáže v bublině a uloží.
+  void _startCorrection(StudentUtterance utterance) {
+    final round = utterance.beginCorrection();
+    _correctedTranscript(utterance).then((text) {
+      if (!utterance.isCurrentRound(round)) return;
+      if (text == null) {
+        L.w('Opravný přepis nedoběhl, platí živý přepis.');
+      } else if (text.isEmpty) {
+        L.i('✍️ Opravný přepis: v nahrávce není řeč.');
+      }
+      utterance.correctedText = text;
+      utterance.correctionDone = true;
+      _showUtteranceText(utterance);
+      _trySaveUtterance(utterance);
+    });
+  }
+
+  /// Opravný přepis zvuku repliky; null, když se nepodaří (pak platí živý přepis).
+  Future<String?> _correctedTranscript(StudentUtterance utterance) async {
+    final audio = utterance.audioBytes();
+    if (audio.isEmpty) return null;
+    try {
+      return await _transcriber
+          .transcribe(audio, previousTutorLine: utterance.previousTutorLine)
+          .timeout(const Duration(seconds: 20));
+    } catch (e) {
+      L.w('Opravný přepis repliky selhal: $e');
+      return null;
+    }
+  }
+
+  /// Ukáže v bublině repliky nejlepší známý přepis. Když bublina ještě není
+  /// (živý přepis nepřišel vůbec), vloží ji před odpověď tutora.
+  void _showUtteranceText(StudentUtterance utterance) {
+    if (!ref.mounted) return;
+    final text = utterance.finalText;
+    final messages = List<ChatMessage>.from(state.messages);
+    final message = utterance.message;
+    final index = message == null ? -1 : messages.indexWhere((m) => identical(m, message));
+
+    if (text.isEmpty) {
+      // Opravný přepis v nahrávce neslyšel řeč: bublina s výmyslem živého přepisu zmizí
+      if (index >= 0 && utterance.correctionDone) {
+        messages.removeAt(index);
+        utterance.message = null;
+        state = state.copyWith(messages: messages);
+      }
+      return;
+    }
+
+    if (index >= 0) {
+      if (messages[index].text == text) return;
+      messages[index] = ChatMessage(text, isUser: true);
+      utterance.message = messages[index];
+    } else {
+      // Dokud může přijít živý přepis, bublinu vytvoří on
+      if (!utterance.liveDone) return;
+      final at = (utterance.insertIndex ?? messages.length).clamp(0, messages.length);
+      final inserted = ChatMessage(text, isUser: true);
+      messages.insert(at, inserted);
+      utterance.message = inserted;
+    }
+    state = state.copyWith(messages: messages);
+  }
+
+  /// Uloží repliku studenta do DB, jakmile je znám živý i opravný přepis.
+  void _trySaveUtterance(StudentUtterance utterance) {
+    if (!utterance.readyToSave) return;
+    utterance.saved = true;
+    _pendingUtterances.remove(utterance);
+
+    final text = utterance.finalText;
+    if (text.isEmpty && utterance.liveText.trim().isNotEmpty) {
+      L.i('Replika bez řeči (ruch), neukládám živý přepis "${utterance.liveText.trim()}".');
+    }
+    if (text.isNotEmpty) {
+      if (text != utterance.liveText.trim()) {
+        L.i('✍️ Opravný přepis repliky studenta: "${utterance.liveText.trim()}" → "$text"');
+      }
+      L.i('💾 [TRANSCRIPT] Ukládám repliku studenta do DB: "$text"');
+      _repo.addTranscript(
+        sessionId: utterance.sessionId,
+        speaker: 'user',
+        content: text,
+        timestamp: utterance.endedAt,
+      );
+    }
+    utterance.markSettled();
+  }
+
+  /// Poslední replika tutora (kontext pro opravný přepis).
+  String? _lastTutorLine() {
+    for (final message in state.messages.reversed) {
+      if (!message.isUser) return message.text;
+    }
+    return null;
+  }
+
+  /// Výchozí stav ruční detekce řeči a replik studenta (nová lekce nebo konec lekce).
+  void _resetSpeechActivity() {
+    _activityOpen = false;
+    _utterance = null;
+    _lastUtterance = null;
+    _pendingUtterances.clear();
+    _preRoll.clear();
   }
 
   /// Zaregistruje všechny události příchozí z WebSocket klienta Gemini.
@@ -575,36 +750,50 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       return;
     }
 
+    // Konec řeči určuje místní detekce řeči, přepis na časovače nesahá
     _resetWatchdog();
-    _userSpokeInCurrentTurn = true;
-    _timers.cancel(TutorTimer.vadSilence);
-    _timers.cancel(TutorTimer.responseSilence);
 
     HapticFeedback.lightImpact();
     L.i('STT chunk uživatele: "$cleanChunk"');
 
     final isNewTurn = _currentUserTranscript.isEmpty;
     _currentUserTranscript += cleanChunk;
+    final liveText = _currentUserTranscript.trim();
 
-    final displayTranscript = _currentUserTranscript.trim();
+    // Hotový opravný přepis má v bublině přednost před živým (a ruch bez řeči bublinu nemá)
+    final utterance = _lastUtterance;
+    if (utterance != null && !utterance.saved) utterance.liveText = liveText;
+    final shown = utterance != null && utterance.correctionDone ? utterance.finalText : liveText;
+
     final newMessages = List<ChatMessage>.from(state.messages);
-
-    // Rozpracovaná replika studenta se průběžně přepisuje v poslední bublině
-    if (!isNewTurn && newMessages.isNotEmpty && newMessages.last.isUser) {
-      newMessages[newMessages.length - 1] = ChatMessage(displayTranscript, isUser: true);
+    final previous = utterance?.message;
+    final index = previous == null ? -1 : newMessages.indexWhere((m) => identical(m, previous));
+    ChatMessage? message;
+    if (shown.isEmpty) {
+      if (index >= 0) newMessages.removeAt(index);
     } else {
-      newMessages.add(ChatMessage(displayTranscript, isUser: true));
+      message = ChatMessage(shown, isUser: true);
+      if (index >= 0) {
+        newMessages[index] = message;
+      } else if (!isNewTurn && newMessages.isNotEmpty && newMessages.last.isUser) {
+        // Rozpracovaná replika studenta se průběžně přepisuje v poslední bublině
+        newMessages[newMessages.length - 1] = message;
+      } else {
+        newMessages.add(message);
+      }
     }
+    if (utterance != null && !utterance.saved) utterance.message = message;
     state = state.copyWith(messages: newMessages);
+
+    if (utterance != null) _trySaveUtterance(utterance);
   }
 
   /// Detekce, že začala téct audio data z AI.
   void _onAudioReceived() {
     _timers.cancel(TutorTimer.thinking);
     _timers.cancel(TutorTimer.responseSilence);
-    _timers.cancel(TutorTimer.vadSilence);
     _timers.cancel(TutorTimer.playbackComplete);
-    _userSpokeInCurrentTurn = false;
+    _resetSpeechDetectionUnlessSpeaking();
     _flushUserTranscript();
     _resetWatchdog();
 
@@ -619,6 +808,14 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
 
   bool get _isPaused => state.status == TutorState.paused;
 
+  /// Tutor mluví nebo domluvil: detekce řeči začne znovu. Rozpracovanou řeč studenta
+  /// (např. skočil tutorovi do přemýšlení) to ale nesmí přerušit – po tichu se musí ukončit.
+  void _resetSpeechDetectionUnlessSpeaking() {
+    if (_activityOpen) return;
+    _timers.cancel(TutorTimer.vadSilence);
+    _userSpokeInCurrentTurn = false;
+  }
+
   /// Události ze serveru (dokončený tah, přerušení) nesmí zrušit pauzu nastavenou studentem.
   TutorState _keepPaused(TutorState next) => _isPaused ? TutorState.paused : next;
 
@@ -626,8 +823,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   void _onTurnComplete(GeminiLiveClient client) {
     _resetWatchdog();
     _timers.cancel(TutorTimer.responseSilence);
-    _timers.cancel(TutorTimer.vadSilence);
-    _userSpokeInCurrentTurn = false;
+    _resetSpeechDetectionUnlessSpeaking();
     HapticFeedback.selectionClick();
     final isStillPlaying = _audio.isPlaying;
     L.i('Gemini hlásí TurnComplete. (Hraje reprák? $isStillPlaying)');
@@ -750,6 +946,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   /// Změna stavu připojení na síťové vrstvě.
   void _onConnectionStatusChanged(bool isConnected, GeminiLiveClient client) {
     if (!isConnected && !_isStopping) {
+      _dropActivityAfterDisconnect();
       if (state.status == TutorState.listening || state.status == TutorState.speaking || state.status == TutorState.thinking) {
         // Výpadek uprostřed aktivního hovoru → reconnecting
         _metrics.reconnects++;
@@ -761,6 +958,8 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       }
     } else if (isConnected && (state.status == TutorState.reconnecting || state.status == TutorState.connecting)) {
       final wasReconnecting = state.status == TutorState.reconnecting;
+      // Nové spojení rozpracovanou řeč nezná (vynucený reconnect neohlásí výpadek)
+      _dropActivityAfterDisconnect();
       L.i('Spojení obnoveno, vracím se do stavu listening.');
       state = state.copyWith(status: TutorState.listening);
       _resetWatchdog();
@@ -769,6 +968,20 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       if (wasReconnecting && state.messages.isNotEmpty) {
         _restoreConversationContext(client);
       }
+    }
+  }
+
+  /// Se spojením zanikla i rozpracovaná řeč studenta na serveru. Replika se uloží
+  /// z opravného přepisu (odpověď na ni už nepřijde) a další řeč začne novou.
+  void _dropActivityAfterDisconnect() {
+    _preRoll.clear();
+    if (!_activityOpen) return;
+    _closeActivity(null);
+    final utterance = _lastUtterance;
+    if (utterance != null && !utterance.liveDone) {
+      utterance.liveDone = true;
+      utterance.insertIndex ??= state.messages.length;
+      _trySaveUtterance(utterance);
     }
   }
 
@@ -866,8 +1079,12 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       if (_currentSessionId != null) {
         final sessionId = _currentSessionId!;
 
-        // Flush any remaining user transcript
-        if (_currentUserTranscript.trim().isNotEmpty) {
+        // Repliky studenta: rozpracovaná řeč i repliky čekající na opravný přepis
+        // se uloží před uzavřením lekce, aby je viděl rozbor po lekci
+        await _settleStudentUtterances();
+
+        // Živý přepis bez nahrané repliky
+        if (_currentUserTranscript.trim().isNotEmpty && _lastUtterance == null) {
           final userText = _currentUserTranscript.trim();
           L.i('Flush: Ukládám zbývající transkript uživatele před koncem session: "$userText"');
           try {
@@ -879,8 +1096,9 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
           } catch (e, stack) {
             L.e('Chyba při flushování transkriptu uživatele', e, stack);
           }
-          _currentUserTranscript = '';
         }
+        _currentUserTranscript = '';
+        _resetSpeechActivity();
 
         // Pokud model zrovna mluvil a nestihl odeslat turnComplete, flushneme rozpracovaný text
         if (ref.mounted && hasSpokenWords(state.currentTranscript)) {
@@ -934,6 +1152,26 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     }
   }
 
+  /// Uloží všechny rozpracované repliky studenta. Na opravný přepis počká nejvýš 8 s,
+  /// potom se uloží živý přepis.
+  Future<void> _settleStudentUtterances() async {
+    if (_activityOpen) _closeActivity(null);
+    for (final utterance in List.of(_pendingUtterances)) {
+      utterance.liveDone = true;
+      _trySaveUtterance(utterance);
+    }
+    if (_pendingUtterances.isEmpty) return;
+
+    L.i('Čekám na opravný přepis ${_pendingUtterances.length} replik studenta...');
+    await Future.wait(_pendingUtterances.map((u) => u.settled))
+        .timeout(const Duration(seconds: 8), onTimeout: () => const <void>[]);
+    for (final utterance in List.of(_pendingUtterances)) {
+      L.w('Opravný přepis nedoběhl, ukládám živý přepis repliky.');
+      utterance.correctionDone = true;
+      _trySaveUtterance(utterance);
+    }
+  }
+
   /// Aktuální stav tutora pro bezpečný přístup mimo ref (např. v dispose).
   TutorState get currentStatus => state.status;
 
@@ -952,8 +1190,10 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     // Zastavíme watchdog a ostatní časovače, aby nespustily reconnect během pauzy
     _timers.cancelAll();
     _turnCompleteReceived = false;
-    _userSpokeInCurrentTurn = false;
-
+    // Rozpracovaná řeč studenta zůstane otevřená: po obnovení může větu dokončit,
+    // a když bude mlčet, konec řeči se ohlásí po obvyklém tichu.
+    _userSpokeInCurrentTurn = _activityOpen;
+    _preRoll.clear();
 
     // Zbytek rozpracované odpovědi tutora se během pauzy nepřehraje
     ref.read(geminiLiveClientProvider)?.muteOutput = true;
@@ -980,6 +1220,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       return;
     }
     client.muteOutput = false;
+    _preRoll.clear();
 
     // Znovu aktivujeme mikrofon bez ohledu na stav sítě,
     // aby mohl běžet na pozadí, jakmile se spojení obnoví.
@@ -1032,6 +1273,9 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     _resetWatchdog();
     final client = ref.read(geminiLiveClientProvider);
     if (client != null && state.status != TutorState.idle && state.status != TutorState.error && state.status != TutorState.paused) {
+      // Rozpracovaná řeč se uzavře, napsaný text je samostatný tah
+      _closeActivity(client);
+      _userSpokeInCurrentTurn = false;
       _flushUserTranscript(); // Flush voice transcript if any was in progress
 
       // Přepneme stav do 'thinking', dokud AI neodpoví
@@ -1116,7 +1360,9 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       // 2. Pokud byl rozpracovaný transkript tutora, bezpečně ho uložíme do zpráv i do DB
       _commitPartialTutorTranscript();
 
-      // 3. Flush rozpracovaného transkriptu uživatele
+      // 3. Uzavření rozpracované řeči a flush transkriptu uživatele
+      _closeActivity(client);
+      _userSpokeInCurrentTurn = false;
       _flushUserTranscript();
 
       // 4. Přepneme stav do thinking – AI ihned začne přemýšlet a generovat nové téma
@@ -1166,20 +1412,21 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
           L.w('🔇 MUTE WINDOW: Zahazuji zvuk z mikrofonu (reproduktor ještě hraje)');
           _muteLogged = true;
         }
+        // Ozvěna tutora nesmí skončit v úvodu další řeči studenta
+        _preRoll.clear();
       } else {
         if (_muteLogged) {
           L.i('🎤 MUTE WINDOW KONČÍ: Mikrofon je opět aktivní.');
           _muteLogged = false;
         }
 
-        if (state.status == TutorState.thinking) {
-          // Při čekání na odpověď (po audioStreamEnd) posíláme zvuk, jen když student znovu
-          // promluví – šum by proud znovu otevřel a server by čekal na konec domnělé řeči.
-          _processAudioChunkForVAD(data, client);
-          if (state.status == TutorState.listening) client.sendAudioChunk(data);
-        } else {
+        // Detekce řeči může řeč právě otevřít (pak se nejdřív pošle úvod z PreRollBuffer)
+        _processAudioChunkForVAD(data, client);
+        if (_activityOpen) {
           client.sendAudioChunk(data);
-          _processAudioChunkForVAD(data, client);
+          _utterance?.addAudio(data);
+        } else {
+          _preRoll.add(data);
         }
       }
     } else if (state.status == TutorState.speaking) {
@@ -1192,75 +1439,90 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     }
   }
 
+  /// PCM 16-bit, 16 kHz, mono: 32 bajtů na milisekundu.
+  static const int _pcmBytesPerMs = 32;
+
+  /// Kolik souvislého hlasu otevře řeč studenta. Krátké ruchy (klepnutí, nádech,
+  /// dozvuk reproduktoru, 80–160 ms) ji otevíraly a živý přepis z nich dělal „¿Qué?“.
+  static const int _minSpeechMs = 200;
+
+  /// Přerušit přemýšlení tutora (a tím zrušit jeho rozpracovanou odpověď) chce víc jistoty.
+  static const int _bargeInSpeechMs = 300;
+
   /// Lokální detekce hlasové aktivity (VAD) z PCM 16-bit audio proudu.
   ///
-  /// Pokud uživatel promluví a po nastaveném čase ticha domluví, popostrčí model (turnComplete: true),
-  /// čímž se zamezí zasekávání modelu při čekání na další slova.
+  /// Při souvislé řeči ohlásí serveru její začátek (activityStart) a po nastaveném
+  /// tichu konec (activityEnd) – ten spustí odpověď modelu.
   void _processAudioChunkForVAD(List<int> buffer, GeminiLiveClient client) {
     if (buffer.length < 2) return;
 
     final volume = pcm16Volume(buffer);
+    final durationMs = buffer.length ~/ _pcmBytesPerMs;
 
     // Šum okolí se odhaduje jen v klidovém poslechu, aby hlas studenta neposouval práh nahoru.
     final level = _vad.classify(
       volume,
       adaptNoiseFloor: !_userSpokeInCurrentTurn && state.status == TutorState.listening,
     );
+    // Hlas začíná blokem řeči, doznívání (sustain) ho jen prodlužuje
+    final voiced = level == VoiceLevel.speech || (level == VoiceLevel.sustain && _vad.isVoicing);
 
     // Pokud jsme ve stavu thinking (čekáme na odpověď AI):
-    // Ignorujeme šum a slabé zvuky. Pouze zřetelná řeč studenta vrátí stav do listening.
+    // Šum ani krátké ruchy přemýšlení nepřeruší. Teprve souvislá řeč studenta
+    // vrátí stav do listening a otevře novou řeč (rozpracovanou odpověď tím zruší).
     if (state.status == TutorState.thinking) {
-      if (level == VoiceLevel.speech) {
+      if (!voiced) {
+        _vad.resetVoiced();
+      } else if (_vad.addVoiced(durationMs, minSpeechMs: _bargeInSpeechMs)) {
         L.i('Student přerušil přemýšlení tutora hlasovým vstupem (vol: ${volume.toStringAsFixed(3)} >= ${_vad.startThreshold.toStringAsFixed(3)}).');
         state = state.copyWith(status: TutorState.listening);
         _userSpokeInCurrentTurn = true;
-        _vad.markSpeechChunk();
         _timers.cancel(TutorTimer.thinking);
         _timers.cancel(TutorTimer.responseSilence);
         _resetWatchdog();
+        _openActivity(client);
       }
       return;
     }
 
-    switch (level) {
-      case VoiceLevel.speech:
-        if (_vad.countSpeechChunk()) {
-          if (!_userSpokeInCurrentTurn) {
-            _userSpokeInCurrentTurn = true;
-            L.vad('Detekována řeč studenta (hlasitost: ${volume.toStringAsFixed(3)}, start práh: ${_vad.startThreshold.toStringAsFixed(3)}, šum: ${_vad.noiseFloor.toStringAsFixed(3)})');
-          }
-          // Student aktivně mluví – zrušíme všechny časovače čekání na odpověď či ticho
-          if (_timers.isActive(TutorTimer.vadSilence)) {
-            L.vad('Student pokračuje v mluvení, ruším časovač ticha');
-            _timers.cancel(TutorTimer.vadSilence);
-          }
-          _timers.cancel(TutorTimer.responseSilence);
-          _timers.cancel(TutorTimer.thinking);
-          _resetWatchdog();
+    if (voiced) {
+      if (_vad.addVoiced(durationMs, minSpeechMs: _minSpeechMs)) {
+        if (!_userSpokeInCurrentTurn) {
+          _userSpokeInCurrentTurn = true;
+          L.vad('Detekována řeč studenta (hlasitost: ${volume.toStringAsFixed(3)}, start práh: ${_vad.startThreshold.toStringAsFixed(3)}, šum: ${_vad.noiseFloor.toStringAsFixed(3)})');
         }
-      case VoiceLevel.silence:
-        _vad.resetSpeechChunks();
-        if (_userSpokeInCurrentTurn && !_timers.isActive(TutorTimer.vadSilence)) {
-          _startEndOfSpeechTimer(volume, client);
+        _openActivity(client);
+        // Student aktivně mluví – zrušíme všechny časovače čekání na odpověď či ticho
+        if (_timers.isActive(TutorTimer.vadSilence)) {
+          L.vad('Student pokračuje v mluvení, ruším časovač ticha');
+          _timers.cancel(TutorTimer.vadSilence);
         }
-      case VoiceLevel.sustain:
-        // Měkké doznění řeči: časovač ticha nezačínáme, ale ani nerušíme běžící.
-        break;
+        _timers.cancel(TutorTimer.responseSilence);
+        _timers.cancel(TutorTimer.thinking);
+        _resetWatchdog();
+      }
+    } else if (level == VoiceLevel.silence) {
+      _vad.resetVoiced();
+      if (_userSpokeInCurrentTurn && !_timers.isActive(TutorTimer.vadSilence)) {
+        _startEndOfSpeechTimer(volume, client);
+      }
     }
+    // Měkké doznění bez předchozí řeči: časovač ticha nezačínáme, ale ani nerušíme běžící.
   }
 
-  /// Po nastavené době ticha od domluvení studenta popostrčí model k odpovědi.
+  /// Po nastavené době ticha od domluvení studenta ohlásí konec řeči – model začne odpovídat.
   void _startEndOfSpeechTimer(double volume, GeminiLiveClient client) {
+    // Nastavená trpělivost + rezerva na doznívání řeči pod prahem hlasitosti
+    // (výchozích 1 500 ms → 2 s ticha). Server konec řeči sám neurčuje.
     final configuredPatience = ref.read(speechPatienceProvider);
-    final vadWaitMs = math.max(2000, configuredPatience + 500);
+    final vadWaitMs = configuredPatience + 500;
     L.vad('Hlasitost klesla pod práh (vol: ${volume.toStringAsFixed(3)} < ${_vad.holdThreshold.toStringAsFixed(3)}), spouštím časovač ticha ${vadWaitMs}ms...');
     _timers.start(TutorTimer.vadSilence, Duration(milliseconds: vadWaitMs), () {
       if ((state.status == TutorState.listening || state.status == TutorState.thinking) && _userSpokeInCurrentTurn) {
         _userSpokeInCurrentTurn = false;
-        final userText = _currentUserTranscript.trim();
 
-        L.vad('Konec řeči studenta (${vadWaitMs}ms ticho po domluvení). Popostrkuji model k odpovědi...');
-        client.nudgeModel(userText.isNotEmpty ? userText : null);
+        L.vad('Konec řeči studenta (${vadWaitMs}ms ticho po domluvení). Ohlašuji konec řeči...');
+        _closeActivity(client);
         state = state.copyWith(status: TutorState.thinking);
         _resetThinkingTimer();
         _resetResponseSilenceTimer();
@@ -1268,30 +1530,18 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     });
   }
 
-  /// Spustí hlídání reakce modelu po domluvě studenta.
+  /// Hlídá, že model po konci řeči studenta začne odpovídat.
   ///
-  /// Pokud uživatel domluví a Gemini delší dobu neodpovídá,
-  /// model po 4.5s zkusíme ještě jednou popostrčit přes nudgeModel.
-  /// Pouze v případě úplného zamrznutí (dalších 6.5s bez jakéhokoliv audia či textu z AI,
-  /// celkem 11s ticha) vyvoláme čistý reconnect s obnovením kontextu.
+  /// Konec řeči ohlašuje aplikace, takže odpověď má přijít hned. Když do 11 s nedorazí
+  /// žádné audio ani text, spojení se obnoví s kontextem.
   void _resetResponseSilenceTimer() {
-    _timers.start(TutorTimer.responseSilence, const Duration(milliseconds: 4500), () {
+    _timers.start(TutorTimer.responseSilence, const Duration(seconds: 11), () {
       if ((state.status == TutorState.listening || state.status == TutorState.thinking) && !_userSpokeInCurrentTurn) {
-        final userText = _currentUserTranscript.trim();
-        L.vad('Model ještě nezačal odpovídat (4.5s po konci řeči). Záložní popostrčení...');
         final client = ref.read(geminiLiveClientProvider);
         if (client != null && client.isConnected) {
-          client.nudgeModel(userText.isNotEmpty ? userText : null);
-
-          // Druhý záchranný krok: Dáme modelu čas dalších 6.5 sekund (celkem 11s ticha).
-          // Teprve při celkovém tichu >11s vyvoláme reconnect.
-          _timers.start(TutorTimer.responseSilence, const Duration(milliseconds: 6500), () {
-            if ((state.status == TutorState.listening || state.status == TutorState.thinking) && !_userSpokeInCurrentTurn) {
-              L.w('Model nereaguje ani po záložním popostrčení (11s celkového ticha). Vyvolávám forceReconnect...');
-              state = state.copyWith(status: TutorState.reconnecting);
-              client.forceReconnect();
-            }
-          });
+          L.w('Model nereaguje 11 s po konci řeči studenta. Vyvolávám forceReconnect...');
+          state = state.copyWith(status: TutorState.reconnecting);
+          client.forceReconnect();
         }
       }
     });

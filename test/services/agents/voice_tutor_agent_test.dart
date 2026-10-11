@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:aj_tudor/services/agents/voice_tutor_agent.dart';
 import 'package:aj_tudor/services/gemini/gemini_live_client.dart';
+import 'package:aj_tudor/services/gemini/speech_transcription_service.dart';
 import 'package:aj_tudor/services/audio/audio_session_controller.dart';
 import 'package:aj_tudor/data/repositories/profile_repository.dart';
 import 'package:aj_tudor/data/repositories/session_repository.dart';
@@ -25,6 +26,7 @@ class MockProfileRepository extends Mock implements ProfileRepository {}
 class MockMemoryManagerAgent extends Mock implements MemoryManagerAgent {}
 class MockWakelockService extends Mock implements WakelockService {}
 class MockSharedPreferences extends Mock implements SharedPreferences {}
+class MockSpeechTranscriber extends Mock implements SpeechTranscriptionService {}
 class MockFlutterSecureStorage extends Mock implements FlutterSecureStorage {}
 
 void main() {
@@ -39,6 +41,12 @@ void main() {
   late MockWakelockService mockWakelock;
   late MockSharedPreferences mockPrefs;
   late MockFlutterSecureStorage mockStorage;
+  late MockSpeechTranscriber mockTranscriber;
+
+  setUpAll(() {
+    registerFallbackValue(DateTime(2000));
+    registerFallbackValue(<int>[]);
+  });
 
   setUp(() {
     mockClient = MockGeminiLiveClient();
@@ -49,6 +57,7 @@ void main() {
     mockWakelock = MockWakelockService();
     mockPrefs = MockSharedPreferences();
     mockStorage = MockFlutterSecureStorage();
+    mockTranscriber = MockSpeechTranscriber();
 
     // Setup default responses for mocks
     when(() => mockStorage.read(key: any(named: 'key'))).thenAnswer((_) async => null);
@@ -63,8 +72,14 @@ void main() {
       sessionId: any(named: 'sessionId'),
       speaker: any(named: 'speaker'),
       content: any(named: 'content'),
+      timestamp: any(named: 'timestamp'),
     )).thenAnswer((_) async => Result.success(null));
     when(() => mockMemory.analyzeSession(any())).thenAnswer((_) async {});
+    // Ruční detekce řeči a opravný přepis (bez API klíče přepis nevrátí nic)
+    when(() => mockClient.sendActivityStart()).thenReturn(true);
+    when(() => mockClient.sendActivityEnd()).thenReturn(true);
+    when(() => mockTranscriber.transcribe(any(), previousTutorLine: any(named: 'previousTutorLine')))
+        .thenAnswer((_) async => null);
     // disconnect might be called
     when(() => mockClient.disconnect()).thenAnswer((_) {});
     when(() => mockClient.isConnected).thenReturn(true);
@@ -79,6 +94,7 @@ void main() {
         wakelockServiceProvider.overrideWithValue(mockWakelock),
         sharedPreferencesProvider.overrideWithValue(mockPrefs),
         secureStorageProvider.overrideWithValue(mockStorage),
+        speechTranscriptionServiceProvider.overrideWithValue(mockTranscriber),
       ],
     );
   });
@@ -250,7 +266,6 @@ void main() {
       modelName: any(named: 'modelName'),
       systemPrompt: any(named: 'systemPrompt'),
       voiceName: any(named: 'voiceName'),
-      silenceDurationMs: any(named: 'silenceDurationMs'),
     )).thenAnswer((_) {});
     when(() => mockClient.currentTokenCount).thenReturn(0);
     when(() => mockClient.sendClientContent(
@@ -300,7 +315,6 @@ void main() {
       modelName: any(named: 'modelName'),
       systemPrompt: any(named: 'systemPrompt'),
       voiceName: any(named: 'voiceName'),
-      silenceDurationMs: any(named: 'silenceDurationMs'),
     )).thenAnswer((_) {});
 
     Function(String)? textCallback;
@@ -324,7 +338,7 @@ void main() {
     expect(container.read(voiceTutorAgentProvider).messages.last.isUser, false);
   });
 
-  test('startSession passes configured silenceDurationMs to client.connect', () async {
+  test('startSession connects the live client once', () async {
     when(() => mockRepo.startNewSession()).thenAnswer((_) async => Result.success(123));
     when(() => mockProfileRepo.getUserProfile()).thenAnswer((_) async => null);
     when(() => mockAudio.start(onAudioChunk: any(named: 'onAudioChunk'))).thenAnswer((_) async {});
@@ -332,7 +346,6 @@ void main() {
       modelName: any(named: 'modelName'),
       systemPrompt: any(named: 'systemPrompt'),
       voiceName: any(named: 'voiceName'),
-      silenceDurationMs: any(named: 'silenceDurationMs'),
     )).thenAnswer((_) {});
 
     final agent = container.read(voiceTutorAgentProvider.notifier);
@@ -342,11 +355,10 @@ void main() {
       modelName: any(named: 'modelName'),
       systemPrompt: any(named: 'systemPrompt'),
       voiceName: any(named: 'voiceName'),
-      silenceDurationMs: 1500, // default from SpeechPatienceNotifier
     )).called(1);
   });
 
-  test('long user speech: receiving multiple STT chunks does not trigger premature nudgeModel or forceReconnect', () async {
+  test('long user speech: receiving multiple STT chunks does not end the speech or force a reconnect', () async {
     Function(String)? userTranscriptCallback;
 
     when(() => mockRepo.startNewSession()).thenAnswer((_) async => Result.success(123));
@@ -356,9 +368,7 @@ void main() {
       modelName: any(named: 'modelName'),
       systemPrompt: any(named: 'systemPrompt'),
       voiceName: any(named: 'voiceName'),
-      silenceDurationMs: any(named: 'silenceDurationMs'),
     )).thenAnswer((_) {});
-    when(() => mockClient.nudgeModel()).thenAnswer((_) {});
     when(() => mockClient.forceReconnect()).thenAnswer((_) {});
 
     when(() => mockClient.onUserTranscriptReceived = any()).thenAnswer((invocation) => 
@@ -380,12 +390,12 @@ void main() {
     expect(state.messages.length, 1);
     expect(state.messages.first.text, 'When I was younger, I used to live in a small town where everybody knew each other and we played outside until dark.');
 
-    // Crucially: nudgeModel and forceReconnect must NOT be called while user is receiving transcripts!
-    verifyNever(() => mockClient.nudgeModel());
+    // Crucially: the speech must not be ended nor the connection reset while transcripts arrive!
+    verifyNever(() => mockClient.sendActivityEnd());
     verifyNever(() => mockClient.forceReconnect());
   });
 
-  test('audio chunk in thinking state reverts to listening and streams audio', () async {
+  test('continuous speech in thinking state reverts to listening and opens the speech', () async {
     Function(List<int>)? audioChunkCallback;
 
     when(() => mockRepo.startNewSession()).thenAnswer((_) async => Result.success(123));
@@ -398,7 +408,6 @@ void main() {
       modelName: any(named: 'modelName'),
       systemPrompt: any(named: 'systemPrompt'),
       voiceName: any(named: 'voiceName'),
-      silenceDurationMs: any(named: 'silenceDurationMs'),
     )).thenAnswer((_) {});
     when(() => mockClient.sendAudioChunk(any())).thenAnswer((_) {});
     when(() => mockClient.sendText(any())).thenAnswer((_) {});
@@ -412,13 +421,19 @@ void main() {
     agent.sendText('Thinking test');
     expect(container.read(voiceTutorAgentProvider).status, TutorState.thinking);
 
-    // User speaks again (generates 16-bit PCM buffer with audible volume)
-    final audioBuffer = List<int>.filled(640, 50); // PCM samples
+    // User speaks again (100 ms blocks of audible 16-bit PCM) – 200 ms do not interrupt the tutor yet
+    final audioBuffer = List<int>.filled(3200, 50);
+    audioChunkCallback!(audioBuffer);
+    audioChunkCallback!(audioBuffer);
+    expect(container.read(voiceTutorAgentProvider).status, TutorState.thinking);
+    verifyNever(() => mockClient.sendAudioChunk(any()));
+
     audioChunkCallback!(audioBuffer);
 
-    // State should revert to listening and audio should be streamed to client
+    // After 300 ms the state reverts to listening, the speech opens and all blocks reach the server
     expect(container.read(voiceTutorAgentProvider).status, TutorState.listening);
-    verify(() => mockClient.sendAudioChunk(audioBuffer)).called(1);
+    verify(() => mockClient.sendActivityStart()).called(1);
+    verify(() => mockClient.sendAudioChunk(audioBuffer)).called(3);
   });
 
   test('ambient room noise does not trigger false speech detection or cancel silence timer', () async {
@@ -434,11 +449,9 @@ void main() {
       modelName: any(named: 'modelName'),
       systemPrompt: any(named: 'systemPrompt'),
       voiceName: any(named: 'voiceName'),
-      silenceDurationMs: any(named: 'silenceDurationMs'),
     )).thenAnswer((_) {});
     when(() => mockClient.sendAudioChunk(any())).thenAnswer((_) {});
     when(() => mockClient.sendText(any())).thenAnswer((_) {});
-    when(() => mockClient.nudgeModel(any())).thenAnswer((_) {});
 
     final agent = container.read(voiceTutorAgentProvider.notifier);
     await agent.startSession();
@@ -454,7 +467,7 @@ void main() {
 
     // Agent must stay in listening state without phantom speech detection
     expect(container.read(voiceTutorAgentProvider).status, TutorState.listening);
-    verifyNever(() => mockClient.nudgeModel(any()));
+    verifyNever(() => mockClient.sendActivityStart());
 
     // 2. Put into thinking state - ambient noise must NOT revert thinking to listening
     agent.sendText('Thinking test');
@@ -465,8 +478,8 @@ void main() {
     }
     // Must remain in thinking state despite background noise
     expect(container.read(voiceTutorAgentProvider).status, TutorState.thinking);
-    // ...and the noise must not reopen the audio stream while waiting for the tutor
-    verify(() => mockClient.sendAudioChunk(noiseChunk)).called(10);
+    // ...and without speech no audio reaches the server at all
+    verifyNever(() => mockClient.sendAudioChunk(noiseChunk));
   });
 
   group('tutor turns', () {
@@ -484,8 +497,7 @@ void main() {
         modelName: any(named: 'modelName'),
         systemPrompt: any(named: 'systemPrompt'),
         voiceName: any(named: 'voiceName'),
-        silenceDurationMs: any(named: 'silenceDurationMs'),
-      )).thenAnswer((_) {});
+        )).thenAnswer((_) {});
       when(() => mockClient.currentTokenCount).thenReturn(0);
       when(() => mockClient.onTurnComplete = any()).thenAnswer((invocation) => turnCompleteCallback =
           (invocation.positionalArguments[0] as void Function()?) ?? turnCompleteCallback);
@@ -543,7 +555,6 @@ void main() {
       modelName: any(named: 'modelName'),
       systemPrompt: any(named: 'systemPrompt'),
       voiceName: any(named: 'voiceName'),
-      silenceDurationMs: any(named: 'silenceDurationMs'),
     ));
   });
 
@@ -567,7 +578,6 @@ void main() {
       modelName: any(named: 'modelName'),
       systemPrompt: any(named: 'systemPrompt'),
       voiceName: any(named: 'voiceName'),
-      silenceDurationMs: any(named: 'silenceDurationMs'),
     ));
   });
 
@@ -581,7 +591,6 @@ void main() {
       modelName: any(named: 'modelName'),
       systemPrompt: any(named: 'systemPrompt'),
       voiceName: any(named: 'voiceName'),
-      silenceDurationMs: any(named: 'silenceDurationMs'),
     )).thenAnswer((_) {});
     // stopSession callbacky nuluje, proto si držíme ten poslední nenulový
     when(() => mockClient.onError = any()).thenAnswer((invocation) => errorCallback =
@@ -614,7 +623,6 @@ void main() {
       modelName: any(named: 'modelName'),
       systemPrompt: any(named: 'systemPrompt'),
       voiceName: any(named: 'voiceName'),
-      silenceDurationMs: any(named: 'silenceDurationMs'),
     )).thenAnswer((_) {});
     when(() => mockClient.sendText(any())).thenAnswer((_) {});
 
@@ -633,6 +641,279 @@ void main() {
     agent.sendText('Hello');
     verify(() => mockRepo.addTranscript(sessionId: 124, speaker: 'user', content: 'Hello')).called(1);
   });
+
+  group('manual speech activity and corrected transcript', () {
+    // Bloky po 100 ms (PCM 16-bit, 16 kHz): dva hlasité bloky jsou 200 ms řeči
+    final loud = List<int>.filled(3200, 50);
+    final quiet = List<int>.filled(3200, 0);
+    final noise = List<int>.generate(640, (i) => i.isEven ? 80 : 0);
+
+    late Function(List<int>) mic;
+    Function(String)? userTranscript;
+    Function(String)? tutorText;
+    Function(bool)? connectionStatus;
+    void Function()? turnComplete;
+
+    setUp(() {
+      turnComplete = null;
+      userTranscript = null;
+      tutorText = null;
+      connectionStatus = null;
+      when(() => mockRepo.startNewSession()).thenAnswer((_) async => Result.success(123));
+      when(() => mockProfileRepo.getUserProfile()).thenAnswer((_) async => null);
+      when(() => mockAudio.isPlaying).thenReturn(false);
+      when(() => mockAudio.start(onAudioChunk: any(named: 'onAudioChunk'))).thenAnswer((invocation) async {
+        mic = invocation.namedArguments[const Symbol('onAudioChunk')] as Function(List<int>);
+      });
+      when(() => mockClient.connect(
+        modelName: any(named: 'modelName'),
+        systemPrompt: any(named: 'systemPrompt'),
+        voiceName: any(named: 'voiceName'),
+      )).thenAnswer((_) {});
+      when(() => mockClient.sendText(any())).thenAnswer((_) {});
+      when(() => mockClient.forceReconnect()).thenAnswer((_) {});
+      when(() => mockClient.currentTokenCount).thenReturn(0);
+      // stopSession callbacky nuluje, proto si držíme ty poslední nenulové
+      when(() => mockClient.onUserTranscriptReceived = any()).thenAnswer((invocation) => userTranscript =
+          (invocation.positionalArguments[0] as Function(String)?) ?? userTranscript);
+      when(() => mockClient.onTextReceived = any()).thenAnswer((invocation) =>
+          tutorText = (invocation.positionalArguments[0] as Function(String)?) ?? tutorText);
+      when(() => mockClient.onConnectionStatusChanged = any()).thenAnswer((invocation) => connectionStatus =
+          (invocation.positionalArguments[0] as Function(bool)?) ?? connectionStatus);
+      when(() => mockClient.onTurnComplete = any()).thenAnswer((invocation) => turnComplete =
+          (invocation.positionalArguments[0] as void Function()?) ?? turnComplete);
+    });
+
+    /// Student řekne větu a odmlčí se, takže se po tichu ohlásí konec řeči.
+    Future<void> speakAndPause(WidgetTester tester) async {
+      mic(noise);
+      mic(loud);
+      mic(loud);
+      mic(quiet);
+      await tester.pump(const Duration(milliseconds: 2100));
+      await tester.pump();
+    }
+
+    testWidgets('speech opens the activity with the pre-roll and silence ends it', (tester) async {
+      final agent = container.read(voiceTutorAgentProvider.notifier);
+      await agent.startSession();
+
+      mic(noise);
+      verifyNever(() => mockClient.sendActivityStart());
+      mic(loud);
+      mic(loud);
+      verifyInOrder([
+        () => mockClient.sendActivityStart(),
+        () => mockClient.sendAudioChunk(noise),
+        () => mockClient.sendAudioChunk(loud),
+        () => mockClient.sendAudioChunk(loud),
+      ]);
+
+      mic(quiet);
+      await tester.pump(const Duration(milliseconds: 1900));
+      verifyNever(() => mockClient.sendActivityEnd());
+      await tester.pump(const Duration(milliseconds: 200));
+      verify(() => mockClient.sendActivityEnd()).called(1);
+      expect(container.read(voiceTutorAgentProvider).status, TutorState.thinking);
+
+      await agent.stopSession('test');
+    });
+
+    testWidgets('a short sound does not open the speech', (tester) async {
+      final agent = container.read(voiceTutorAgentProvider.notifier);
+      await agent.startSession();
+
+      // Klepnutí nebo nádech: 100 ms nad prahem řeči a zase ticho
+      mic(loud);
+      mic(quiet);
+      mic(loud);
+      mic(quiet);
+      await tester.pump(const Duration(seconds: 3));
+
+      verifyNever(() => mockClient.sendActivityStart());
+      verifyNever(() => mockClient.sendAudioChunk(any()));
+
+      await agent.stopSession('test');
+    });
+
+    testWidgets('a recording without speech removes the live "¿Qué?" and saves nothing', (tester) async {
+      final correction = Completer<String?>();
+      when(() => mockTranscriber.transcribe(any(), previousTutorLine: any(named: 'previousTutorLine')))
+          .thenAnswer((_) => correction.future);
+      final agent = container.read(voiceTutorAgentProvider.notifier);
+      await agent.startSession();
+
+      await speakAndPause(tester);
+      userTranscript!('¿Qué?');
+      expect(container.read(voiceTutorAgentProvider).messages.single.text, '¿Qué?');
+
+      correction.complete(''); // opravný přepis: v nahrávce není řeč
+      await tester.pump();
+      tutorText!('Sorry, could you say that again?');
+      await tester.pump();
+
+      final messages = container.read(voiceTutorAgentProvider).messages;
+      expect(messages.where((m) => m.isUser), isEmpty);
+      verifyNever(() => mockRepo.addTranscript(
+        sessionId: any(named: 'sessionId'),
+        speaker: 'user',
+        content: any(named: 'content'),
+        timestamp: any(named: 'timestamp'),
+      ));
+
+      await agent.stopSession('test');
+    });
+
+    testWidgets('the configured patience decides how long the silence must be', (tester) async {
+      when(() => mockPrefs.getInt(any())).thenReturn(800); // „Rychlá“ trpělivost
+      final agent = container.read(voiceTutorAgentProvider.notifier);
+      await agent.startSession();
+
+      mic(loud);
+      mic(loud);
+      mic(quiet);
+      await tester.pump(const Duration(milliseconds: 1200));
+      verifyNever(() => mockClient.sendActivityEnd());
+      await tester.pump(const Duration(milliseconds: 200));
+      verify(() => mockClient.sendActivityEnd()).called(1);
+
+      await agent.stopSession('test');
+    });
+
+    testWidgets('a tutor turn ending while the student speaks does not keep the speech open', (tester) async {
+      final agent = container.read(voiceTutorAgentProvider.notifier);
+      await agent.startSession();
+      mic(loud);
+      mic(loud);
+
+      // Přerušená odpověď tutora skončí, zatímco student mluví
+      turnComplete!();
+      mic(quiet);
+      await tester.pump(const Duration(milliseconds: 2100));
+      verify(() => mockClient.sendActivityEnd()).called(1);
+
+      await agent.stopSession('test');
+    });
+
+    testWidgets('pause keeps the student speech open and silence after resume ends it', (tester) async {
+      final agent = container.read(voiceTutorAgentProvider.notifier);
+      await agent.startSession();
+      mic(loud);
+      mic(loud);
+      verify(() => mockClient.sendActivityStart()).called(1);
+
+      await agent.pauseSession();
+      await tester.pump(const Duration(seconds: 5));
+      verifyNever(() => mockClient.sendActivityEnd());
+
+      await agent.resumeSession();
+      mic(quiet);
+      await tester.pump(const Duration(milliseconds: 2100));
+      verify(() => mockClient.sendActivityEnd()).called(1);
+      // Po obnovení pokračovala tatáž řeč
+      verifyNever(() => mockClient.sendActivityStart());
+
+      await agent.stopSession('test');
+    });
+
+    testWidgets('the corrected transcript replaces the live one in the bubble and in the lesson', (tester) async {
+      when(() => mockTranscriber.transcribe(any(), previousTutorLine: any(named: 'previousTutorLine')))
+          .thenAnswer((_) async => 'Cože? To nevím.');
+      final agent = container.read(voiceTutorAgentProvider.notifier);
+      await agent.startSession();
+
+      await speakAndPause(tester);
+      userTranscript!('¿Qué?');
+      tutorText!('Let me explain.');
+      await tester.pump();
+
+      final messages = container.read(voiceTutorAgentProvider).messages;
+      expect(messages.first.isUser, isTrue);
+      expect(messages.first.text, 'Cože? To nevím.');
+      verify(() => mockRepo.addTranscript(
+        sessionId: 123,
+        speaker: 'user',
+        content: 'Cože? To nevím.',
+        timestamp: any(named: 'timestamp'),
+      )).called(1);
+      verifyNever(() => mockRepo.addTranscript(
+        sessionId: any(named: 'sessionId'),
+        speaker: 'user',
+        content: '¿Qué?',
+        timestamp: any(named: 'timestamp'),
+      ));
+
+      await agent.stopSession('test');
+    });
+
+    testWidgets('without a corrected transcript the live one is saved', (tester) async {
+      final agent = container.read(voiceTutorAgentProvider.notifier);
+      await agent.startSession();
+
+      await speakAndPause(tester);
+      userTranscript!('I need practice.');
+      tutorText!('Sure!');
+      await tester.pump();
+
+      verify(() => mockRepo.addTranscript(
+        sessionId: 123,
+        speaker: 'user',
+        content: 'I need practice.',
+        timestamp: any(named: 'timestamp'),
+      )).called(1);
+
+      await agent.stopSession('test');
+    });
+
+    testWidgets('ending the lesson waits for the corrected transcript before closing it', (tester) async {
+      final correction = Completer<String?>();
+      when(() => mockTranscriber.transcribe(any(), previousTutorLine: any(named: 'previousTutorLine')))
+          .thenAnswer((_) => correction.future);
+      final agent = container.read(voiceTutorAgentProvider.notifier);
+      await agent.startSession();
+      mic(loud);
+      mic(loud);
+
+      final stop = agent.stopSession('test');
+      await tester.pump();
+      verifyNever(() => mockRepo.closeSession(any()));
+
+      correction.complete('Only one manager has Power BI.');
+      await tester.pump();
+      await stop;
+      // Úvodní replika tutora čeká 1 s po startu, ať po testu nezůstane časovač
+      await tester.pump(const Duration(seconds: 1));
+
+      verifyInOrder([
+        () => mockRepo.addTranscript(
+              sessionId: 123,
+              speaker: 'user',
+              content: 'Only one manager has Power BI.',
+              timestamp: any(named: 'timestamp'),
+            ),
+        () => mockRepo.closeSession(123),
+      ]);
+    });
+
+    testWidgets('a dropped connection ends the open speech locally and the next speech opens a new one',
+        (tester) async {
+      final agent = container.read(voiceTutorAgentProvider.notifier);
+      await agent.startSession();
+      mic(loud);
+      mic(loud);
+
+      connectionStatus!(false);
+      expect(container.read(voiceTutorAgentProvider).status, TutorState.reconnecting);
+      verifyNever(() => mockClient.sendActivityEnd());
+
+      connectionStatus!(true);
+      mic(quiet);
+      mic(loud);
+      mic(loud);
+      verify(() => mockClient.sendActivityStart()).called(2);
+
+      await agent.stopSession('test');
+      await tester.pump(const Duration(seconds: 1));
+    });
+  });
 }
-
-

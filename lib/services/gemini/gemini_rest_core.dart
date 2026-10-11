@@ -43,6 +43,14 @@ String geminiErrorMessage(DioException e) {
   return e.message ?? e.toString();
 }
 
+/// Odstraní z textové odpovědi modelu HTML/XML tagy (např. `</code>`) a markdown
+/// (`**`, `*`, `` ` ``), které model občas přidá, a sjednotí mezery do jednoho řádku.
+String stripModelFormatting(String raw) => raw
+    .replaceAll(RegExp(r'<[^<>]*>'), '')
+    .replaceAll(RegExp(r'[`*]'), '')
+    .replaceAll(RegExp(r'\s+'), ' ')
+    .trim();
+
 /// Sleduje dočasně nedostupné (přetížené) modely a naposledy funkční model.
 ///
 /// Každá služba má vlastní instanci, takže cooldown jednoho typu dotazu

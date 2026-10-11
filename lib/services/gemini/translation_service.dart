@@ -141,13 +141,8 @@ class WordTranslationService {
 
   /// Odstraní z překladu od modelu uvozovky, HTML/XML tagy (např. `</code>`) a markdown
   /// (`**`, `*`, `` ` ``), které model občas přidá, a sjednotí mezery do jednoho řádku.
-  static String cleanTranslationText(String raw) {
-    return raw
-        .replaceAll(RegExp(r'<[^<>]*>'), '')
-        .replaceAll(RegExp(r'[`*"„“”]'), '')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
-  }
+  static String cleanTranslationText(String raw) =>
+      stripModelFormatting(raw.replaceAll(RegExp(r'["„“”]'), ''));
 
   /// Vyčistí interpunkci a bílé znaky ze začátku a konce slova/fráze
   static String cleanWord(String input) {

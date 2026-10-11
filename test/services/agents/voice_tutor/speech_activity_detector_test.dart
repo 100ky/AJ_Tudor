@@ -65,23 +65,24 @@ void main() {
       expect(vad.holdThreshold, closeTo(0.072, 0.001));
     });
 
-    test('speech needs two consecutive chunks', () {
-      expect(vad.countSpeechChunk(), false);
-      expect(vad.countSpeechChunk(), true);
+    test('speech needs enough continuous voice, a short sound does not count', () {
+      // Ruch 80–160 ms (klepnutí, nádech) řeč nezačne
+      expect(vad.addVoiced(80, minSpeechMs: 200), false);
+      expect(vad.addVoiced(80, minSpeechMs: 200), false);
+      vad.resetVoiced();
+      expect(vad.isVoicing, false);
 
-      vad.resetSpeechChunks();
-      expect(vad.countSpeechChunk(), false);
-
-      vad.markSpeechChunk();
-      expect(vad.countSpeechChunk(), true);
+      expect(vad.addVoiced(100, minSpeechMs: 200), false);
+      expect(vad.isVoicing, true);
+      expect(vad.addVoiced(100, minSpeechMs: 200), true);
     });
 
     test('reset restores the initial state', () {
       vad.classify(0.06, adaptNoiseFloor: true);
-      vad.countSpeechChunk();
+      vad.addVoiced(100, minSpeechMs: 200);
       vad.reset();
       expect(vad.noiseFloor, SpeechActivityDetector.initialNoiseFloor);
-      expect(vad.countSpeechChunk(), false);
+      expect(vad.isVoicing, false);
     });
   });
 }

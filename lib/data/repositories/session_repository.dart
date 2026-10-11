@@ -33,11 +33,13 @@ class SessionRepository {
 
   /// Přidá záznam promluvy (textu) do historie dané lekce.
   /// 
-  /// [speaker] může být 'user' (student) nebo 'tutor' (AI).
+  /// [speaker] může být 'user' (student) nebo 'tutor' (AI). [timestamp] určuje pořadí
+  /// v přepisu – replika uložená později (po opravném přepisu) dostane čas, kdy zazněla.
   Future<Result<void>> addTranscript({
     required int sessionId,
     required String speaker,
     required String content,
+    DateTime? timestamp,
   }) async {
     try {
       await _db.into(_db.transcripts).insert(
@@ -45,7 +47,7 @@ class SessionRepository {
           sessionId: sessionId,
           speaker: speaker,
           content: content,
-          timestamp: DateTime.now(),
+          timestamp: timestamp ?? DateTime.now(),
         ),
       );
       return Result.success(null);

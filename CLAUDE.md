@@ -24,6 +24,6 @@ ADB=/c/Users/tosma/AppData/Local/Android/Sdk/platform-tools/adb.exe
 Postup:
 1. V `db.sqlite` najít lekce daného dne a jejich nahlášené problémy. Časy (`started_at`, `created_at`, `timestamp`) jsou unixové sekundy, převádět na místní čas. Python spouštět s `PYTHONIOENCODING=utf-8`, přepis obsahuje češtinu i nelatinková písmena z chybného STT.
 2. Je-li u problému `transcript_id`, čas té repliky (`transcripts.timestamp`) ukazuje místo v logu lekce.
-3. V logu sledovat stavy agenta, `[VAD]` (místní i serverová detekce řeči), `inputTranscription`, `turnComplete` a pauzy. Rozbor po lekci je na konci logu.
+3. V logu sledovat stavy agenta, `[VAD]` (místní detekce řeči, `➡️ activityStart` a `➡️ activityEnd` ohlášené serveru), `inputTranscription` (živý přepis), `✍️ Opravný přepis` (nahrazený text repliky), `turnComplete` a pauzy. Rozbor po lekci je na konci logu.
 
 Rozbor po lekci volá Gemini a při přetížení zkouší další modely, každý pokus až 55 s. Nevyhodnocená lekce hned po konci hovoru tedy ještě nemusí znamenat chybu.

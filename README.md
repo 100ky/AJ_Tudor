@@ -8,7 +8,7 @@
 
 - 🎙️ **Real-time hlasová konverzace (A2A)**: Obousměrný WebSocket přenos surového PCM audia přímo do modelu Gemini Live (výchozí `gemini-3.8-live`, odezva pod 1 sekundu).
 - 🤖 **Multi-agentní systém**:
-  - **Voice Tutor Agent**: Řídí živý hlasový dialog, detekci řeči (VAD), skákání do řeči (barge-in), ochranu proti repetici a automatické popostrčení (nudge).
+  - **Voice Tutor Agent**: Řídí živý hlasový dialog, místní detekci řeči (VAD), která serveru ohlašuje začátek a konec řeči studenta, opravný přepis replik studenta a ochranu proti repetici.
   - **Memory Manager Agent**: Po skončení lekce asynchronně analyzuje transkript pomocí *Structured Outputs (JSON)*, sleduje chyby, slovní zásobu a aplikuje Ebbinghausovu křivku zapomínání.
 - 📝 **Inteligentní telemetrie chyb & Memory Pruning**: Po skončení hovoru `MemoryManagerAgent` přes *Structured Outputs (JSON)* provede detailní rozbor chyb, extrahuje nová slovíčka, odnaučuje zvládnuté jevy a automaticky vytváří kartičky (Smart Flashcards) k procvičení.
 - 🗂️ **Smart Flashcards s opakováním (SRS)**: Kartička se otočí až po pokusu o odpověď (hlasem s hodnocením výslovnosti, napsáním, nebo „Nevím“), takže ji nejde ohodnotit bez zkoušení.
@@ -116,8 +116,9 @@ Po prvním spuštění přejděte na záložku **Settings** (Nastavení) a vlož
    }
    ```
 3. **Výstup z AI**: Model v reálném čase vrací 24 000 Hz PCM audio chunky a STT textový přepis.
-4. **Lokální VAD & Nudge**: Pokud uživatel domluví, lokální Voice Activity Detection a záchranné časovače zajistí, že model okamžitě dostane signál k odpovědi (`turnComplete: true`).
-5. **Skryté pokyny**: Rady režiséra (`VoiceDirectorAgent`) a další pokyny během hovoru jdou jako `clientContent`. Taková zpráva podle dokumentace Live API přeruší odpověď, kterou model právě generuje, proto pokyny čekají ve frontě a odešlou se až po `turnComplete` tutora. Hned se posílá jen „Změnit téma“, kde je přerušení záměr.
+4. **Ruční detekce řeči**: Serverová detekce řeči je vypnutá (`automaticActivityDetection.disabled`). Začátek a konec řeči studenta určuje místní detekce (`SpeechActivityDetector`) a aplikace je serveru ohlašuje zprávami `activityStart` a `activityEnd`. Řeč začne až po 200 ms souvislého hlasu (přerušit přemýšlení tutora chce 300 ms), takže ji krátký ruch jako klepnutí, nádech nebo dozvuk reproduktoru neotevře. Zvuk se posílá jen mezi `activityStart` a `activityEnd`, zhruba půl sekundy úvodu před zjištěnou řečí doplní `PreRollBuffer`. Konec řeči nastane po tichu „trpělivost učitele + 0,5 s“ a model pak hned odpoví. Pauza rozpracovanou řeč neukončí, po obnovení může student větu dokončit. Když model do 11 s neodpoví, spojení se obnoví.
+5. **Opravný přepis**: Živý přepis Gemini Live občas zapíše řeč studenta jiným jazykem („¿Qué?“). Zvuk každé repliky (`StudentUtterance`) se proto po jejím konci přepíše znovu přes `SpeechTranscriptionService` s pokynem, že student mluví česky nebo anglicky. Výsledek nahradí text v bublině a do databáze se uloží až ten. Když přepis selže, uloží se živý přepis. Když opravný přepis v nahrávce řeč neslyší, krátký živý přepis (nejvýš dvě slova, typicky „¿Qué?“ na ruch) se zahodí i z bubliny. Konec lekce na rozpracované přepisy počká nejvýš 8 s.
+6. **Skryté pokyny**: Rady režiséra (`VoiceDirectorAgent`) a další pokyny během hovoru jdou jako `clientContent`. Taková zpráva podle dokumentace Live API přeruší odpověď, kterou model právě generuje, proto pokyny čekají ve frontě a odešlou se až po `turnComplete` tutora. Hned se posílá jen „Změnit téma“, kde je přerušení záměr.
 
 ---
 
@@ -161,6 +162,7 @@ Každá hlasová lekce má navíc vlastní log `logs/sessions/session_<id>.log`,
 Automatické testy nepokryjí mikrofon, přehrávání zvuku ani skutečné volání Gemini. Po větších změnách projděte na telefonu:
 
 - [ ] Hlasová lekce: start, pauza a obnovení (i přes překlad slova), stop
+- [ ] Hlasová lekce: tutor odpoví hned po domluvení, pauza uprostřed věty a dokončení věty po obnovení, věta v češtině má v historii český přepis
 - [ ] Nahlášení problému v detailu lekce (tlačítkem i dlouhým stiskem repliky)
 - [ ] Hlasová lekce: věta se dvěma chybami (tutor je opraví postupně, vždy jednu), tutor se neutíná uprostřed věty
 - [ ] Překlad slova (klepnutí) a fráze (podržení a tažení), uložení do kartiček tlačítkem
@@ -176,12 +178,12 @@ Automatické testy nepokryjí mikrofon, přehrávání zvuku ani skutečné vol�
 
 ## 🛠️ Úpravy po ručním testu (9.–10. 10. 2026)
 
-Úpravy vzešly z rozboru logů hlasových lekcí z telefonu a z gramatického drilu. Počet testů vzrostl z 333 na 362.
+Úpravy vzešly z rozboru logů hlasových lekcí z telefonu a z gramatického drilu. Počet testů vzrostl z 333 na 385.
 
 - **Ukončení a spuštění lekce se nepřekříží:** start počká na rozběhnuté ukončení, a když lekci během spouštění někdo ukončí, hovor se nespustí. Dřív mohl hovor běžet bez lekce v databázi, takže se přepis neukládal ani nevyhodnotil.
 - **Chyba spojení lekci uzavře:** po chybě (např. „Nepodařilo se obnovit spojení“) se lekce uloží a spustí se rozbor. Dřív zůstala otevřená a nevyhodnocená.
-- **Popostrčení modelu přes `audioStreamEnd`:** po 2 s ticha aplikace dřív posílala prázdný `clientContent` s `turnComplete`. Ten na server dorazil dřív než přepis studenta a model odpověděl na prázdný tah („Take your time...“, nebo i 16 s mumlání přepsaného jako „...“). Skutečná odpověď přišla až potom. Teď aplikace posílá `realtimeInput.audioStreamEnd`, které řeč studenta na serveru uzavře. Dokumentace Live API výslovně neříká, že model po něm vždy odpoví. Na telefonu to zatím funguje.
-- **Mikrofon při čekání na odpověď:** ve stavu „přemýšlí“ se zvuk na server posílá, jen když student znovu promluví. Šum by jinak proud znovu otevřel.
+- **Ruční detekce řeči místo popostrčení:** po 2 s ticha aplikace dřív posílala prázdný `clientContent` s `turnComplete`. Ten dorazil dřív než přepis studenta a model odpověděl na prázdný tah („Take your time...“, nebo i 16 s mumlání přepsaného jako „...“). Náhrada přes `audioStreamEnd` řeč na serveru často neuzavřela vůbec: ve 14 pobídkách lekce 8 server 5× nereagoval a jednou to skončilo obnovením spojení. Serverová detekce řeči je teď vypnutá a začátek i konec řeči ohlašuje aplikace (viz *Jak funguje Gemini Live Audio Pipeline*, bod 4). Trpělivost učitele teď přímo určuje délku ticha (dřív se čekalo vždy aspoň 2 s).
+- **Opravný přepis replik studenta:** viz *Jak funguje Gemini Live Audio Pipeline*, bod 5.
 - **Repliky bez slov:** tah tutora přepsaný jen jako „...“ se nezobrazí ani neuloží.
 - **Pauza:** dokončený tah tutora ani přerušení pauzu nezruší. Zbytek rozpracované odpovědi se během pauzy nepřehraje.
 - **Log lekce a nahlášení problému:** viz *Log z telefonu*.
@@ -227,7 +229,7 @@ Refaktoring proběhl ve větvi `refactor/structure` ve čtyřech fázích. Sché
 
 ### Otevřené body a doporučení
 1. **Ruční test na zařízení** (oddíl *Kontrola změn*) projít před sloučením do `main`.
-2. **`voice_tutor_agent.dart` má po opravách z 9.–10. 10. už 1341 řádků.** Dalším krokem je vyčlenit do `services/agents/voice_tutor/` spuštění a ukončení lekce (`startSession` má asi 200 řádků, `stopSession` asi 120) a zpracování zvuku z mikrofonu (`_handleIncomingAudioChunk`, `_processAudioChunkForVAD` a časovače, asi 190 řádků). Dělat to až po úspěšném ručním testu. Jde o řízení živého hovoru a reálný zvuk automatické testy nepokryjí.
+2. **`voice_tutor_agent.dart` má po opravách z 9.–10. 10. už 1562 řádků.** Dalším krokem je vyčlenit do `services/agents/voice_tutor/` spuštění a ukončení lekce (`startSession` má asi 200 řádků, `stopSession` asi 120) a zpracování zvuku z mikrofonu (`_handleIncomingAudioChunk`, `_processAudioChunkForVAD` a časovače, asi 190 řádků). Dělat to až po úspěšném ručním testu. Jde o řízení živého hovoru a reálný zvuk automatické testy nepokryjí.
 3. **Další soubory nad 600 řádků.** Rozdělit je, až se na nich bude pracovat:
    - `core/app_theme.dart` (781): oddělit barvy od `ThemeData` a `TextTheme`.
    - `features/conversation/widgets/word_translation_sheet.dart` (753): překlad, uložení do kartiček a vrácení zpět přesunout ze stavu widgetu do controlleru. Metodu `build` (přes 400 řádků) rozdělit na menší widgety.
