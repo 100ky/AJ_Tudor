@@ -81,6 +81,10 @@ class SpeechTranscriptionService {
         if (text == null) continue;
         _cooldowns.markSuccess(model, remember: true);
         final clean = stripModelFormatting(text);
+        if (TaskPrompts.isTranscriptionPromptEcho(clean)) {
+          L.w('Opravný přepis: model $model vrátil místo přepisu své zadání, výsledek zahazuji.');
+          return null;
+        }
         return _silence.hasMatch(clean) ? '' : clean;
       } on DioException catch (e) {
         final kind = classifyGeminiError(e);

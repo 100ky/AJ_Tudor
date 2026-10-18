@@ -527,7 +527,13 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
 
       // --- DETEKCE FRUSTRACE (Krátké odpovědi) ---
       // Ignorujeme běžná výplňková slova a váhání studenta při přemýšlení (uh, em, um apod.)
-      final wordCount = meaningfulWordCount(userText);
+      // Živý přepis bývá u delší řeči (zvlášť české) zkomolený na „¿Qué?“ apod. Dlouhá nahrávka
+      // nebo přepis v cizím písmu proto není krátká odpověď – student mluvil, jen se špatně přepsal.
+      final spokeAtLength = utterance != null && utterance.audioMs >= 3000;
+      final wordCount =
+          (spokeAtLength || looksLikeForeignTranscription(userText)) ? null : meaningfulWordCount(userText);
+
+      if (spokeAtLength) _consecutiveShortAnswers = 0;
 
       if (wordCount != null) {
         // ─── METRIKA: délka odpovědi uživatele ───
@@ -954,6 +960,10 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
 
       // Uložení finálního přepisu řeči tutora do DB
       _saveTranscript('tutor', tutorText);
+
+      // Věta k zopakování po opravě chyby se vypíchne na displeji (nebo zmizí, když tah
+      // opravou nebyl). Režisér pak mlčí, dokud student větu nezopakuje.
+      _director.setRepeatTarget(extractRepeatTarget(finalTutorText));
     } else {
       if (state.currentTranscript.isNotEmpty) {
         L.w('Tah tutora bez slov ("${state.currentTranscript}") – do přepisu ho neukládám.');

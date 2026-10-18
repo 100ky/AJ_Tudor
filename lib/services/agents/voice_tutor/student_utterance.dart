@@ -98,6 +98,9 @@ class StudentUtterance {
   /// Celý dosavadní zvuk k opravnému přepisu; prázdný, když replika byla moc dlouhá.
   Uint8List audioBytes() => _audioTooLong ? Uint8List(0) : _audio.toBytes();
 
+  /// Délka dosud nahraného zvuku v ms (PCM 16-bit, 16 kHz, mono = 32 bajtů na ms).
+  int get audioMs => (_audioTooLong ? maxAudioBytes : _audio.length) ~/ 32;
+
   /// Student mluví dál dřív, než tutor odpověděl: model to bere jako jeden tah,
   /// takže replika pokračuje a opravný přepis se udělá znovu z celého zvuku.
   void reopen() {

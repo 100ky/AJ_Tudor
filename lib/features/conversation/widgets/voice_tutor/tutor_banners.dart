@@ -107,3 +107,85 @@ class DirectorTipBanner extends StatelessWidget {
     );
   }
 }
+
+/// Výrazně vypíchnutá věta, kterou má student po opravě chyby zopakovat.
+class RepeatTargetBanner extends StatelessWidget {
+  final String sentence;
+  final VoidCallback onDismiss;
+
+  const RepeatTargetBanner({super.key, required this.sentence, required this.onDismiss});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
+        child: GlassContainer(
+          key: ValueKey('repeat_target_$sentence'),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          borderRadius: BorderRadius.circular(16),
+          color: AppTheme.primary.withValues(alpha: 0.16),
+          border: Border.all(
+            color: AppTheme.primary.withValues(alpha: 0.55),
+            width: 1.5,
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppTheme.primary.withValues(alpha: 0.22),
+                ),
+                child: Icon(
+                  Icons.record_voice_over_rounded,
+                  size: 16,
+                  color: AppTheme.primary,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Zopakuj:',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.onSurfaceMuted,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      sentence,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.textColor(context),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              GestureDetector(
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  onDismiss();
+                },
+                child: Icon(
+                  Icons.close_rounded,
+                  size: 16,
+                  color: AppTheme.onSurfaceMuted,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

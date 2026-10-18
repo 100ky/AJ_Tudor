@@ -233,6 +233,7 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
     final hasMessages =
         messages.isNotEmpty || tutorState.currentTranscript.isNotEmpty;
     final tip = directorState.currentTip;
+    final repeatTarget = directorState.repeatTarget;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -261,8 +262,15 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
                   : _buildConversation(tutorState, isActive),
             ),
 
+            // ── Věta k zopakování po opravě chyby má přednost před běžnou nápovědí ───────────────
+            if (isActive && repeatTarget != null && repeatTarget.isNotEmpty)
+              RepeatTargetBanner(
+                sentence: repeatTarget,
+                onDismiss: () =>
+                    ref.read(voiceDirectorAgentProvider.notifier).dismissTip(),
+              )
             // ── Asistivní vizuální nápověda pro studenta (Voice Director) ─────────
-            if (isActive && tip != null && tip.isNotEmpty)
+            else if (isActive && tip != null && tip.isNotEmpty)
               DirectorTipBanner(
                 tip: tip,
                 onDismiss: () =>

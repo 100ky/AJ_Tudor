@@ -28,6 +28,10 @@ class VoiceDirectorState {
   /// Skóre vitality a hloubky tématu (1–10).
   final int lastHealthScore;
 
+  /// Věta, kterou tutor právě po opravě chyby požádal studenta zopakovat.
+  /// Dokud je nastavená, režisér mlčí, aby se s tutorem nepral.
+  final String? repeatTarget;
+
   /// Vytvoří stav Voice Directora.
   const VoiceDirectorState({
     this.isAnalyzing = false,
@@ -36,6 +40,7 @@ class VoiceDirectorState {
     this.sessionFacts = const [],
     this.lastAnalyzedTurnIndex = 0,
     this.lastHealthScore = 10,
+    this.repeatTarget,
   });
 
   /// Vytvoří kopii stavu s modifikovanými hodnotami.
@@ -47,6 +52,8 @@ class VoiceDirectorState {
     List<String>? sessionFacts,
     int? lastAnalyzedTurnIndex,
     int? lastHealthScore,
+    String? repeatTarget,
+    bool clearRepeatTarget = false,
   }) {
     return VoiceDirectorState(
       isAnalyzing: isAnalyzing ?? this.isAnalyzing,
@@ -55,6 +62,7 @@ class VoiceDirectorState {
       sessionFacts: sessionFacts ?? this.sessionFacts,
       lastAnalyzedTurnIndex: lastAnalyzedTurnIndex ?? this.lastAnalyzedTurnIndex,
       lastHealthScore: lastHealthScore ?? this.lastHealthScore,
+      repeatTarget: clearRepeatTarget ? null : (repeatTarget ?? this.repeatTarget),
     );
   }
 }
@@ -96,9 +104,22 @@ class VoiceDirectorAgent extends Notifier<VoiceDirectorState> {
   /// Zavře aktivní nápovědu pro studenta.
   void dismissTip() {
     _tipDismissTimer?.cancel();
-    if (ref.mounted && state.currentTip != null) {
-      state = state.copyWith(clearTip: true);
+    if (ref.mounted && (state.currentTip != null || state.repeatTarget != null)) {
+      state = state.copyWith(clearTip: true, clearRepeatTarget: true);
     }
+  }
+
+  /// Nastaví (nebo smaže, při null) větu, kterou má student po opravě zopakovat.
+  ///
+  /// Volá tutor po každém dokončeném tahu; věta pochází z jeho vlastní promluvy.
+  void setRepeatTarget(String? sentence) {
+    if (!ref.mounted) return;
+    if (sentence == null) {
+      if (state.repeatTarget != null) state = state.copyWith(clearRepeatTarget: true);
+      return;
+    }
+    _tipDismissTimer?.cancel();
+    state = state.copyWith(repeatTarget: sentence, clearTip: true);
   }
 
   /// Sestaví bohatý přehled dosavadního hovoru pro bezešvý reconnect (při limitu 25k tokenů).
@@ -150,6 +171,12 @@ class VoiceDirectorAgent extends Notifier<VoiceDirectorState> {
     required void Function(String whisper) onWhisperReady,
   }) async {
     if (state.isAnalyzing) return;
+
+    // Tutor právě opravuje chybu a čeká, až student větu zopakuje – do toho režisér nemluví.
+    if (state.repeatTarget != null) {
+      L.d('VoiceDirector: Probíhá oprava (student opakuje větu), mlčím a počkám.');
+      return;
+    }
 
     // Spočítáme počet nových replik studenta od minulé analýzy
     final unanalyzedMessages = messages.sublist(
@@ -272,9 +299,13 @@ class VoiceDirectorAgent extends Notifier<VoiceDirectorState> {
         }
       }
 
-      // 3. Našeptání do živého hlasového hovoru
+      // 3. Našeptání do živého hlasového hovoru (ne když mezitím začala oprava chyby)
       if (whisper != null && whisper.isNotEmpty) {
-        onWhisperReady(whisper);
+        if (ref.mounted && state.repeatTarget != null) {
+          L.d('VoiceDirector: Šepot zahazuji – tutor mezitím začal opravu a režisér ho nesmí přebít.');
+        } else {
+          onWhisperReady(whisper);
+        }
       }
 
       // 4. Zobrazení tipu pro studenta v UI (pokud je smysluplný)

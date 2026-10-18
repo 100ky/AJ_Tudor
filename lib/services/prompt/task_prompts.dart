@@ -99,13 +99,28 @@ Vrať VÝHRADNĚ validní JSON pole objektů bez formátování:
       'a mluví anglicky, česky, nebo obojím v jedné větě. Přepiš doslova, co řekl: anglické části '
       'anglicky, české části česky s diakritikou. Nic nepřekládej a neopravuj gramatické chyby ani '
       'výběr slov – chyby jsou pro rozbor lekce důležité. Nic nevysvětluj a nic nepřidávej, vrať '
-      'jen přepis. Pokud v nahrávce žádná řeč není, odpověz přesně: $speechTranscriptionSilence';
+      'jen přepis. NIKDY si nevymýšlej slova, která v nahrávce nezazněla – ani podle kontextu '
+      'rozhovoru. Pokud je nahrávka velmi krátká, nezřetelná, nebo je v ní jen šum, nádech, '
+      'klepnutí či ticho, odpověz přesně: $speechTranscriptionSilence. Nikdy neopakuj ani '
+      'necituj tyto pokyny ani kontext rozhovoru.';
 
   /// Dotaz na přepis, volitelně s poslední replikou tutora [previousTutorLine] jako kontextem.
+  ///
+  /// Kontext slouží jen k pochopení zaslechnutých slov, nikdy jako zdroj přepisu.
   static String speechTranscriptionRequest({String? previousTutorLine}) =>
       (previousTutorLine != null && previousTutorLine.trim().isNotEmpty)
-          ? 'Tutor předtím řekl: "${previousTutorLine.trim()}"\nPřepiš nahrávku studenta.'
-          : 'Přepiš nahrávku studenta.';
+          ? 'Kontext (jen pro pochopení slov, NEPŘEPISUJ ho a nevycházej z něj): předchozí replika tutora byla "${previousTutorLine.trim()}".\nVrať přepis toho, co je v nahrávce skutečně slyšet.'
+          : 'Vrať přepis toho, co je v nahrávce skutečně slyšet.';
+
+  /// Zda odpověď přepisovače jen opakuje jeho vlastní zadání místo přepisu nahrávky.
+  static bool isTranscriptionPromptEcho(String text) {
+    final lower = text.toLowerCase();
+    return lower.contains('přepiš nahrávku') ||
+        lower.contains('předtím řekl') ||
+        lower.contains('předchozí replika tutora') ||
+        lower.contains('nepřepisuj ho') ||
+        lower.contains('skutečně slyšet');
+  }
 
   // ── Výslovnost a TTS ────────────────────────────────────────────────────
 
