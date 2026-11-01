@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../../core/utils/logger.dart';
 import '../audio/audio_playback_service.dart';
@@ -85,6 +86,8 @@ class GeminiLiveClient {
   /// Bezpečně uzavře stávající kanál a zruší listener, aby nespouštěl onDone při úmyslném zavření.
   void _closeCurrentChannel() {
     _isSetupComplete = false;
+    // Nové spojení začíná s prázdným kontextem, spotřeba tokenů se počítá od nuly
+    _currentTokenCount = 0;
     _channelSubscription?.cancel();
     _channelSubscription = null;
     try {
@@ -361,6 +364,10 @@ class GeminiLiveClient {
     _safeSend(jsonEncode(clientContent));
   }
 
+  /// Zpracuje zprávu, jako by přišla ze serveru (testy bez WebSocketu).
+  @visibleForTesting
+  void handleMessageForTesting(dynamic message) => _handleIncomingMessage(message);
+
   /// Zpracovává a analyzuje všechny příchozí WebSocket zprávy z Gemini serveru.
   void _handleIncomingMessage(dynamic message) {
     try {
@@ -402,6 +409,23 @@ class GeminiLiveClient {
         L.e('Gemini API Error: $msg');
         if (onError != null) onError!(msg);
         return;
+      }
+
+      // Spotřeba tokenů se zpracuje dřív než konec tahu ze stejné zprávy:
+      // podle ní agent při turnComplete rozhoduje, jestli obnovit spojení
+      if (data.containsKey('usageMetadata')) {
+        final usage = data['usageMetadata'];
+        if (usage is Map) {
+          final totalTokens = usage['totalTokenCount'] ?? usage['total_token_count'];
+          if (totalTokens != null) {
+            final count = int.tryParse(totalTokens.toString()) ?? 0;
+            if (count > 0) {
+              _currentTokenCount = count;
+              L.d('UsageMetadata: $count tokenů spotřebováno.');
+              if (onTokenCountUpdate != null) onTokenCountUpdate!(count);
+            }
+          }
+        }
       }
 
       // Podpora pro camelCase (Google standard) i snake_case (který mohou posílat některé proxy)
@@ -491,22 +515,6 @@ class GeminiLiveClient {
         // Zpracování signálu generationComplete (model dokončil generování)
         if (serverContent is Map && serverContent.containsKey('generationComplete')) {
           L.d('GenerationComplete signál přijat.');
-        }
-      }
-
-      // Zpracování usageMetadata (sledování spotřeby tokenů)
-      if (data.containsKey('usageMetadata')) {
-        final usage = data['usageMetadata'];
-        if (usage is Map) {
-          final totalTokens = usage['totalTokenCount'] ?? usage['total_token_count'];
-          if (totalTokens != null) {
-            final count = int.tryParse(totalTokens.toString()) ?? 0;
-            if (count > 0) {
-              _currentTokenCount = count;
-              L.d('UsageMetadata: $count tokenů spotřebováno.');
-              if (onTokenCountUpdate != null) onTokenCountUpdate!(count);
-            }
-          }
         }
       }
 
@@ -602,6 +610,9 @@ class GeminiLiveClient {
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
     _closeCurrentChannel();
+    // Agent se o výpadku dozví stejně jako u spadlého spojení: rozpracovanou řeč ukončí
+    // a po připojení obnoví kontext hovoru (jinak by nové spojení znalo jen systémový prompt)
+    if (onConnectionStatusChanged != null) onConnectionStatusChanged!(false);
 
     if (_lastModelName != null && _lastSystemPrompt != null) {
       connect(

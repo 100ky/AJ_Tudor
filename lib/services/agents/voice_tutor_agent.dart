@@ -144,6 +144,18 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   // Délka aktuálního souvislého hlasu se do repliky započítala (první blok běhu přidá celý začátek).
   bool _voiceRunCounted = false;
 
+  // Student domluvil a model zatím neodpověděl (ani na jeho další repliky). Lhůta na odpověď
+  // běží od první nezodpovězené repliky (viz _awaitResponse).
+  bool _awaitingResponse = false;
+  bool _responseOverdue = false;
+
+  /// Jak dlouho od první nezodpovězené repliky studenta smí model mlčet.
+  static const Duration _responseTimeout = Duration(seconds: 11);
+
+  /// Kolik času dostane model na odpověď na každou další repliku. Běžně odpoví
+  /// do 1–2 s, nejpomalejší odpověď v logu lekcí přišla za 4 s.
+  static const Duration _responseGrace = Duration(seconds: 5);
+
   // Skryté pokyny (rada režiséra, odlehčení, tichá změna tématu) čekající na konec tahu tutora.
   // Zpráva clientContent podle dokumentace Live API přeruší právě generovanou odpověď,
   // proto je posíláme až po turnComplete: model nemluví a mikrofon je ještě ztlumený.
@@ -621,11 +633,11 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     }
 
     if (state.status == TutorState.thinking) {
-      // Rozpracovanou odpověď tutora activityStart zruší
+      // Rozpracovanou odpověď tutora activityStart zruší. Lhůta na odpověď běží dál:
+      // když model mlčí, student se po chvíli ozve znovu („Haló?“).
       L.i('Student přerušil přemýšlení tutora hlasovým vstupem.');
       state = state.copyWith(status: TutorState.listening);
       _timers.cancel(TutorTimer.thinking);
-      _timers.cancel(TutorTimer.responseSilence);
     }
   }
 
@@ -646,7 +658,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     _closeActivity(client);
     state = state.copyWith(status: TutorState.thinking);
     _resetThinkingTimer();
-    _resetResponseSilenceTimer();
+    _awaitResponse();
   }
 
   /// Krátká replika doběhla tichem a ověření je hotové: řeč (nebo nejasný výsledek)
@@ -805,6 +817,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     _lastUtterance = null;
     _pendingUtterances.clear();
     _preRoll.clear();
+    _stopAwaitingResponse();
   }
 
   /// Zaregistruje všechny události příchozí z WebSocket klienta Gemini.
@@ -823,7 +836,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   /// Příjem textové části odpovědi AI.
   void _onTextReceived(String text) {
     _timers.cancel(TutorTimer.thinking);
-    _timers.cancel(TutorTimer.responseSilence);
+    _stopAwaitingResponse();
     _flushUserTranscript();
     _resetWatchdog();
     _resetStuckTimer();
@@ -887,7 +900,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   /// Detekce, že začala téct audio data z AI.
   void _onAudioReceived() {
     _timers.cancel(TutorTimer.thinking);
-    _timers.cancel(TutorTimer.responseSilence);
+    _stopAwaitingResponse();
     _timers.cancel(TutorTimer.playbackComplete);
     _resetSpeechDetectionUnlessSpeaking();
     _flushUserTranscript();
@@ -919,7 +932,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   /// Konec promluvy tutora (turn complete).
   void _onTurnComplete(GeminiLiveClient client) {
     _resetWatchdog();
-    _timers.cancel(TutorTimer.responseSilence);
+    _stopAwaitingResponse();
     _resetSpeechDetectionUnlessSpeaking();
     HapticFeedback.selectionClick();
     final isStillPlaying = _audio.isPlaying;
@@ -1035,6 +1048,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   void _onInterrupted() {
     _resetWatchdog();
     _resetStuckTimer();
+    _stopAwaitingResponse(); // model odpovídal, student ho přerušil
     _timers.cancel(TutorTimer.playbackComplete);
     _turnCompleteReceived = false;
     _director.dismissTip();
@@ -1059,15 +1073,18 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       }
     } else if (isConnected && (state.status == TutorState.reconnecting || state.status == TutorState.connecting)) {
       final wasReconnecting = state.status == TutorState.reconnecting;
-      // Nové spojení rozpracovanou řeč nezná (vynucený reconnect neohlásí výpadek)
+      // Nové spojení rozpracovanou řeč nezná
       _dropActivityAfterDisconnect();
+      // Na poslední repliku studenta staré spojení neodpovědělo, odpoví na ni tutor v novém
+      final answerStudent = _awaitingResponse && (state.messages.lastOrNull?.isUser ?? false);
+      _stopAwaitingResponse();
       L.i('Spojení obnoveno, vracím se do stavu listening.');
       state = state.copyWith(status: TutorState.listening);
       _resetWatchdog();
 
       // Pokud došlo k reconnectu během běžícího hovoru, obnovíme kontext do nové WebSocket relace
       if (wasReconnecting && state.messages.isNotEmpty) {
-        _restoreConversationContext(client);
+        _restoreConversationContext(client, answerStudent: answerStudent);
       }
     }
   }
@@ -1101,7 +1118,10 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
 
   /// Po výpadku a znovupřipojení WebSocketu injektuje do nové relace Gemini
   /// living executive summary od VoiceDirectorAgenta, aby model neztratil nit ani v dlouhém hovoru.
-  void _restoreConversationContext(GeminiLiveClient client) {
+  ///
+  /// S [answerStudent] tutor hned odpoví na poslední repliku studenta, na kterou
+  /// staré spojení neodpovědělo. Jinak čeká, až student promluví.
+  void _restoreConversationContext(GeminiLiveClient client, {bool answerStudent = false}) {
     try {
       final executiveBriefing = _director.getExecutiveBriefingForReconnect(
         recentMessages: state.messages,
@@ -1111,11 +1131,25 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       L.director('Obnovuji kontext konverzace po reconnectu s využitím living executive summary...');
       L.block('RECONNECT', 'Living Executive Briefing (Kontext pro obnovené spojení)', executiveBriefing);
 
+      if (!answerStudent) {
+        client.sendClientContent(
+          role: 'user',
+          text: executiveBriefing,
+          turnComplete: false,
+        );
+        return;
+      }
+
+      L.i('Poslední replika studenta zůstala bez odpovědi, tutor na ni odpoví hned.');
       client.sendClientContent(
         role: 'user',
-        text: executiveBriefing,
-        turnComplete: false,
+        text: '$executiveBriefing\n${LiveTutorPrompts.systemInstruction(LiveTutorPrompts.answerAfterReconnect)}',
+        turnComplete: true,
       );
+      state = state.copyWith(status: TutorState.thinking);
+      _resetThinkingTimer();
+      // Když nové spojení taky mlčí, lhůta ho po 11 s obnoví znovu
+      _awaitResponse();
     } catch (e) {
       L.w('Chyba při obnově kontextu po reconnectu: $e');
     }
@@ -1138,6 +1172,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     try {
       // Zrušení časovačů
       _timers.cancelAll();
+      _stopAwaitingResponse();
       _turnCompleteReceived = false;
       _userSpokeInCurrentTurn = false;
       _pendingGuidance.clear();
@@ -1300,6 +1335,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
 
     // Zastavíme watchdog a ostatní časovače, aby nespustily reconnect během pauzy
     _timers.cancelAll();
+    _stopAwaitingResponse();
     _turnCompleteReceived = false;
     // Rozpracovaná řeč studenta zůstane otevřená: po obnovení může větu dokončit,
     // a když bude mlčet, konec řeči se ohlásí po obvyklém tichu.
@@ -1508,11 +1544,8 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
           state.status != TutorState.connecting) {
         L.w('Watchdog: Žádná aktivita 45s, zkouším reconnect s obnovením kontextu...');
         if (ref.mounted) {
-          final client = ref.read(geminiLiveClientProvider);
-          if (client != null) {
-            state = state.copyWith(status: TutorState.reconnecting);
-            client.forceReconnect();
-          }
+          // Výpadek ohlásí sám klient, stav přepne na reconnecting
+          ref.read(geminiLiveClientProvider)?.forceReconnect();
         }
       }
     });
@@ -1625,7 +1658,6 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       _openActivity(client);
     }
     if (_activityOpen) {
-      _timers.cancel(TutorTimer.responseSilence);
       _timers.cancel(TutorTimer.thinking);
     }
   }
@@ -1664,19 +1696,45 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
 
   /// Hlídá, že model po konci řeči studenta začne odpovídat.
   ///
-  /// Konec řeči ohlašuje aplikace, takže odpověď má přijít hned. Když do 11 s nedorazí
-  /// žádné audio ani text, spojení se obnoví s kontextem.
-  void _resetResponseSilenceTimer() {
-    _timers.start(TutorTimer.responseSilence, const Duration(seconds: 11), () {
-      if ((state.status == TutorState.listening || state.status == TutorState.thinking) && !_userSpokeInCurrentTurn) {
-        final client = ref.read(geminiLiveClientProvider);
-        if (client != null && client.isConnected) {
-          L.w('Model nereaguje 11 s po konci řeči studenta. Vyvolávám forceReconnect...');
-          state = state.copyWith(status: TutorState.reconnecting);
-          client.forceReconnect();
-        }
-      }
-    });
+  /// Konec řeči ohlašuje aplikace, takže odpověď má přijít hned. Lhůta 11 s běží od první
+  /// nezodpovězené repliky: když model mlčí, student se po chvíli ozve znovu („Haló?“),
+  /// a kdyby každá replika lhůtu vynulovala, nikdy by nedoběhla. Na každou další repliku
+  /// má model aspoň 5 s. Pak se spojení obnoví s kontextem a tutor na repliku odpoví.
+  void _awaitResponse() {
+    if (!_awaitingResponse) {
+      _awaitingResponse = true;
+      _responseOverdue = false;
+      _timers.start(TutorTimer.responseSilence, _responseTimeout, () {
+        _responseOverdue = true;
+        _reconnectIfUnanswered();
+      });
+    }
+    _timers.start(TutorTimer.responseGrace, _responseGrace, _reconnectIfUnanswered);
+  }
+
+  /// Obnoví spojení, když lhůta na odpověď doběhla a model ani na poslední repliku neodpověděl.
+  void _reconnectIfUnanswered() {
+    if (!_awaitingResponse || !_responseOverdue || _timers.isActive(TutorTimer.responseGrace)) return;
+    if (state.status != TutorState.listening && state.status != TutorState.thinking) return;
+    if (_activityOpen || _userSpokeInCurrentTurn) {
+      // Student právě mluví: spojení se neobnoví uprostřed jeho řeči. Po jejím konci
+      // dostane model zase 5 s, zahozený ruch se ověří za sekundu.
+      _timers.start(TutorTimer.responseGrace, const Duration(seconds: 1), _reconnectIfUnanswered);
+      return;
+    }
+    final client = ref.read(geminiLiveClientProvider);
+    if (client == null || !client.isConnected) return;
+    L.w('Model neodpověděl na repliku studenta ani ${_responseTimeout.inSeconds} s po jejím konci. Obnovuji spojení...');
+    // Výpadek ohlásí sám klient, stav přepne na reconnecting
+    client.forceReconnect();
+  }
+
+  /// Model odpovídá (nebo hovor skončil či se pozastavil): lhůta na odpověď už neběží.
+  void _stopAwaitingResponse() {
+    _awaitingResponse = false;
+    _responseOverdue = false;
+    _timers.cancel(TutorTimer.responseSilence);
+    _timers.cancel(TutorTimer.responseGrace);
   }
 
   /// Resetuje a konfiguruje stuck timer pro stav 'speaking'.

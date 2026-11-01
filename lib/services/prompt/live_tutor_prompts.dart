@@ -48,6 +48,13 @@ abstract final class LiveTutorPrompts {
       "smoothly introduce a completely fresh and engaging topic suited to the student's level and interests, "
       "and ask ONE clear open-ended question to invite the student to speak.";
 
+  /// Po obnovení spojení zůstala poslední replika studenta bez odpovědi – tutor na ni odpoví hned.
+  static const String answerAfterReconnect =
+      "The connection dropped before you answered the student's last message in Recent Exchanges. "
+      "Answer it right now, naturally and briefly, as AJ Tudor. "
+      "If the student was asking whether you are still there, reassure them in a few words and carry on. "
+      "Do NOT talk about technical problems.";
+
   /// Konverzace se zacyklila – v příštím tahu nenápadně změnit téma.
   static const String changeTopicSilently =
       "CRITICAL INSTRUCTION: Okamžitě opusti současné téma hovoru, "

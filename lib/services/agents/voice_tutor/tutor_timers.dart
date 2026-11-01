@@ -11,8 +11,11 @@ enum TutorTimer {
   /// Tutor příliš dlouho „přemýšlí“ → zpět do poslechu.
   thinking,
 
-  /// Model po domluvení studenta neodpovídá → popostrčení, pak reconnect.
+  /// Model neodpovídá 11 s od první nezodpovězené repliky studenta → reconnect.
   responseSilence,
+
+  /// Čas modelu na odpověď na poslední repliku studenta (aspoň 5 s), než se spojení obnoví.
+  responseGrace,
 
   /// Ticho po řeči studenta → konec jeho promluvy.
   vadSilence,

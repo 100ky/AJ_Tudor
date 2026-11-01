@@ -63,7 +63,7 @@ test/
 │   │   ├── scenario_planner_agent_test.dart      # Plánování scénářů, integrace slabých kartiček, custom scénáře
 │   │   ├── topic_preparation_agent_test.dart     # Příprava témat, 12h čerstvost, wildcard, facts bootstrap
 │   │   ├── voice_director_agent_test.dart        # Režisér konverzace (cooldown, tipy, briefing pro reconnect)
-│   │   ├── voice_tutor_agent_test.dart           # Stavový automat tutora, ruční detekce řeči (activityStart/End), opravný přepis, reconnect, fronta pokynů, start/stop, pauza
+│   │   ├── voice_tutor_agent_test.dart           # Stavový automat tutora, ruční detekce řeči (activityStart/End), opravný přepis, reconnect a lhůta na odpověď, fronta pokynů, start/stop, pauza
 │   │   └── voice_tutor/
 │   │       ├── pre_roll_buffer_test.dart         # Úvod řeči před activityStart (limit bajtů, vyprázdnění)
 │   │       ├── speech_activity_detector_test.dart # Detekce řeči (prahy, hystereze, adaptace na šum, délka hlasu)
@@ -73,6 +73,7 @@ test/
 │   ├── flashcards/
 │   │   └── flashcard_generation_service_test.dart # Kartičky z chyb, migrace starých zadání, nová slovíčka
 │   ├── gemini/
+│   │   ├── gemini_live_client_test.dart          # Spotřeba tokenů na konci tahu, vynucený reconnect (ohlášení výpadku, nulování tokenů)
 │   │   ├── gemini_rest_core_test.dart            # Pořadí modelů, cooldown, třídění chyb, dekódování JSON
 │   │   └── speech_transcription_service_test.dart # Opravný přepis (WAV, kontext tutora, ticho, záložní modely)
 │   ├── prompt/

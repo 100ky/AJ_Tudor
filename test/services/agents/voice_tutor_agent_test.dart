@@ -6,6 +6,7 @@ import 'package:mocktail/mocktail.dart';
 import 'package:aj_tudor/services/agents/voice_tutor_agent.dart';
 import 'package:aj_tudor/services/gemini/gemini_live_client.dart';
 import 'package:aj_tudor/services/gemini/speech_transcription_service.dart';
+import 'package:aj_tudor/services/prompt/live_tutor_prompts.dart';
 import 'package:aj_tudor/services/audio/audio_session_controller.dart';
 import 'package:aj_tudor/data/repositories/profile_repository.dart';
 import 'package:aj_tudor/data/repositories/session_repository.dart';
@@ -980,6 +981,121 @@ void main() {
 
       await agent.stopSession('test');
       await tester.pump(const Duration(seconds: 1));
+    });
+
+    group('waiting for the tutor reply', () {
+      setUp(() {
+        // Vynucený reconnect ohlásí výpadek jako skutečný klient
+        when(() => mockClient.forceReconnect()).thenAnswer((_) => connectionStatus!(false));
+      });
+
+      testWidgets('without a reply the connection is restored 11 s after the end of speech', (tester) async {
+        final agent = container.read(voiceTutorAgentProvider.notifier);
+        await agent.startSession();
+
+        await speakAndPause(tester);
+        await tester.pump(const Duration(milliseconds: 10800));
+        verifyNever(() => mockClient.forceReconnect());
+        await tester.pump(const Duration(milliseconds: 200));
+        verify(() => mockClient.forceReconnect()).called(1);
+        expect(container.read(voiceTutorAgentProvider).status, TutorState.reconnecting);
+
+        await agent.stopSession('test');
+      });
+
+      testWidgets('asking again does not restart the wait and the tutor answers the reply after the reconnect',
+          (tester) async {
+        final agent = container.read(voiceTutorAgentProvider.notifier);
+        await agent.startSession();
+
+        // Lekce 18: model na „čočková polévka“ neodpověděl a student se po 4 s ticha
+        // ozval znovu („Haló?“). Každá replika dřív lhůtu vynulovala, takže nikdy nedoběhla.
+        await speakAndPause(tester);
+        userTranscript!('czeska polivka');
+        for (var i = 0; i < 2; i++) {
+          await tester.pump(const Duration(seconds: 4));
+          await speakAndPause(tester);
+        }
+
+        // Od první repliky uběhlo přes 11 s, na poslední má model ještě 5 s
+        await tester.pump(const Duration(milliseconds: 4700));
+        verifyNever(() => mockClient.forceReconnect());
+        await tester.pump(const Duration(milliseconds: 400));
+        verify(() => mockClient.forceReconnect()).called(1);
+        expect(container.read(voiceTutorAgentProvider).status, TutorState.reconnecting);
+
+        // Nové spojení dostane kontext a tutor hned odpoví na nezodpovězenou repliku
+        connectionStatus!(true);
+        verify(() => mockClient.sendClientContent(
+              role: 'user',
+              text: any(
+                named: 'text',
+                that: allOf(contains('czeska polivka'), contains(LiveTutorPrompts.answerAfterReconnect)),
+              ),
+              turnComplete: true,
+            )).called(1);
+        expect(container.read(voiceTutorAgentProvider).status, TutorState.thinking);
+
+        await agent.stopSession('test');
+      });
+
+      testWidgets('the student speaking when the wait runs out postpones the reconnect', (tester) async {
+        final agent = container.read(voiceTutorAgentProvider.notifier);
+        await agent.startSession();
+
+        await speakAndPause(tester);
+        await tester.pump(const Duration(seconds: 10));
+        // Student mluví ještě ve chvíli, kdy lhůta doběhne
+        speak();
+        await tester.pump(const Duration(seconds: 1));
+        speak(3);
+        verifyNever(() => mockClient.forceReconnect());
+
+        mic(quiet);
+        await tester.pump(const Duration(milliseconds: 2100));
+        await tester.pump(const Duration(milliseconds: 4800));
+        verifyNever(() => mockClient.forceReconnect());
+        await tester.pump(const Duration(milliseconds: 300));
+        verify(() => mockClient.forceReconnect()).called(1);
+
+        await agent.stopSession('test');
+      });
+
+      testWidgets('a reply from the tutor ends the wait', (tester) async {
+        final agent = container.read(voiceTutorAgentProvider.notifier);
+        await agent.startSession();
+
+        await speakAndPause(tester);
+        tutorText!('Sure!');
+        await tester.pump(const Duration(seconds: 12));
+        verifyNever(() => mockClient.forceReconnect());
+
+        await agent.stopSession('test');
+      });
+
+      testWidgets('a reconnect for the token limit restores the conversation context', (tester) async {
+        when(() => mockClient.currentTokenCount).thenReturn(26000);
+        final agent = container.read(voiceTutorAgentProvider.notifier);
+        await agent.startSession();
+
+        await speakAndPause(tester);
+        userTranscript!('I like cooking.');
+        tutorText!('Nice! What do you cook?');
+        turnComplete!();
+        verify(() => mockClient.forceReconnect()).called(1);
+        expect(container.read(voiceTutorAgentProvider).status, TutorState.reconnecting);
+
+        // Dřív nové spojení znalo jen systémový prompt („Would you like to continue in English?“)
+        connectionStatus!(true);
+        verify(() => mockClient.sendClientContent(
+              role: 'user',
+              text: any(named: 'text', that: contains('What do you cook?')),
+              turnComplete: false,
+            )).called(1);
+        expect(container.read(voiceTutorAgentProvider).status, TutorState.listening);
+
+        await agent.stopSession('test');
+      });
     });
   });
 }
