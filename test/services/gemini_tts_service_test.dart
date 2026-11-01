@@ -30,9 +30,9 @@ void main() {
       container.dispose();
     });
 
-    test('GeminiModels.tts points to gemini-3.1-flash-tts-preview', () {
-      expect(GeminiModels.tts, 'gemini-3.1-flash-tts-preview');
-      expect(GeminiModels.ttsFlash2_5, 'gemini-2.5-flash-tts');
+    test('GeminiModels.tts points to updated TTS models', () {
+      expect(GeminiModels.tts, 'gemini-3.8-flash-tts');
+      expect(GeminiModels.ttsFlash2_5, 'gemini-2.5-flash-preview-tts');
       expect(GeminiModels.ttsPro2_5, 'gemini-2.5-pro-preview-tts');
       expect(GeminiModels.getLabel(GeminiModels.tts), contains('Gemini 3.1 Flash TTS'));
     });

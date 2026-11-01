@@ -34,9 +34,9 @@ class WordTranslationService {
 
   /// Bleskové modely optimalizované pro rychlý překlad slov a frází bez prodlev
   static const List<String> _fastModels = [
-    GeminiModels.flashLite3_5, // gemini-3.5-flash-lite – ultra rychlý a lehký
+    GeminiModels.flash3_5,     // gemini-3.5-flash (hlavní a stabilní bleskový překlad)
+    GeminiModels.flashLite3_5, // gemini-3.5-flash-lite – rychlý ale může mít prodlevy
     GeminiModels.flashLite3_1, // gemini-3.1-flash-lite – bleskový lehký model
-    GeminiModels.flash3_5,     // gemini-3.5-flash
     GeminiModels.flash3_6,     // gemini-3.6-flash
     GeminiModels.flash3_8,     // gemini-3.8-flash (fallback)
   ];
@@ -63,8 +63,9 @@ class WordTranslationService {
   WordTranslationService(this._ref, {GeminiRestCore? api})
       : _api = api ??
             GeminiRestCore(
-              connectTimeout: const Duration(seconds: 3),
-              receiveTimeout: const Duration(seconds: 4),
+              // Prodlouženo pro případ občasných prodlev (4 s receiveTimeout bylo málo a způsobovalo kaskády fallbacků)
+              connectTimeout: const Duration(seconds: 5),
+              receiveTimeout: const Duration(seconds: 10),
             );
 
   /// Počet položek v paměťové mezipaměti překladů.
@@ -225,6 +226,12 @@ class WordTranslationService {
           break;
         }
         if (kind == GeminiErrorKind.overloaded) {
+          // Pokud jde o SocketException (bez internetu), nedávej cooldown jen jednomu modelu na dlouho
+          final isNetworkError = e.error is SocketException || e.type == DioExceptionType.connectionError;
+          if (isNetworkError) {
+             L.w('Chyba sítě (bez internetu), překlad nefunguje.');
+             return 'Chyba sítě (bez internetu)'; // Okamžitě ukončí pokusy
+          }
           _cooldowns.markOverloaded(modelName, const Duration(minutes: 2));
           L.w('Model $modelName přetížen/timeout (${e.response?.statusCode ?? 0}). Dávám na 2min cooldown a zkouším další...');
         } else {

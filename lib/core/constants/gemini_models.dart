@@ -4,6 +4,7 @@
 /// lidsky čitelné popisky pro uživatelské rozhraní.
 class GeminiModels {
   // Aktuální verze modelů Gemini (k září 2026)
+  static const String argon4 = 'gemini-4-argon';       // Gemini 4 Argon
   static const String flash3_8 = 'gemini-3.8-flash';   // vydán 2. 9. 2026
   static const String flash3_7 = 'gemini-3.7-flash';   // vydán 13. 8. 2026
   static const String flash3_6 = 'gemini-3.6-flash';
@@ -13,7 +14,8 @@ class GeminiModels {
   static const String pro3_1 = 'gemini-3.1-pro-preview';
 
   // --- Modely pro Multimodální vstup, Speech-to-Text a Text-to-Speech ---
-  /// Model Gemini 2.0 Flash podporující nativní audio výstup (AUDIO modality) i audio vstup.
+  /// Model Gemini 2.0 Flash (Vypnuto - Shut down dle dokumentace)
+  @Deprecated('Model byl vypnut. Použijte 2.5, 3.5 nebo 3.8')
   static const String flash2_0 = 'gemini-2.0-flash';
   static const String flash2_5 = 'gemini-2.5-flash';
 
@@ -24,8 +26,8 @@ class GeminiModels {
   static const String transcribeLive = 'gemini-3.5-transcribe-live';
 
   /// Model pro syntézu přirozené řeči (Text-to-Speech) s audio tagy pro tempo a intonaci.
-  static const String tts = 'gemini-3.1-flash-tts-preview';
-  static const String ttsFlash2_5 = 'gemini-2.5-flash-tts';
+  static const String tts = 'gemini-3.8-flash-tts';
+  static const String ttsFlash2_5 = 'gemini-2.5-flash-preview-tts';
   static const String ttsPro2_5 = 'gemini-2.5-pro-preview-tts';
 
   // --- Model pro Multimodal Live API (WebSocket / Voice Tutor) ---
@@ -48,6 +50,7 @@ class GeminiModels {
 
   /// Seznam modelů, které si uživatel může vybrat v nastavení pro textový chat.
   static const List<String> allowedChatModels = [
+    argon4,
     flash3_8,
     flash3_7,
     flash3_6,
@@ -60,6 +63,8 @@ class GeminiModels {
   /// Vrátí přehledný český název modelu pro zobrazení v UI.
   static String getLabel(String model) {
     switch (model) {
+      case argon4:
+        return 'Gemini 4 Argon (Vlajková loď 🚀)';
       case flash3_8:
         return 'Gemini 3.8 Flash (Nejnovější ✨)';
       case flash3_7:
@@ -81,7 +86,7 @@ class GeminiModels {
       case transcribe:
         return 'Gemini 3.5 Transcribe (Přepis)';
       case tts:
-        return 'Gemini 3.1 Flash TTS (Výslovnost)';
+        return 'Gemini 3.8 Flash TTS (Výslovnost)';
       case ttsFlash2_5:
         return 'Gemini 2.5 Flash TTS';
       case ttsPro2_5:

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/config/config_providers.dart';
@@ -23,10 +24,10 @@ class SpeechTranscriptionService {
 
   /// Rychlé modely s audio vstupem (stejné pořadí jako u výslovnosti).
   static const List<String> _models = [
+    GeminiModels.flash3_5,     // Nejstabilnější rychlý model
     GeminiModels.flashLite3_5,
-    GeminiModels.flash3_5,
     GeminiModels.flashLite3_1,
-    GeminiModels.flash2_5,
+    GeminiModels.flash2_5,     // Může vracet 404 pro nové klíče
   ];
 
   static final RegExp _silence = RegExp(r'^\(ticho\)\.?$', caseSensitive: false);
@@ -94,6 +95,11 @@ class SpeechTranscriptionService {
           break;
         }
         if (kind == GeminiErrorKind.overloaded) {
+          final isNetworkError = e.error is SocketException || e.type == DioExceptionType.connectionError;
+          if (isNetworkError) {
+             L.w('Opravný přepis: chyba sítě (bez internetu).');
+             return null;
+          }
           _cooldowns.markOverloaded(model, const Duration(minutes: 2));
           L.w('Opravný přepis: model $model je přetížený (${e.response?.statusCode ?? 0}), zkouším další...');
         } else {

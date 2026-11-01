@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:dio/dio.dart';
 import '../../core/constants/gemini_models.dart';
 import '../../core/utils/logger.dart';
@@ -88,6 +89,11 @@ class GeminiBatchClient {
           case GeminiErrorKind.notFound:
             L.w('Model $modelName nebyl nalezen (404). Zkouším další záložní model v pořadí...');
           case GeminiErrorKind.overloaded:
+            final isNetworkError = e.error is SocketException || e.type == DioExceptionType.connectionError;
+            if (isNetworkError) {
+              L.e('Chyba sítě (bez internetu), přerušuji zkoušení dalších modelů.');
+              throw Exception('Chyba sítě (bez internetu). Zkontrolujte připojení.');
+            }
             _cooldowns.markOverloaded(modelName, const Duration(minutes: 3));
             L.w('Model $modelName je přetížený (${e.response?.statusCode ?? 0}). Dávám na 3min cooldown a zkouším další...');
           case GeminiErrorKind.other:

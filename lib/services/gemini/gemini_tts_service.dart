@@ -213,6 +213,14 @@ class GeminiTtsService {
           L.i('Gemini TTS: Výslovnost úspěšně přehrána modelem $model (${bytes.length} B).');
           return true;
         } catch (e) {
+          if (e is DioException) {
+            final isNetworkError = e.error is SocketException || e.type == DioExceptionType.connectionError;
+            if (isNetworkError) {
+              L.w('Gemini TTS: Chyba sítě (bez internetu). Přehrávání se neuskuteční.');
+              return false;
+            }
+          }
+
           final errorDetail = (e is DioException && e.response?.data != null)
               ? '${e.message} -> ${e.response?.data}'
               : e.toString();
