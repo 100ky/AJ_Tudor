@@ -114,6 +114,22 @@ void main() {
       expect(promptWithBriefing.contains('targetWordOrPhrase'), true);
     });
 
+    test('the lesson analysis keeps only lasting facts it does not know yet', () {
+      final prompt = SystemPromptBuilder.buildAnalysisPrompt(knownFacts: '["Pracuje na vývoji aplikací"]');
+      const header = 'FAKTA, KTERÁ UŽ O STUDENTOVI VÍŠ (neopakuj je ani jinými slovy):';
+      expect(prompt, contains('$header\n["Pracuje na vývoji aplikací"]'));
+      expect(prompt, contains('Ukládej jen trvalá fakta'));
+      expect(SystemPromptBuilder.buildAnalysisPrompt(), isNot(contains(header)));
+    });
+
+    test('the lesson analysis never tells the tutor to stop correcting', () {
+      // Lekce 18 a 19: rozbor radil „přestat drillovat“ a paměť to předala do dalšího
+      // hovoru, i když si student důsledné opravování výslovně přeje
+      final prompt = SystemPromptBuilder.buildAnalysisPrompt();
+      expect(prompt, contains('nikdy nedoporučuj, aby tutor opravoval méně'));
+      expect(prompt, contains('opravoval drobnosti'));
+    });
+
     test('getAnalysisResponseSchema provides valid schema structure with all required fields', () {
       final schema = SystemPromptBuilder.getAnalysisResponseSchema();
       expect(schema['type'], 'object');
@@ -267,6 +283,11 @@ void main() {
       expect(prompt.contains('topicHealth'), true);
       expect(prompt.contains('whisperToTutor'), true);
       expect(prompt.contains('studentHint'), true);
+      // Lekce 18 a 19: režisér vracel hovor k jídlu a ke „dnešním“ narozeninám z profilu
+      // a radil tutorovi, ať po opravě „jde dál“
+      expect(prompt, contains('Nevracej hovor k faktům z profilu'));
+      expect(prompt, contains('Gramatiku a opravy neřešíš vůbec'));
+      expect(prompt, contains('Když se student loučí'));
 
       final schema = SystemPromptBuilder.getDirectorResponseSchema();
       expect(schema['type'], 'object');

@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/utils/logger.dart';
 import '../../data/models/chat_message.dart';
-import '../../data/data_providers.dart';
 import '../gemini/gemini_json.dart';
 import '../gemini/gemini_providers.dart';
 
@@ -234,7 +233,6 @@ class VoiceDirectorAgent extends Notifier<VoiceDirectorState> {
         wrappedTranscript,
         systemPrompt: prompt,
         responseSchema: SystemPromptBuilder.getDirectorResponseSchema(),
-        temperature: 0.4,
       );
 
       final data = decodeModelJson(rawResponse) as Map<String, dynamic>;
@@ -287,16 +285,12 @@ class VoiceDirectorAgent extends Notifier<VoiceDirectorState> {
         }
       }
 
-      // 2. Uložení nových faktů o studentovi do databáze i do lokálního stavu
+      // 2. Nová fakta o studentovi jen pro tento hovor (souhrn pro obnovení spojení).
+      // Do profilu je neukládáme: zapisoval je sem i rozbor po lekci, profil se plnil
+      // duplicitami a fakty na jeden den („dnes má narozeniny“, „právě vaří knedlíky“).
       final updatedSessionFacts = List<String>.from(state.sessionFacts);
-      if (newFacts.isNotEmpty) {
-        final profileRepo = ref.read(profileRepositoryProvider);
-        for (final fact in newFacts) {
-          if (!updatedSessionFacts.contains(fact)) {
-            updatedSessionFacts.add(fact);
-            await profileRepo.addUserFact(fact);
-          }
-        }
+      for (final fact in newFacts) {
+        if (!updatedSessionFacts.contains(fact)) updatedSessionFacts.add(fact);
       }
 
       // 3. Našeptání do živého hlasového hovoru (ne když mezitím začala oprava chyby)

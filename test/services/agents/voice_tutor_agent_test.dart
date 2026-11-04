@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:mocktail/mocktail.dart';
 import 'package:aj_tudor/services/agents/voice_tutor_agent.dart';
 import 'package:aj_tudor/services/gemini/gemini_live_client.dart';
@@ -19,6 +20,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:aj_tudor/core/utils/result.dart';
 import 'package:aj_tudor/data/database/app_database.dart';
+import 'package:aj_tudor/data/models/chat_message.dart';
+import 'package:aj_tudor/services/agents/voice_director_agent.dart';
 
 class MockGeminiLiveClient extends Mock implements GeminiLiveClient {}
 class MockAudioSessionController extends Mock implements AudioSessionController {}
@@ -30,10 +33,28 @@ class MockSharedPreferences extends Mock implements SharedPreferences {}
 class MockSpeechTranscriber extends Mock implements SpeechTranscriptionService {}
 class MockFlutterSecureStorage extends Mock implements FlutterSecureStorage {}
 
+/// Režisér, který neanalyzuje, jen si schová callbacky pro předání rady.
+class _CapturingDirector extends VoiceDirectorAgent {
+  final List<void Function(String whisper)> whisperCallbacks = [];
+
+  @override
+  Future<void> onTurnCompleted({
+    required int sessionId,
+    required List<ChatMessage> messages,
+    required String targetLevel,
+    required String? userFacts,
+    required String? recentTopics,
+    required void Function(String whisper) onWhisperReady,
+  }) async {
+    whisperCallbacks.add(onWhisperReady);
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   
   late ProviderContainer container;
+  late List<Override> overrides;
   late MockGeminiLiveClient mockClient;
   late MockAudioSessionController mockAudio;
   late MockSessionRepository mockRepo;
@@ -85,8 +106,7 @@ void main() {
     when(() => mockClient.disconnect()).thenAnswer((_) {});
     when(() => mockClient.isConnected).thenReturn(true);
 
-    container = ProviderContainer(
-      overrides: [
+    overrides = [
         geminiLiveClientProvider.overrideWithValue(mockClient),
         audioSessionControllerProvider.overrideWithValue(mockAudio),
         sessionRepositoryProvider.overrideWithValue(mockRepo),
@@ -96,8 +116,8 @@ void main() {
         sharedPreferencesProvider.overrideWithValue(mockPrefs),
         secureStorageProvider.overrideWithValue(mockStorage),
         speechTranscriptionServiceProvider.overrideWithValue(mockTranscriber),
-      ],
-    );
+      ];
+    container = ProviderContainer(overrides: overrides);
   });
 
   tearDown(() {
@@ -655,12 +675,14 @@ void main() {
     Function(String)? tutorText;
     Function(bool)? connectionStatus;
     void Function()? turnComplete;
+    void Function()? activityEndUnconfirmed;
 
     setUp(() {
       turnComplete = null;
       userTranscript = null;
       tutorText = null;
       connectionStatus = null;
+      activityEndUnconfirmed = null;
       when(() => mockRepo.startNewSession()).thenAnswer((_) async => Result.success(123));
       when(() => mockProfileRepo.getUserProfile()).thenAnswer((_) async => null);
       when(() => mockAudio.isPlaying).thenReturn(false);
@@ -684,6 +706,9 @@ void main() {
           (invocation.positionalArguments[0] as Function(bool)?) ?? connectionStatus);
       when(() => mockClient.onTurnComplete = any()).thenAnswer((invocation) => turnComplete =
           (invocation.positionalArguments[0] as void Function()?) ?? turnComplete);
+      when(() => mockClient.onActivityEndUnconfirmed = any()).thenAnswer((invocation) =>
+          activityEndUnconfirmed =
+              (invocation.positionalArguments[0] as void Function()?) ?? activityEndUnconfirmed);
     });
 
     /// Student mluví [blocks] × 100 ms. Od 0,7 s je to jistě řeč a hned se posílá serveru.
@@ -1059,6 +1084,102 @@ void main() {
         verify(() => mockClient.forceReconnect()).called(1);
 
         await agent.stopSession('test');
+      });
+
+      testWidgets('an end of speech the server never confirmed restores the connection right away',
+          (tester) async {
+        final agent = container.read(voiceTutorAgentProvider.notifier);
+        await agent.startSession();
+
+        // Tah se ztratil (lekce 19: server konec řeči nepotvrdil), student by čekal 11 s
+        await speakAndPause(tester);
+        userTranscript!('I watch the series.');
+        activityEndUnconfirmed!();
+        verify(() => mockClient.forceReconnect()).called(1);
+
+        connectionStatus!(true);
+        verify(() => mockClient.sendClientContent(
+              role: 'user',
+              text: any(
+                named: 'text',
+                that: allOf(contains('I watch the series.'), contains(LiveTutorPrompts.answerAfterReconnect)),
+              ),
+              turnComplete: true,
+            )).called(1);
+
+        await agent.stopSession('test');
+      });
+
+      testWidgets('an unconfirmed end after the tutor already replied changes nothing', (tester) async {
+        final agent = container.read(voiceTutorAgentProvider.notifier);
+        await agent.startSession();
+
+        await speakAndPause(tester);
+        tutorText!('Sure!');
+        activityEndUnconfirmed!();
+        verifyNever(() => mockClient.forceReconnect());
+
+        await agent.stopSession('test');
+      });
+
+      group('director whisper', () {
+        late _CapturingDirector director;
+        late List<String> sentContent;
+
+        setUp(() {
+          director = _CapturingDirector();
+          sentContent = [];
+          when(() => mockClient.sendClientContent(
+                role: any(named: 'role'),
+                text: any(named: 'text'),
+                turnComplete: any(named: 'turnComplete'),
+              )).thenAnswer((invocation) => sentContent.add(invocation.namedArguments[#text] as String));
+          container.dispose();
+          container = ProviderContainer(
+            overrides: [...overrides, voiceDirectorAgentProvider.overrideWith(() => director)],
+          );
+        });
+
+        /// Jedna výměna: student promluví, tutor odpoví a domluví.
+        Future<void> exchange(WidgetTester tester, String student, String tutor) async {
+          await speakAndPause(tester);
+          userTranscript!(student);
+          tutorText!(tutor);
+          turnComplete!();
+          await tester.pump();
+        }
+
+        bool whisperSent(String whisper) => sentContent.any((text) => text.contains(whisper));
+
+        testWidgets('a whisper ready after one student reply reaches the tutor', (tester) async {
+          final agent = container.read(voiceTutorAgentProvider.notifier);
+          await agent.startSession();
+          await exchange(tester, 'I went to the lake.', 'Nice! Who did you go with?');
+          final whisperFromFirstTurn = director.whisperCallbacks.first;
+
+          await exchange(tester, 'With my wife.', 'Lovely! Was the water warm?');
+          whisperFromFirstTurn('Ask about the boat.');
+          await exchange(tester, 'Yes, quite warm.', 'Great!');
+          expect(whisperSent('Ask about the boat.'), isTrue);
+
+          await agent.stopSession('test');
+        });
+
+        testWidgets('a whisper that arrives after the student spoke twice is dropped', (tester) async {
+          // Lekce 19: rada „přejdi na narozeniny“ dorazila po pěti tazích, zrovna když se student loučil
+          final agent = container.read(voiceTutorAgentProvider.notifier);
+          await agent.startSession();
+          await exchange(tester, 'I went to the lake.', 'Nice! Who did you go with?');
+          final whisperFromFirstTurn = director.whisperCallbacks.first;
+
+          await exchange(tester, 'With my wife.', 'Lovely! Was the water warm?');
+          await exchange(tester, 'Yes, quite warm.', 'Great! Anything else?');
+          whisperFromFirstTurn('Ask about the boat.');
+          await exchange(tester, 'Bye, good night.', 'Good night!');
+          expect(whisperSent('Ask about the boat.'), isFalse);
+
+          await agent.stopSession('test');
+        });
       });
 
       testWidgets('a reply from the tutor ends the wait', (tester) async {

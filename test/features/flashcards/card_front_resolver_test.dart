@@ -14,7 +14,6 @@ class _PendingBatchClient extends GeminiBatchClient {
     String text, {
     Map<String, dynamic>? responseSchema,
     String? systemPrompt,
-    double? temperature,
   }) {
     calls++;
     return reply.future;

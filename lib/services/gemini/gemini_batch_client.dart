@@ -41,21 +41,23 @@ class GeminiBatchClient {
   /// [text] je samotná zpráva od uživatele.
   /// [responseSchema] je volitelné schéma pro vynucení strukturovaného JSON výstupu.
   /// [systemPrompt] umožňuje přepsat výchozí systémovou instrukci pro tento konkrétní dotaz.
+  ///
+  /// Teplota se neposílá: modely Gemini 3.6+ a 4 ji ignorují a u starších Gemini 3
+  /// dokumentace radí nechat výchozí hodnotu, jinak se zhoršuje uvažování.
   Future<String> sendMessage(
     String text, {
     Map<String, dynamic>? responseSchema,
     String? systemPrompt,
-    double? temperature,
   }) async {
     // Definice pořadí zkoušených modelů (waterfall).
     // Začínáme primárně vybraným modelem a v případě přetížení (429, 503) kaskádovitě
-    // přecházíme od nejinteligentnějšího (3.8 Flash) přes silný reasoning (3.1 Pro) až po starší stabilní (3.5 Flash).
+    // přecházíme od nejinteligentnějšího (3.8 Flash) přes silný reasoning (3.1 Pro) až po rychlé Flash-Lite.
     final allCandidates = {
       primaryModelName,
       GeminiModels.flash3_8,
-      GeminiModels.flash3_7,
       GeminiModels.pro3_1,
-      GeminiModels.flash3_5,
+      GeminiModels.flash3_6,
+      GeminiModels.flashLite3_5,
       GeminiModels.flashLite3_1,
     };
 
@@ -70,7 +72,6 @@ class GeminiBatchClient {
           text: text,
           responseSchema: responseSchema,
           systemPromptOverride: systemPrompt,
-          temperature: temperature,
         );
 
         _cooldowns.markSuccess(modelName);
@@ -118,7 +119,6 @@ class GeminiBatchClient {
     required String text,
     Map<String, dynamic>? responseSchema,
     String? systemPromptOverride,
-    double? temperature,
   }) async {
     final effectiveSystemPrompt = systemPromptOverride ??
         systemPrompt ??
@@ -139,13 +139,10 @@ class GeminiBatchClient {
           ]
         }
       ],
-      if (responseSchema != null || temperature != null)
+      if (responseSchema != null)
         'generationConfig': {
-          if (responseSchema != null) ...{
-            'responseMimeType': 'application/json',
-            'responseSchema': responseSchema,
-          },
-          'temperature': ?temperature,
+          'responseMimeType': 'application/json',
+          'responseSchema': responseSchema,
         },
     };
 

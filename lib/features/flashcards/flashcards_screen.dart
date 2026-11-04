@@ -294,7 +294,9 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Nepodařilo se vyhodnotit výslovnost. Zkontrolujte API klíč.'),
+              content: Text(
+                  'Výslovnost se teď nepodařilo vyhodnotit (Gemini je přetížené nebo chybí připojení). '
+                  'Zkus to za chvíli znovu, nebo odpověz napsáním.'),
               backgroundColor: AppTheme.warning,
               behavior: SnackBarBehavior.floating,
             ),

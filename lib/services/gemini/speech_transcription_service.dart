@@ -24,10 +24,9 @@ class SpeechTranscriptionService {
 
   /// Rychlé modely s audio vstupem (stejné pořadí jako u výslovnosti).
   static const List<String> _models = [
-    GeminiModels.flash3_5,     // Nejstabilnější rychlý model
+    GeminiModels.flash3_6,     // Nejstabilnější rychlý model
     GeminiModels.flashLite3_5,
     GeminiModels.flashLite3_1,
-    GeminiModels.flash2_5,     // Může vracet 404 pro nové klíče
   ];
 
   static final RegExp _silence = RegExp(r'^\(ticho\)\.?$', caseSensitive: false);
@@ -72,7 +71,6 @@ class SpeechTranscriptionService {
           ]
         }
       ],
-      'generationConfig': {'temperature': 0.0},
     };
 
     for (final model in _cooldowns.order(_models, preferLastWorking: true)) {

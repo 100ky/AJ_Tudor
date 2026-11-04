@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../../core/utils/logger.dart';
 import '../audio/audio_playback_service.dart';
+import 'live_activity_gate.dart';
 
 /// Klient pro obousměrnou real-time komunikaci s Gemini Live API přes WebSocket.
 /// 
@@ -38,6 +39,15 @@ class GeminiLiveClient {
 
   // Pocitadlo po sobe jdoucich ridicich tokenu (ochrana pred zaseknutim v loopu)
   int _consecutiveControlTokens = 0;
+
+  // Další řeč studenta odejde až po potvrzení konce předchozí (viz LiveActivityGate)
+  late final LiveActivityGate _activityGate = LiveActivityGate(
+    send: _safeSend,
+    onEndUnconfirmed: () => onActivityEndUnconfirmed?.call(),
+  );
+
+  // Odchozí zprávy místo WebSocketu (testy)
+  void Function(String message)? _testSink;
 
   /// Vrací [bool] vyjadřující, zda je klient momentálně připojen a nemá aktivní pokusy o reconnect.
   bool get isConnected => _channel != null && _isSetupComplete && _reconnectAttempts == 0 && !_isReconnecting;
@@ -80,6 +90,10 @@ class GeminiLiveClient {
   /// Vyvoláno při aktualizaci počtu spotřebovaných tokenů (z usageMetadata).
   Function(int totalTokens)? onTokenCountUpdate;
 
+  /// Vyvoláno, když server nepotvrdil konec řeči studenta ani za [LiveActivityGate.ackTimeout]:
+  /// tah se nejspíš ztratil a odpověď na něj nepřijde.
+  void Function()? onActivityEndUnconfirmed;
+
   /// Konstruktor vyžadující API klíč a instanci služby přehrávání zvuku.
   GeminiLiveClient(this._apiKey, this._playbackService);
 
@@ -88,6 +102,8 @@ class GeminiLiveClient {
     _isSetupComplete = false;
     // Nové spojení začíná s prázdným kontextem, spotřeba tokenů se počítá od nuly
     _currentTokenCount = 0;
+    // Rozpracovanou řeč nové spojení nezná (agent ji ukončí sám)
+    _activityGate.reset();
     _channelSubscription?.cancel();
     _channelSubscription = null;
     try {
@@ -273,6 +289,11 @@ class GeminiLiveClient {
 
   /// Bezpečně odešle textová data do WebSocketu s ošetřením výjimek při rozpadlém spojení.
   void _safeSend(String data) {
+    final testSink = _testSink;
+    if (testSink != null) {
+      testSink(data);
+      return;
+    }
     if (_channel == null) return;
     try {
       _channel?.sink.add(data);
@@ -288,8 +309,8 @@ class GeminiLiveClient {
 
   /// Odešle raw audio data (PCM 16-bit, 16kHz) zakódovaná do Base64.
   void sendAudioChunk(List<int> pcm16Data) {
-    if (_channel == null || _isReconnecting || !_isSetupComplete) return;
-    
+    if (!_canSendRealtime) return;
+
     final base64Audio = base64Encode(pcm16Data);
     final clientContent = {
       'realtimeInput': {
@@ -299,25 +320,33 @@ class GeminiLiveClient {
         }
       }
     };
-    _safeSend(jsonEncode(clientContent));
+    _activityGate.sendAudio(jsonEncode(clientContent));
   }
 
   /// Ohlásí začátek řeči studenta (ruční detekce řeči). Zvuk poslaný potom patří
   /// do jeho tahu; rozpracovanou odpověď modelu to přeruší.
   ///
+  /// Dokud server nepotvrdí konec předchozí řeči, začátek i se zvukem čeká ([LiveActivityGate]).
   /// Vrátí false, když spojení není připravené a zpráva se neposlala.
-  bool sendActivityStart() => _sendActivity('activityStart');
+  bool sendActivityStart() => _sendActivity(start: true);
 
   /// Ohlásí konec řeči studenta: model začne odpovídat na to, co student řekl.
-  bool sendActivityEnd() => _sendActivity('activityEnd');
+  bool sendActivityEnd() => _sendActivity(start: false);
 
-  bool _sendActivity(String type) {
-    if (_channel == null || _isReconnecting || !_isSetupComplete) return false;
-    L.vad('➡️ $type');
-    _safeSend(jsonEncode({
-      'realtimeInput': {type: <String, dynamic>{}}
-    }));
+  bool get _canSendRealtime =>
+      (_channel != null || _testSink != null) && !_isReconnecting && _isSetupComplete;
+
+  bool _sendActivity({required bool start}) {
+    if (!_canSendRealtime) return false;
+    _activityGate.sendActivity(start: start);
     return true;
+  }
+
+  /// Odchozí zprávy jdou do [sink] místo WebSocketu a klient se chová jako připojený (testy).
+  @visibleForTesting
+  void attachSinkForTesting(void Function(String message) sink) {
+    _testSink = sink;
+    _isSetupComplete = true;
   }
 
   /// Odešle textový vstup od uživatele (např. při psaní na klávesnici v UI).
@@ -394,6 +423,7 @@ class GeminiLiveClient {
       final voiceActivity = data['voiceActivity'] ?? data['voice_activity'];
       if (voiceActivity != null) {
         L.vad('Gemini server VAD detekoval hlasovou aktivitu: $voiceActivity');
+        _activityGate.onServerVoiceActivity(voiceActivity);
       }
 
       // Detekce dokončení úvodního SETUPu

@@ -122,7 +122,6 @@ void main() {
         any(),
         systemPrompt: any(named: 'systemPrompt'),
         responseSchema: any(named: 'responseSchema'),
-        temperature: any(named: 'temperature'),
       ));
     });
 
@@ -151,7 +150,6 @@ void main() {
         any(),
         systemPrompt: any(named: 'systemPrompt'),
         responseSchema: any(named: 'responseSchema'),
-        temperature: any(named: 'temperature'),
       )).thenAnswer((_) async => mockResponse);
 
       String? deliveredWhisper;
@@ -167,8 +165,8 @@ void main() {
       // Verify whisper was delivered to tutor
       expect(deliveredWhisper, 'Ask what bicycle model they ride or if they commute by bike.');
 
-      // Verify fact was persisted in repository
-      verify(() => mockRepo.addUserFact('Rád jezdí na kole (15km)')).called(1);
+      // Fakta ukládá do profilu jen rozbor po lekci, režisér si je drží jen pro tento hovor
+      verifyNever(() => mockRepo.addUserFact(any()));
 
       // Verify state was updated
       final state = container.read(voiceDirectorAgentProvider);
@@ -196,7 +194,6 @@ void main() {
         any(),
         systemPrompt: any(named: 'systemPrompt'),
         responseSchema: any(named: 'responseSchema'),
-        temperature: any(named: 'temperature'),
       )).thenThrow(Exception('API connection timeout'));
 
       var whisperCalled = false;

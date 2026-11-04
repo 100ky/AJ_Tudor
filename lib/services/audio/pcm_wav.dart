@@ -1,5 +1,36 @@
 import 'dart:typed_data';
 
+/// Zda [bytes] začínají hlavičkou WAV souboru (RIFF … WAVE).
+bool isWav(List<int> bytes) =>
+    bytes.length >= 12 &&
+    String.fromCharCodes(bytes.sublist(0, 4)) == 'RIFF' &&
+    String.fromCharCodes(bytes.sublist(8, 12)) == 'WAVE';
+
+/// Vytáhne z WAV souboru surová PCM data (blok `data`) a jejich vzorkovací frekvenci.
+///
+/// Ostatní bloky (např. metadata C2PA za zvukem) vynechá. Vrátí null, když [bytes]
+/// nejsou WAV nebo v nich blok `data` chybí.
+({Uint8List pcm, int sampleRate})? pcm16FromWav(List<int> bytes) {
+  if (!isWav(bytes)) return null;
+  final data = bytes is Uint8List ? bytes : Uint8List.fromList(bytes);
+  final view = ByteData.sublistView(data);
+  var sampleRate = 24000;
+  var offset = 12;
+  while (offset + 8 <= data.length) {
+    final id = String.fromCharCodes(data.sublist(offset, offset + 4));
+    final size = view.getUint32(offset + 4, Endian.little);
+    final body = offset + 8;
+    if (id == 'fmt ' && body + 8 <= data.length) {
+      sampleRate = view.getUint32(body + 4, Endian.little);
+    } else if (id == 'data') {
+      final end = (body + size).clamp(body, data.length);
+      return (pcm: Uint8List.sublistView(data, body, end), sampleRate: sampleRate);
+    }
+    offset = body + size + (size & 1); // bloky jsou zarovnané na sudý počet bajtů
+  }
+  return null;
+}
+
 /// Převede surová PCM 16-bit Mono data na standardní WAV soubor s 44-bytovou hlavičkou.
 Uint8List pcm16ToWav(List<int> pcmBytes, {int sampleRate = 16000, int channels = 1}) {
   final byteRate = sampleRate * channels * 2;

@@ -21,6 +21,22 @@ class MemoryManagerAgent {
   /// Inicializuje agenta paměti.
   MemoryManagerAgent(this._ref);
 
+  /// Nejvyšší délka briefingu pro příští lekci (bez kritiky tutora).
+  static const int maxBriefingChars = 600;
+
+  /// Nejvyšší délka kritiky tutora připojené za briefing.
+  static const int maxTutorFeedbackChars = 300;
+
+  /// Zkrátí [text] na nejvýš [max] znaků, pokud to jde, za koncem věty.
+  static String clipBriefing(String text, int max) {
+    final trimmed = text.trim();
+    if (trimmed.length <= max) return trimmed;
+    final head = trimmed.substring(0, max);
+    final sentenceEnd = head.lastIndexOf(RegExp(r'[.!?](\s|$)'));
+    if (sentenceEnd >= max ~/ 2) return head.substring(0, sentenceEnd + 1);
+    return '${head.trimRight()}…';
+  }
+
   /// Znaky, které se v angličtině ani češtině nevyskytují: španělské ¿ ¡ ñ
   /// a nelatinková písma (azbuka, hindština, arabština, japonština, čínština…).
   /// STT Gemini Live občas přepíše anglickou řeč studenta do cizího jazyka.
@@ -77,7 +93,10 @@ class MemoryManagerAgent {
       L.i('Odesílám transkript k analýze do Gemini (Structured Outputs)...');
       final analysisResult = await gemini.sendMessage(
         wrappedHistory,
-        systemPrompt: SystemPromptBuilder.buildAnalysisPrompt(previousBriefing: previousBriefing),
+        systemPrompt: SystemPromptBuilder.buildAnalysisPrompt(
+          previousBriefing: previousBriefing,
+          knownFacts: userProfile?.userFacts,
+        ),
         responseSchema: SystemPromptBuilder.getAnalysisResponseSchema(),
       );
       L.i('Analýza od Gemini úspěšně přijata.');
@@ -158,21 +177,19 @@ class MemoryManagerAgent {
       // --- INTEGRACE FRUSTRACE A SEBE-REFLEXE ---
       // Uložení shrnutí/briefingu pro příští lekci do profilu studenta (pouze pokud nebyla lekce příliš krátká)
       if (!isTooShort) {
-        String finalBriefing = data['briefing'] ?? '';
-        final tutorFeedback = data['tutorFeedback'];
-        
-        // Zřetězení analytického briefingu s kritikou chování AI
-        if (tutorFeedback != null && tutorFeedback.toString().isNotEmpty) {
-           finalBriefing += '\n\nKRITICKÁ SEBE-REFLEXE (Self-Correction pro tutora na příště): $tutorFeedback';
-        }
-        
         // --- PREVENCE NAFUKOVÁNÍ PROMPTU ---
-        // Analytik má tendenci nabalovat staré briefingy. Ořízneme briefing,
-        // aby nepřekročil ~500-600 znaků a nestal se attention sinkem.
-        if (finalBriefing.length > 600) {
-           finalBriefing = '...${finalBriefing.substring(finalBriefing.length - 600)}';
+        // Analytik má tendenci nabalovat staré briefingy, proto má briefing i kritika tutora
+        // svůj limit. Zachová se začátek briefingu (slabiny a téma na příště): dřív se nechával
+        // konec, takže z briefingu zbyla hlavně připojená kritika tutora.
+        var finalBriefing = clipBriefing(data['briefing']?.toString() ?? '', maxBriefingChars);
+        final tutorFeedback = data['tutorFeedback']?.toString() ?? '';
+
+        // Zřetězení analytického briefingu s kritikou chování AI
+        if (tutorFeedback.isNotEmpty) {
+          finalBriefing += '\n\nKRITICKÁ SEBE-REFLEXE (Self-Correction pro tutora na příště): '
+              '${clipBriefing(tutorFeedback, maxTutorFeedbackChars)}';
         }
-        
+
         await profileRepo.updateUserMemory(finalBriefing);
       }
       

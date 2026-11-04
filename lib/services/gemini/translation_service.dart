@@ -34,10 +34,9 @@ class WordTranslationService {
 
   /// Bleskové modely optimalizované pro rychlý překlad slov a frází bez prodlev
   static const List<String> _fastModels = [
-    GeminiModels.flash3_5,     // gemini-3.5-flash (hlavní a stabilní bleskový překlad)
+    GeminiModels.flash3_6,     // gemini-3.6-flash (hlavní a stabilní bleskový překlad)
     GeminiModels.flashLite3_5, // gemini-3.5-flash-lite – rychlý ale může mít prodlevy
     GeminiModels.flashLite3_1, // gemini-3.1-flash-lite – bleskový lehký model
-    GeminiModels.flash3_6,     // gemini-3.6-flash
     GeminiModels.flash3_8,     // gemini-3.8-flash (fallback)
   ];
 
@@ -194,9 +193,6 @@ class WordTranslationService {
           ]
         }
       ],
-      'generationConfig': {
-        'temperature': 0.1,
-      },
     };
 
     for (final modelName in _cooldowns.order(_fastModels)) {

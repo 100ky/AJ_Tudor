@@ -76,16 +76,6 @@ void main() {
       expect(TaskPrompts.pronunciationRequest('give up'), contains('"give up"'));
     });
 
-    test('ttsTranscript puts the instruction before the transcript', () {
-      final plain = TaskPrompts.ttsTranscript('Hello');
-      expect(plain, startsWith('Read ONLY the transcript below with standard'));
-      expect(plain, endsWith('#### TRANSCRIPT\nHello'));
-
-      final styled = TaskPrompts.ttsTranscript('Hello', instruction: 'Speak slowly.');
-      expect(styled, startsWith('Speak slowly.\nRead ONLY'));
-      expect(styled, endsWith('#### TRANSCRIPT\nHello'));
-    });
-
     test('drillKickoff targets a topic or recurring errors', () {
       expect(TaskPrompts.drillKickoff('present perfect'), contains('"present perfect"'));
       expect(TaskPrompts.drillKickoff(), contains('opakující se chyby'));

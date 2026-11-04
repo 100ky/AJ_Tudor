@@ -28,7 +28,9 @@ class HistoryTopicTab extends ConsumerWidget {
     final topicState = ref.watch(topicPreparationAgentProvider);
     final preparedTopic = topicState.topic;
 
-    if (topicState.isLoading) {
+    // Dosavadní téma zůstane vidět i během přípravy nového: hovor ho použije, dokud
+    // nové nedorazí (při přetížených modelech příprava trvala skoro minutu)
+    if (topicState.isLoading && preparedTopic == null) {
       return GlassContainer(
         padding: const EdgeInsets.all(16),
         borderRadius: BorderRadius.circular(16),
@@ -118,28 +120,51 @@ class HistoryTopicTab extends ConsumerWidget {
                 ),
               ),
               const SizedBox(width: 6),
-              InkWell(
-                onTap: () => _prepareNewTopic(ref),
-                borderRadius: BorderRadius.circular(12),
-                child: Padding(
+              if (topicState.isLoading)
+                Padding(
                   padding: const EdgeInsets.all(4.0),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.refresh_rounded, size: 14, color: AppTheme.primary),
-                      const SizedBox(width: 4),
+                      const SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(strokeWidth: 1.5),
+                      ),
+                      const SizedBox(width: 6),
                       Text(
-                        'Jiné téma',
+                        'Připravuji nové…',
                         style: GoogleFonts.plusJakartaSans(
                           fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.primary,
+                          color: AppTheme.mutedTextColor(context),
                         ),
                       ),
                     ],
                   ),
+                )
+              else
+                InkWell(
+                  onTap: () => _prepareNewTopic(ref),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Padding(
+                    padding: const EdgeInsets.all(4.0),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.refresh_rounded, size: 14, color: AppTheme.primary),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Jiné téma',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
             ],
           ),
           const SizedBox(height: 8),

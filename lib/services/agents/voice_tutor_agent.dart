@@ -156,6 +156,13 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   /// do 1–2 s, nejpomalejší odpověď v logu lekcí přišla za 4 s.
   static const Duration _responseGrace = Duration(seconds: 5);
 
+  /// Kolikrát smí student promluvit mezi spuštěním režiséra a příchodem jeho rady.
+  /// Rada vzniká po tahu tutora a předá se po dalším, takže jedna replika studenta je běžná.
+  static const int _maxStudentTurnsForWhisper = 1;
+
+  /// Počet replik studenta v aktuální lekci (z bublin chatu).
+  int get _studentTurnCount => state.messages.where((m) => m.isUser).length;
+
   // Skryté pokyny (rada režiséra, odlehčení, tichá změna tématu) čekající na konec tahu tutora.
   // Zpráva clientContent podle dokumentace Live API přeruší právě generovanou odpověď,
   // proto je posíláme až po turnComplete: model nemluví a mikrofon je ještě ztlumený.
@@ -831,6 +838,17 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     client.onConnectionStatusChanged =
         (isConnected) => _onConnectionStatusChanged(isConnected, client);
     client.onError = _onError;
+    client.onActivityEndUnconfirmed = _onActivityEndUnconfirmed;
+  }
+
+  /// Server nepotvrdil konec řeči studenta: tah se ztratil a odpověď na něj nepřijde.
+  /// Spojení se obnoví hned (jakmile student domluví), ne až po lhůtě na odpověď.
+  void _onActivityEndUnconfirmed() {
+    if (!_awaitingResponse) return;
+    L.w('Server nepotvrdil konec řeči studenta, odpověď nepřijde.');
+    _responseOverdue = true;
+    _timers.cancel(TutorTimer.responseGrace);
+    _reconnectIfUnanswered();
   }
 
   /// Příjem textové části odpovědi AI.
@@ -996,6 +1014,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
 
     // Asynchronní analýza a režie hovoru na pozadí (VoiceDirectorAgent)
     if (_currentSessionId != null && state.messages.isNotEmpty) {
+      final studentTurnsAtStart = _studentTurnCount;
       _director.onTurnCompleted(
         sessionId: _currentSessionId!,
         messages: state.messages,
@@ -1003,6 +1022,14 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         userFacts: _userFactsSnapshot,
         recentTopics: _recentTopicsSnapshot,
         onWhisperReady: (whisper) {
+          // Rada se předá až po dalším tahu tutora. Když mezitím student promluvil
+          // víckrát, hovor je jinde (lekce 19: rada „přejdi na narozeniny“ dorazila
+          // po pěti tazích, zrovna když se student loučil).
+          final studentTurnsSince = _studentTurnCount - studentTurnsAtStart;
+          if (studentTurnsSince > _maxStudentTurnsForWhisper) {
+            L.i('VoiceDirector: Rada je zastaralá (student mezitím promluvil $studentTurnsSince×), zahazuji: "$whisper"');
+            return;
+          }
           L.i('VoiceDirector: Našeptávám tutorovi: "$whisper"');
           injectMidSessionGuidance(LiveTutorPrompts.directorWhisper(whisper), turnComplete: false);
         },
@@ -1205,6 +1232,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
             liveClient.onToolCall = null;
             liveClient.onInterrupted = null;
             liveClient.onTokenCountUpdate = null;
+            liveClient.onActivityEndUnconfirmed = null;
           }
         } catch (e, stack) {
           L.e('Chyba při odpojování WebSocketu', e, stack);
@@ -1724,7 +1752,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     }
     final client = ref.read(geminiLiveClientProvider);
     if (client == null || !client.isConnected) return;
-    L.w('Model neodpověděl na repliku studenta ani ${_responseTimeout.inSeconds} s po jejím konci. Obnovuji spojení...');
+    L.w('Model neodpověděl na repliku studenta. Obnovuji spojení...');
     // Výpadek ohlásí sám klient, stav přepne na reconnecting
     client.forceReconnect();
   }

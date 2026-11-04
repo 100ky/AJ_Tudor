@@ -3,21 +3,15 @@
 /// Centralizuje názvy modelů pro různé účely (chat, audio, embedding) a poskytuje
 /// lidsky čitelné popisky pro uživatelské rozhraní.
 class GeminiModels {
-  // Aktuální verze modelů Gemini (k září 2026)
+  // Aktuální verze modelů Gemini (k listopadu 2026, aistudio.google.com/docs/deprecations).
+  // gemini-3.7-flash a gemini-3.5-flash jsou zastaralé (API je přesměruje na 3.8 a 3.6 Flash),
+  // gemini-2.5-flash se vypíná 1. 12. 2026.
   static const String argon4 = 'gemini-4-argon';       // Gemini 4 Argon
   static const String flash3_8 = 'gemini-3.8-flash';   // vydán 2. 9. 2026
-  static const String flash3_7 = 'gemini-3.7-flash';   // vydán 13. 8. 2026
-  static const String flash3_6 = 'gemini-3.6-flash';
-  static const String flash3_5 = 'gemini-3.5-flash';
+  static const String flash3_6 = 'gemini-3.6-flash';   // vydán 21. 7. 2026
   static const String flashLite3_5 = 'gemini-3.5-flash-lite';
-  static const String flashLite3_1 = 'gemini-3.1-flash-lite';
+  static const String flashLite3_1 = 'gemini-3.1-flash-lite'; // vypíná se 7. 5. 2027
   static const String pro3_1 = 'gemini-3.1-pro-preview';
-
-  // --- Modely pro Multimodální vstup, Speech-to-Text a Text-to-Speech ---
-  /// Model Gemini 2.0 Flash (Vypnuto - Shut down dle dokumentace)
-  @Deprecated('Model byl vypnut. Použijte 2.5, 3.5 nebo 3.8')
-  static const String flash2_0 = 'gemini-2.0-flash';
-  static const String flash2_5 = 'gemini-2.5-flash';
 
   /// Model pro přesný přepis audia (Speech-to-Text) s časovými značkami slov a detekcí jazyka.
   static const String transcribe = 'gemini-3.5-transcribe';
@@ -25,10 +19,10 @@ class GeminiModels {
   /// Model pro živý přepis audia přes WebSockets v reálném čase.
   static const String transcribeLive = 'gemini-3.5-transcribe-live';
 
-  /// Model pro syntézu přirozené řeči (Text-to-Speech) s audio tagy pro tempo a intonaci.
+  /// Model pro syntézu přirozené řeči (Text-to-Speech). Text čte doslova, vrací WAV (24 kHz).
   static const String tts = 'gemini-3.8-flash-tts';
-  static const String ttsFlash2_5 = 'gemini-2.5-flash-preview-tts';
-  static const String ttsPro2_5 = 'gemini-2.5-pro-preview-tts';
+  /// Rychlejší a levnější záložní TTS (modely 2.5 TTS se vypínají 17. 11. 2026).
+  static const String ttsLite = 'gemini-3.8-flash-lite-tts';
 
   // --- Model pro Multimodal Live API (WebSocket / Voice Tutor) ---
   /// Model optimalizovaný pro real-time dialog a voice-first AI aplikace.
@@ -40,8 +34,7 @@ class GeminiModels {
   static const String defaultLiveModel = liveVoiceModel;
 
   /// Model pro generování multimodálních embeddingů (text, obraz, audio, video).
-  /// Endpoint dle dokumentace: gemini-embedding-2-preview
-  static const String embedding = 'gemini-embedding-2-preview';
+  static const String embedding = 'gemini-embedding-2';
 
   /// Výchozí model pro standardní textový chat.
   /// gemini-3.8-flash: vydán 2. 9. 2026, nejinteligentnější Flash model optimalizovaný pro
@@ -52,9 +45,7 @@ class GeminiModels {
   static const List<String> allowedChatModels = [
     argon4,
     flash3_8,
-    flash3_7,
     flash3_6,
-    flash3_5,
     flashLite3_5,
     flashLite3_1,
     pro3_1,
@@ -67,12 +58,8 @@ class GeminiModels {
         return 'Gemini 4 Argon (Vlajková loď 🚀)';
       case flash3_8:
         return 'Gemini 3.8 Flash (Nejnovější ✨)';
-      case flash3_7:
-        return 'Gemini 3.7 Flash (Výkonný)';
       case flash3_6:
         return 'Gemini 3.6 Flash (Stabilní)';
-      case flash3_5:
-        return 'Gemini 3.5 Flash (Rychlý)';
       case flashLite3_5:
         return 'Gemini 3.5 Flash-Lite (Úsporný)';
       case flashLite3_1:
@@ -87,10 +74,8 @@ class GeminiModels {
         return 'Gemini 3.5 Transcribe (Přepis)';
       case tts:
         return 'Gemini 3.8 Flash TTS (Výslovnost)';
-      case ttsFlash2_5:
-        return 'Gemini 2.5 Flash TTS';
-      case ttsPro2_5:
-        return 'Gemini 2.5 Pro TTS';
+      case ttsLite:
+        return 'Gemini 3.8 Flash-Lite TTS';
       default:
         return model;
     }

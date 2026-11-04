@@ -98,7 +98,6 @@ void main() {
         any(),
         responseSchema: any(named: 'responseSchema'),
         systemPrompt: any(named: 'systemPrompt'),
-        temperature: any(named: 'temperature'),
       ));
 
       expect(container.read(topicPreparationAgentProvider).topic?.title, 'Kavárny v Praze');
@@ -118,7 +117,6 @@ void main() {
         any(),
         responseSchema: any(named: 'responseSchema'),
         systemPrompt: any(named: 'systemPrompt'),
-        temperature: any(named: 'temperature'),
       )).thenAnswer((_) async => standardTopicResponse);
 
       final notifier = container.read(topicPreparationAgentProvider.notifier);
@@ -150,7 +148,6 @@ void main() {
         any(),
         responseSchema: any(named: 'responseSchema'),
         systemPrompt: any(named: 'systemPrompt'),
-        temperature: any(named: 'temperature'),
       )).thenAnswer((invocation) async {
         capturedPrompt = invocation.namedArguments[const Symbol('systemPrompt')] as String?;
         return randomTopicResponse;
@@ -187,7 +184,6 @@ void main() {
         any(),
         responseSchema: any(named: 'responseSchema'),
         systemPrompt: any(named: 'systemPrompt'),
-        temperature: any(named: 'temperature'),
       )).thenAnswer((invocation) async {
         final prompt = invocation.namedArguments[const Symbol('systemPrompt')] as String?;
         if (prompt != null && prompt.contains('Divokou kartu')) {
@@ -240,7 +236,6 @@ void main() {
         any(),
         responseSchema: any(named: 'responseSchema'),
         systemPrompt: any(named: 'systemPrompt'),
-        temperature: any(named: 'temperature'),
       )).thenAnswer((invocation) async {
         final prompt = invocation.namedArguments[const Symbol('systemPrompt')] as String?;
         if (prompt != null && prompt.contains('analyzovat zprávy studenta z předchozích rozhovorů')) {
@@ -287,7 +282,6 @@ void main() {
         any(),
         responseSchema: any(named: 'responseSchema'),
         systemPrompt: any(named: 'systemPrompt'),
-        temperature: any(named: 'temperature'),
       )).thenAnswer((_) async => jsonEncode({
         "topicTitle": "Téma",
         "openerEn": "Opener",

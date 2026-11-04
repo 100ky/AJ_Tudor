@@ -1,9 +1,11 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:aj_tudor/core/constants/gemini_models.dart';
 import 'package:aj_tudor/core/config/config_providers.dart';
+import 'package:aj_tudor/services/audio/pcm_wav.dart';
 import 'package:aj_tudor/services/gemini/gemini_tts_service.dart';
 
 void main() {
@@ -32,9 +34,38 @@ void main() {
 
     test('GeminiModels.tts points to updated TTS models', () {
       expect(GeminiModels.tts, 'gemini-3.8-flash-tts');
-      expect(GeminiModels.ttsFlash2_5, 'gemini-2.5-flash-preview-tts');
-      expect(GeminiModels.ttsPro2_5, 'gemini-2.5-pro-preview-tts');
-      expect(GeminiModels.getLabel(GeminiModels.tts), contains('Gemini 3.1 Flash TTS'));
+      expect(GeminiModels.ttsLite, 'gemini-3.8-flash-lite-tts');
+      expect(GeminiModels.getLabel(GeminiModels.tts), contains('Gemini 3.8 Flash TTS'));
+    });
+
+    group('audio from the model response', () {
+      Map<String, dynamic> response(List<int> audio) => {
+            'candidates': [
+              {
+                'content': {
+                  'parts': [
+                    {
+                      'inlineData': {'mimeType': 'audio/wav', 'data': base64Encode(audio)}
+                    }
+                  ]
+                }
+              }
+            ]
+          };
+
+      test('a WAV response plays only its sound, not the header or the C2PA metadata', () {
+        // gemini-3.8-flash-tts vrací celý WAV a za zvukem blok C2PA, který zněl na konci jako šum
+        final pcm = List<int>.generate(480, (i) => i % 251);
+        final c2pa = [...'C2PA'.codeUnits, 6, 0, 0, 0, 1, 2, 3, 4, 5, 6];
+        final wav = [...pcm16ToWav(pcm, sampleRate: 24000), ...c2pa];
+
+        expect(GeminiTtsService.extractAudio(response(wav)), pcm);
+      });
+
+      test('raw PCM from the older models is played as it is', () {
+        final pcm = List<int>.generate(480, (i) => i % 7);
+        expect(GeminiTtsService.extractAudio(response(pcm)), pcm);
+      });
     });
 
     test('sanitizeTextForSpeech strips markdown formatting correctly', () {
@@ -129,6 +160,25 @@ void main() {
       expect(success, true);
       // Mělo by být načteno z disku a vloženo do paměťové mezipaměti
       expect(GeminiTtsService.cachedAudioCount, 1);
+    });
+
+    test('a cached WAV recording from before the fix is deleted instead of played', () async {
+      // Takové nahrávky vytvořil gemini-3.8-flash-tts, který předčítal i pokyny k textu
+      final tempDir = Directory.systemTemp.createTempSync('tts_cache_wav_');
+      addTearDown(() {
+        if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
+      });
+      GeminiTtsService.diskCacheDirOverride = tempDir;
+
+      final cacheKey = 'intrigued-${container.read(voiceProvider)}';
+      final hash = cacheKey.hashCode.toUnsigned(32).toRadixString(16).padLeft(8, '0');
+      final cached = File('${tempDir.path}/${cacheKey}_$hash.pcm');
+      await cached.writeAsBytes(pcm16ToWav(List.filled(48, 0), sampleRate: 24000));
+
+      // Bez API klíče se nová nahrávka nevytvoří, stará se ale nepřehraje
+      expect(await service.speak('intrigued'), false);
+      expect(await cached.exists(), false);
+      expect(GeminiTtsService.cachedAudioCount, 0);
     });
   });
 }

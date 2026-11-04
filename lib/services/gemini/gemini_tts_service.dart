@@ -2,14 +2,15 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import '../../core/constants/gemini_models.dart';
 import '../../core/utils/logger.dart';
 import '../audio/audio_providers.dart';
+import '../audio/pcm_wav.dart';
 import '../../core/config/config_providers.dart';
-import '../prompt/task_prompts.dart';
 import 'gemini_rest_core.dart';
 
 /// Služba pro převod textu na řeč (Text-to-Speech) pomocí modelu Gemini TTS.
@@ -35,9 +36,8 @@ class GeminiTtsService {
 
   /// Seznam podporovaných specializovaných TTS modelů v kaskádovém pořadí.
   static const List<String> _ttsModels = [
-    GeminiModels.tts,          // gemini-3.1-flash-tts-preview
-    GeminiModels.ttsFlash2_5,  // gemini-2.5-flash-tts
-    GeminiModels.ttsPro2_5,    // gemini-2.5-pro-preview-tts
+    GeminiModels.tts,      // gemini-3.8-flash-tts
+    GeminiModels.ttsLite,  // gemini-3.8-flash-lite-tts
   ];
 
   GeminiTtsService(this._ref)
@@ -113,6 +113,18 @@ class GeminiTtsService {
     }
   }
 
+  /// Smaže jednu nahrávku z trvalé diskové mezipaměti.
+  static Future<void> _deleteFromDiskCache(String cacheKey) async {
+    try {
+      final dir = await _getCacheDir();
+      if (dir == null) return;
+      final file = File(p.join(dir.path, _generateCacheFileName(cacheKey)));
+      if (await file.exists()) await file.delete();
+    } catch (e) {
+      L.w('Gemini TTS: Chyba při mazání z diskové mezipaměti: $e');
+    }
+  }
+
   /// Smaže celou diskovou mezipaměť vygenerovaných nahrávek.
   static Future<void> clearDiskCache() async {
     try {
@@ -127,10 +139,9 @@ class GeminiTtsService {
   }
 
   /// Vygeneruje a přehraje výslovnost zadaného textu.
-  /// 
+  ///
   /// [text] je anglický text k vyslovení.
-  /// [instruction] volitelná instrukce pro intonaci či přízvuk (např. 'Speak slowly and emphasize past tense.').
-  Future<bool> speak(String text, {String? instruction}) async {
+  Future<bool> speak(String text) async {
     final cleanText = sanitizeTextForSpeech(text);
     if (cleanText.isEmpty) return false;
 
@@ -147,7 +158,14 @@ class GeminiTtsService {
     }
 
     // 2. Zkontrolujeme trvalou diskovou mezipaměť
-    final diskBytes = await _readFromDiskCache(cacheKey);
+    var diskBytes = await _readFromDiskCache(cacheKey);
+    if (diskBytes != null && isWav(diskBytes)) {
+      // Celý WAV se do mezipaměti ukládal jen před opravou: gemini-3.8-flash-tts v něm
+      // předčítal i pokyny („Read only the transcript below…“), nahrávka se vytvoří znovu
+      L.i('Gemini TTS: Nahrávka "$cleanText" v mezipaměti je ze starého pokynu, vytvořím ji znovu.');
+      await _deleteFromDiskCache(cacheKey);
+      diskBytes = null;
+    }
     if (diskBytes != null && diskBytes.isNotEmpty) {
       L.i('Gemini TTS: Přehrávám z diskové mezipaměti pro "$cleanText" (${diskBytes.length} B).');
       _audioCache[cacheKey] = diskBytes;
@@ -165,11 +183,12 @@ class GeminiTtsService {
     try {
       L.i('Gemini TTS: Generuji výslovnost pro text: "$cleanText" (hlas: $voiceName)...');
 
+      // Jen samotný text: gemini-3.8-flash-tts předčítal nahlas i pokyny kolem něj
       final requestBody = {
         'contents': [
           {
             'parts': [
-              {'text': TaskPrompts.ttsTranscript(cleanText, instruction: instruction)}
+              {'text': cleanText}
             ]
           }
         ],
@@ -193,7 +212,7 @@ class GeminiTtsService {
             model: model,
             body: requestBody,
           );
-          final bytes = _extractAudio(data);
+          final bytes = extractAudio(data);
           if (bytes == null) continue;
 
           // Zapamatujeme si fungující model a zrušíme cooldown
@@ -244,14 +263,24 @@ class GeminiTtsService {
     }
   }
 
-  /// Najde v odpovědi první část s audio daty (`inlineData`) a dekóduje je.
-  static List<int>? _extractAudio(Map<String, dynamic>? data) {
+  /// Najde v odpovědi první část s audio daty (`inlineData`) a vrátí z ní surové PCM.
+  ///
+  /// Starší modely vrací rovnou PCM, gemini-3.8-flash-tts celý WAV soubor: jeho hlavička
+  /// a metadata C2PA za zvukem by se přehrály jako šum, proto se z něj vezme jen zvuk.
+  @visibleForTesting
+  static List<int>? extractAudio(Map<String, dynamic>? data) {
     final parts = GeminiRestCore.firstCandidateParts(data);
     if (parts == null) return null;
     for (final part in parts) {
       final inlineData = part['inlineData'];
       if (inlineData != null && inlineData['data'] != null) {
-        return base64Decode(inlineData['data'] as String);
+        final bytes = base64Decode(inlineData['data'] as String);
+        final wav = pcm16FromWav(bytes);
+        if (wav == null) return bytes;
+        if (wav.sampleRate != 24000) {
+          L.w('Gemini TTS: Nahrávka má ${wav.sampleRate} Hz, přehrávání počítá s 24000 Hz.');
+        }
+        return wav.pcm;
       }
     }
     return null;

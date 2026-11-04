@@ -220,6 +220,33 @@ void main() {
       await drainTimers(tester);
     });
 
+    testWidgets('while a new history topic is prepared the current one stays visible',
+        (WidgetTester tester) async {
+      // Při přetížených modelech trvala příprava skoro minutu a záložka ukazovala jen
+      // načítání, i když hovor mezitím použije dosavadní téma
+      configureViewport(tester);
+      final fakeAgent = FakeVoiceTutorAgent(VoiceTutorState(status: TutorState.idle));
+      final topic = PreparedTopic(
+        title: 'Pěstování bylinek',
+        openerEn: 'How are your herbs doing?',
+        rationale: '',
+        preparedAt: DateTime(2026, 11, 1),
+      );
+
+      await tester.pumpWidget(buildTestWidget(
+        fakeTutorAgent: fakeAgent,
+        topicState: TopicPreparationState(isLoading: true, topic: topic),
+      ));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('Pěstování bylinek'), findsOneWidget);
+      expect(find.text('Připravuji nové…'), findsOneWidget);
+      expect(find.text('Jiné téma'), findsNothing);
+      expect(find.text('Příprava tématu z historie...'), findsNothing);
+
+      await drainTimers(tester);
+    });
+
     testWidgets('taps mic button in idle state and triggers startSession',
         (WidgetTester tester) async {
       configureViewport(tester);

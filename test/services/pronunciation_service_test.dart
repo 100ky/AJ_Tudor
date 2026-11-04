@@ -155,5 +155,29 @@ void main() {
       expect(await evaluate(), isNull);
       verifyCalls().called(greaterThan(1));
     });
+
+    test('after every model was overloaded the next try asks them all again', () async {
+      // 4. 11.: všechny modely byly přetížené a další kartička pak skončila hned, protože
+      // „dostupný“ zůstal jen model s 404. Teď se zkusí znovu všechny.
+      final models = <String>[];
+      String? missingModel;
+      when(() => api.generateContent(
+            apiKey: any(named: 'apiKey'),
+            model: any(named: 'model'),
+            body: any(named: 'body'),
+          )).thenAnswer((invocation) async {
+        final model = invocation.namedArguments[#model] as String;
+        models.add(model);
+        missingModel ??= model;
+        throw _httpError(model == missingModel ? 404 : 503);
+      });
+
+      expect(await evaluate(), isNull);
+      final firstTry = List.of(models);
+      models.clear();
+
+      expect(await evaluate(), isNull);
+      expect(models, hasLength(firstTry.length));
+    });
   });
 }

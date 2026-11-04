@@ -111,7 +111,7 @@ class ModelNotifier extends Notifier<String> {
     if (saved != null && GeminiModels.allowedChatModels.contains(saved)) {
       return saved;
     }
-    // Pokud není vybráno nic nebo neplatný model, použije se výchozí (3.5 Flash)
+    // Pokud není vybráno nic nebo už nepodporovaný model, použije se výchozí (3.8 Flash)
     return GeminiModels.defaultModel;
   }
 

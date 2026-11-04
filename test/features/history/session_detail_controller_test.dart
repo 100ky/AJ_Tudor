@@ -21,7 +21,6 @@ class _FakeBatchClient extends GeminiBatchClient {
     String text, {
     Map<String, dynamic>? responseSchema,
     String? systemPrompt,
-    double? temperature,
   }) async {
     prompts.add(text);
     return '  Great question! How was your day?  ';

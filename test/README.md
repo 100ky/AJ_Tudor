@@ -57,9 +57,11 @@ test/
 │   └── settings/
 │       ├── settings_screen_test.dart             # Nastavení API klíče, motivy, připomínky, chytré bubliny
 │       └── settings_screen_layout_test.dart      # Responzivita a prvky v nastavení
+├── tool/
+│   └── prompt_eval_checks_test.dart             # Automatické kontroly testu promptu tutora (otázky, opravy, odbočení, opakování)
 ├── services/                                     # Testy aplikačních služeb a agentů
 │   ├── agents/
-│   │   ├── memory_manager_agent_test.dart        # Analýza session, Structured Outputs, memory pruning, fakta, přepis v cizím jazyce
+│   │   ├── memory_manager_agent_test.dart        # Analýza session, Structured Outputs, memory pruning, fakta, přepis v cizím jazyce, zkrácení paměti
 │   │   ├── scenario_planner_agent_test.dart      # Plánování scénářů, integrace slabých kartiček, custom scénáře
 │   │   ├── topic_preparation_agent_test.dart     # Příprava témat, 12h čerstvost, wildcard, facts bootstrap
 │   │   ├── voice_director_agent_test.dart        # Režisér konverzace (cooldown, tipy, briefing pro reconnect)
@@ -73,18 +75,18 @@ test/
 │   ├── flashcards/
 │   │   └── flashcard_generation_service_test.dart # Kartičky z chyb, migrace starých zadání, nová slovíčka
 │   ├── gemini/
-│   │   ├── gemini_live_client_test.dart          # Spotřeba tokenů na konci tahu, vynucený reconnect (ohlášení výpadku, nulování tokenů)
+│   │   ├── gemini_live_client_test.dart          # Spotřeba tokenů na konci tahu, vynucený reconnect, další řeč až po potvrzení konce předchozí
 │   │   ├── gemini_rest_core_test.dart            # Pořadí modelů, cooldown, třídění chyb, dekódování JSON
 │   │   └── speech_transcription_service_test.dart # Opravný přepis (WAV, kontext tutora, ticho, záložní modely)
 │   ├── prompt/
 │   │   ├── live_tutor_prompts_test.dart          # Pokyny během hovoru (úvodní zpráva, skryté instrukce)
-│   │   ├── system_prompt_builder_test.dart       # Sestavování promptů (tutor, CEFR, drill, schémata, fakta)
-│   │   ├── task_prompts_test.dart                # Krátké úlohové prompty (překlad, výslovnost, TTS, dril)
+│   │   ├── system_prompt_builder_test.dart       # Sestavování promptů (tutor, CEFR, drill, schémata, fakta, rozbor neradí méně opravovat)
+│   │   ├── task_prompts_test.dart                # Krátké úlohové prompty (překlad, výslovnost, dril)
 │   │   └── user_facts_and_topic_prompts_test.dart # Prompty s fakty „O mně“ a příprava témat
 │   ├── system/
 │   │   └── backup_service_test.dart              # Validace SQLite hlavičky, export/import zálohy databáze
-│   ├── gemini_tts_service_test.dart              # Gemini TTS, audio cache
-│   ├── pronunciation_service_test.dart           # Analýza výslovnosti
+│   ├── gemini_tts_service_test.dart              # Gemini TTS, audio cache, zvuk z WAV odpovědi (bez hlavičky a C2PA)
+│   ├── pronunciation_service_test.dart           # Analýza výslovnosti, záložní modely (po přetížení všech se zkusí znovu všechny)
 │   └── translation_service_test.dart             # Překladový servis a disková cache
 ├── widget_test.dart                              # Základní smoke test
 └── README.md                                     # Tento průvodce testováním

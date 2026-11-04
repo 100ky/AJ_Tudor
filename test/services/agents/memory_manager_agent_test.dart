@@ -90,8 +90,7 @@ void main() {
 
       verifyNever(() => mockGemini.sendMessage(any(),
           responseSchema: any(named: 'responseSchema'),
-          systemPrompt: any(named: 'systemPrompt'),
-          temperature: any(named: 'temperature')));
+          systemPrompt: any(named: 'systemPrompt')));
     });
 
     test('analyzeSession exits early if session has empty transcripts', () async {
@@ -102,8 +101,7 @@ void main() {
 
       verifyNever(() => mockGemini.sendMessage(any(),
           responseSchema: any(named: 'responseSchema'),
-          systemPrompt: any(named: 'systemPrompt'),
-          temperature: any(named: 'temperature')));
+          systemPrompt: any(named: 'systemPrompt')));
     });
 
     test('analyzeSession handles short session (<2 user messages) without overwriting memory briefing', () async {
@@ -232,19 +230,21 @@ void main() {
       expect(fakeTopicAgent.lastResetCounter, true);
     });
 
-    test('analyzeSession trims briefing if length exceeds 600 characters', () async {
+    test('a long briefing keeps its beginning and the tutor critique has its own limit', () async {
       final s = (await repo.startNewSession()).getOrThrow();
       await repo.addTranscript(sessionId: s, speaker: 'user', content: 'First line');
       await repo.addTranscript(sessionId: s, speaker: 'user', content: 'Second line');
 
-      final longBriefing = 'A' * 700;
+      // Dřív se nechávalo posledních 600 znaků: slabiny a téma na příště zmizely
+      // a z paměti zbyla hlavně kritika tutora
+      final longBriefing = 'Slabiny: minulý čas. ${'Další doporučení pro příště. ' * 30}';
       final mockJson = jsonEncode({
         "topicSummary": "Long briefing test",
         "fluencyScore": 0.7,
         "estimatedLevel": "B1",
         "totalErrors": 0,
         "briefing": longBriefing,
-        "tutorFeedback": "",
+        "tutorFeedback": 'Neopravuj drobnosti. ' * 30,
         "resolvedErrors": [],
         "vocabulary": [],
         "newLearnedUserFacts": [],
@@ -261,8 +261,19 @@ void main() {
       await agent.analyzeSession(s);
 
       final profile = await profileRepo.getUserProfile();
-      expect(profile?.memoryBriefing?.startsWith('...'), true);
-      expect(profile?.memoryBriefing?.length, 603);
+      final parts = profile!.memoryBriefing!.split('\n\nKRITICKÁ SEBE-REFLEXE (Self-Correction pro tutora na příště): ');
+      expect(parts, hasLength(2));
+      expect(parts.first, startsWith('Slabiny: minulý čas.'));
+      expect(parts.first, endsWith('příště.'));
+      expect(parts.first.length, lessThanOrEqualTo(MemoryManagerAgent.maxBriefingChars));
+      expect(parts.last, endsWith('drobnosti.'));
+      expect(parts.last.length, lessThanOrEqualTo(MemoryManagerAgent.maxTutorFeedbackChars));
+    });
+
+    test('clipBriefing cuts after a sentence, or marks a cut inside one', () {
+      expect(MemoryManagerAgent.clipBriefing('Krátké.', 600), 'Krátké.');
+      expect(MemoryManagerAgent.clipBriefing('První věta. Druhá dlouhá věta', 20), 'První věta.');
+      expect(MemoryManagerAgent.clipBriefing('A' * 30, 10), '${'A' * 10}…');
     });
 
     test('analyzeSession handles exception in Gemini call gracefully without throwing', () async {

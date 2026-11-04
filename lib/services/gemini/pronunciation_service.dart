@@ -147,16 +147,12 @@ class PronunciationService {
         }
       };
 
-      // Modely Flash-Lite a Flash 3.5 jsou pro audio multimodalitu řádově nejrychlejší
-      // a netrpí přetížením (503), které v současnosti postihuje těžší modely 3.8 a 3.7.
+      // Rychlé modely první, těžší 3.8 Flash bývá přetížený (503) nejčastěji
       const baseModels = [
         GeminiModels.flashLite3_5,
-        GeminiModels.flash3_5,
-        GeminiModels.flashLite3_1,
-        GeminiModels.flash2_5,
-        GeminiModels.flash3_8,
-        GeminiModels.flash3_7,
         GeminiModels.flash3_6,
+        GeminiModels.flashLite3_1,
+        GeminiModels.flash3_8,
       ];
 
       // Naposledy úspěšný model nasadíme jako první pro bleskovou odezvu,
@@ -209,6 +205,11 @@ class PronunciationService {
           if (kind == GeminiErrorKind.overloaded) {
             _cooldowns.markOverloaded(model, const Duration(minutes: 3));
             L.w('Model $model je přetížený (${e.response?.statusCode ?? 0} / ${e.type.name}). Dávám na 3min cooldown.');
+          } else if (kind == GeminiErrorKind.notFound) {
+            // Model bez cooldownu by zůstal jediný „dostupný“, když jsou ostatní přetížené,
+            // a další pokus by po jeho 404 hned skončil, místo aby zkusil ostatní znovu
+            _cooldowns.markOverloaded(model, const Duration(hours: 12));
+            L.w('Model $model neexistuje (404), dalších 12 h ho nezkouším.');
           } else {
             L.w('Model $model selhal při analýze výslovnosti: $e');
           }

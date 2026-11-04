@@ -184,7 +184,6 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
           userMessage,
           systemPrompt: prompt,
           responseSchema: SystemPromptBuilder.getTopicPreparationResponseSchema(),
-          temperature: 0.95,
         );
 
         final data = jsonDecode(result);
@@ -269,7 +268,6 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
         userMessage,
         systemPrompt: prompt,
         responseSchema: SystemPromptBuilder.getTopicPreparationResponseSchema(),
-        temperature: 0.85,
       );
 
       final data = jsonDecode(result);

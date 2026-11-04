@@ -172,22 +172,6 @@ Vrať VÝHRADNĚ validní JSON bez jakéhokoliv markdown formátování dle sch�
   static String pronunciationRequest(String referenceText) =>
       'Zhodnoť výslovnost anglické nahrávky oproti vzorovému textu: "$referenceText"';
 
-  /// Prompt pro Gemini TTS dle oficiální specifikace – model oddělí instrukce
-  /// od mluveného textu a nečte pokyny nahlas.
-  static String ttsTranscript(String text, {String? instruction}) {
-    if (instruction != null && instruction.isNotEmpty) {
-      return '''$instruction
-Read ONLY the transcript below with natural native pronunciation. Do not read directions.
-
-#### TRANSCRIPT
-$text''';
-    }
-    return '''Read ONLY the transcript below with standard, clear native pronunciation. Do not read directions.
-
-#### TRANSCRIPT
-$text''';
-  }
-
   // ── Konverzace mimo hlasového tutora ────────────────────────────────────
 
   /// Úvodní zpráva gramatického drilu (na zadané téma, nebo na opakující se chyby).
