@@ -85,6 +85,62 @@ void main() {
     });
   });
 
+  group('vyčerpaný denní limit (bezplatná úroveň)', () {
+    // Tvar odpovědi Gemini API při vyčerpané kvótě (RESOURCE_EXHAUSTED s QuotaFailure)
+    Map<String, Object> quota(String quotaId) => {
+          'error': {
+            'code': 429,
+            'message': 'You exceeded your current quota, please check your plan and billing details.',
+            'status': 'RESOURCE_EXHAUSTED',
+            'details': [
+              {
+                '@type': 'type.googleapis.com/google.rpc.QuotaFailure',
+                'violations': [
+                  {'quotaId': quotaId}
+                ],
+              }
+            ],
+          }
+        };
+    final daily = _dioError(statusCode: 429, data: quota('GenerateRequestsPerDayPerProjectPerModel-FreeTier'));
+    final perMinute = _dioError(statusCode: 429, data: quota('GenerateRequestsPerMinutePerProjectPerModel-FreeTier'));
+
+    tearDown(() => ModelCooldownTracker().clear());
+
+    test('denní limit se pozná podle quotaId, minutový a přetížení ne', () {
+      expect(isDailyQuotaError(daily), isTrue);
+      expect(isDailyQuotaError(perMinute), isFalse);
+      expect(isDailyQuotaError(_dioError(statusCode: 503)), isFalse);
+    });
+
+    test('kvóta se obnovuje o půlnoci pacifického času (8:00 UTC)', () {
+      expect(nextDailyQuotaReset(DateTime.utc(2026, 11, 6, 7, 30)), DateTime.utc(2026, 11, 6, 8));
+      expect(nextDailyQuotaReset(DateTime.utc(2026, 11, 6, 15)), DateTime.utc(2026, 11, 7, 8));
+    });
+
+    test('model s vyčerpaným denním limitem se vynechá až do obnovy, minutový jen na minutu', () {
+      final now = DateTime.utc(2026, 11, 6, 15);
+      expect(cooldownAfter(daily, otherwise: const Duration(minutes: 3), now: now), const Duration(hours: 17));
+      expect(cooldownAfter(perMinute, otherwise: const Duration(minutes: 3), now: now), const Duration(minutes: 1));
+      expect(
+        cooldownAfter(_dioError(statusCode: 503), otherwise: const Duration(minutes: 3), now: now),
+        const Duration(minutes: 3),
+      );
+    });
+
+    test('vyčerpaný denní limit platí pro všechny služby, přetížení jen pro tu jednu', () {
+      // Dřív si ho každá služba zkoušela znovu po 2–3 minutách
+      final transcription = ModelCooldownTracker();
+      final translation = ModelCooldownTracker();
+      transcription.markFailure('gemini-3.6-flash', daily, otherwise: const Duration(minutes: 2));
+      expect(translation.order(['gemini-3.6-flash', 'gemini-3.5-flash-lite']), ['gemini-3.5-flash-lite']);
+
+      transcription.markFailure('gemini-3.5-flash-lite', _dioError(statusCode: 503), otherwise: const Duration(minutes: 2));
+      expect(translation.order(['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite']),
+          ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite']);
+    });
+  });
+
   group('classifyGeminiError', () {
     test('401 and 403 are auth errors', () {
       expect(classifyGeminiError(_dioError(statusCode: 401)), GeminiErrorKind.auth);

@@ -23,11 +23,23 @@ class GeminiBatchClient {
 
   final GeminiRestCore _api;
 
+  /// Záložní modely po [primaryModelName]; null = výchozí řetězec ([defaultFallbackModels]).
+  final List<String>? fallbackModels;
+
+  /// Výchozí záložní modely: od nejschopnějšího k flash-lite s vyšším denním limitem.
+  /// gemini-3.1-pro-preview tu není, na bezplatné úrovni vždy vrátí 429.
+  static const List<String> defaultFallbackModels = [
+    GeminiModels.flash3_8,
+    GeminiModels.flash3_6,
+    GeminiModels.flashLite3_5,
+    GeminiModels.flashLite3_1,
+  ];
+
   /// Dočasný cooldown pro modely přetížené chybami 503/429/timeout.
   static final ModelCooldownTracker _cooldowns = ModelCooldownTracker();
 
   /// Inicializuje klienta s potřebnými konfiguračními údaji.
-  GeminiBatchClient(this.apiKey, this.primaryModelName, {this.systemPrompt})
+  GeminiBatchClient(this.apiKey, this.primaryModelName, {this.systemPrompt, this.fallbackModels})
       : _api = GeminiRestCore(
           connectTimeout: const Duration(seconds: 15),
           receiveTimeout: const Duration(seconds: 45),
@@ -49,17 +61,9 @@ class GeminiBatchClient {
     Map<String, dynamic>? responseSchema,
     String? systemPrompt,
   }) async {
-    // Definice pořadí zkoušených modelů (waterfall).
-    // Začínáme primárně vybraným modelem a v případě přetížení (429, 503) kaskádovitě
-    // přecházíme od nejinteligentnějšího (3.8 Flash) přes silný reasoning (3.1 Pro) až po rychlé Flash-Lite.
-    final allCandidates = {
-      primaryModelName,
-      GeminiModels.flash3_8,
-      GeminiModels.pro3_1,
-      GeminiModels.flash3_6,
-      GeminiModels.flashLite3_5,
-      GeminiModels.flashLite3_1,
-    };
+    // Pořadí zkoušených modelů (waterfall): primární model, pak záložní. Při přetížení (503)
+    // nebo vyčerpané kvótě (429) se přechází na další.
+    final allCandidates = {primaryModelName, ...(fallbackModels ?? defaultFallbackModels)};
 
     String lastError = '';
 
@@ -95,8 +99,10 @@ class GeminiBatchClient {
               L.e('Chyba sítě (bez internetu), přerušuji zkoušení dalších modelů.');
               throw Exception('Chyba sítě (bez internetu). Zkontrolujte připojení.');
             }
-            _cooldowns.markOverloaded(modelName, const Duration(minutes: 3));
-            L.w('Model $modelName je přetížený (${e.response?.statusCode ?? 0}). Dávám na 3min cooldown a zkouším další...');
+            final cooldown = _cooldowns.markFailure(modelName, e, otherwise: const Duration(minutes: 3));
+            L.w(isDailyQuotaError(e)
+                ? 'Model $modelName vyčerpal denní limit, vynechám ho ${cooldown.inHours} h. Zkouším další...'
+                : 'Model $modelName je přetížený (${e.response?.statusCode ?? 0}). Dávám na ${cooldown.inMinutes}min cooldown a zkouším další...');
           case GeminiErrorKind.other:
             L.e('Neočekávaná chyba u modelu $modelName: $lastError');
             rethrow; // Vyhodíme výjimku dál, ať to agent umí zpracovat (např. v catch JSON)

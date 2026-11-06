@@ -32,12 +32,13 @@ class WordTranslationService {
   final Ref _ref;
   final GeminiRestCore _api;
 
-  /// Bleskové modely optimalizované pro rychlý překlad slov a frází bez prodlev
+  /// Bleskové modely pro překlad slov a frází. Nejdřív flash-lite (500 požadavků denně),
+  /// 3.6 a 3.8 Flash mají na bezplatné úrovni jen 20 denně.
   static const List<String> _fastModels = [
-    GeminiModels.flash3_6,     // gemini-3.6-flash (hlavní a stabilní bleskový překlad)
-    GeminiModels.flashLite3_5, // gemini-3.5-flash-lite – rychlý ale může mít prodlevy
-    GeminiModels.flashLite3_1, // gemini-3.1-flash-lite – bleskový lehký model
-    GeminiModels.flash3_8,     // gemini-3.8-flash (fallback)
+    GeminiModels.flashLite3_5,
+    GeminiModels.flashLite3_1,
+    GeminiModels.flash3_6,
+    GeminiModels.flash3_8,
   ];
 
   /// Dočasná paměťová mezipaměť (anglický výraz + kontext -> český překlad)
@@ -228,8 +229,10 @@ class WordTranslationService {
              L.w('Chyba sítě (bez internetu), překlad nefunguje.');
              return 'Chyba sítě (bez internetu)'; // Okamžitě ukončí pokusy
           }
-          _cooldowns.markOverloaded(modelName, const Duration(minutes: 2));
-          L.w('Model $modelName přetížen/timeout (${e.response?.statusCode ?? 0}). Dávám na 2min cooldown a zkouším další...');
+          _cooldowns.markFailure(modelName, e, otherwise: const Duration(minutes: 2));
+          L.w(isDailyQuotaError(e)
+              ? 'Model $modelName vyčerpal denní limit, překlad ho do obnovy kvóty vynechá.'
+              : 'Model $modelName přetížen/timeout (${e.response?.statusCode ?? 0}). Zkouším další...');
         } else {
           L.w('Model $modelName selhal při překladu ($e), zkouším další...');
         }

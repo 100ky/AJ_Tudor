@@ -98,8 +98,10 @@ class SpeechTranscriptionService {
              L.w('Opravný přepis: chyba sítě (bez internetu).');
              return null;
           }
-          _cooldowns.markOverloaded(model, const Duration(minutes: 2));
-          L.w('Opravný přepis: model $model je přetížený (${e.response?.statusCode ?? 0}), zkouším další...');
+          _cooldowns.markFailure(model, e, otherwise: const Duration(minutes: 2));
+          L.w(isDailyQuotaError(e)
+              ? 'Opravný přepis: model $model vyčerpal denní limit, do obnovy kvóty ho vynechám.'
+              : 'Opravný přepis: model $model je přetížený (${e.response?.statusCode ?? 0}), zkouším další...');
         } else {
           L.w('Opravný přepis: model $model selhal ($e), zkouším další...');
         }

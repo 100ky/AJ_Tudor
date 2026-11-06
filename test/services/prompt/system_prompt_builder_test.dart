@@ -29,6 +29,13 @@ void main() {
       expect(normalPrompt.contains('LIDSKÉ UZNÁNÍ PŘÍBĚHU'), true);
       expect(normalPrompt.contains('DŮSLEDNOST OPRAVOVÁNÍ'), true);
       expect(normalPrompt.contains('NEZAMĚŇUJ TÉMA ZA FRUSTRACI'), true);
+      // Test promptu (lekce 2–19): tutor opravoval členy a předložky místo času slovesa,
+      // nevracel se k druhé chybě a stáčel hovor k jídlu a koníčkům z profilu
+      expect(normalPrompt, contains('DROBNOST (tu neopravuj)'));
+      expect(normalPrompt, contains('v tomto pořadí důležitosti: české slovo nebo výraz, čas slovesa'));
+      expect(normalPrompt, contains('vrať se k ní HNED v tomto tahu'));
+      expect(normalPrompt, contains('Tato pravidla mají přednost před pamětí z minulé lekce'));
+      expect(normalPrompt, contains('Nezačínej z nich nová témata'));
 
       final immersivePrompt = SystemPromptBuilder.buildTutorPrompt(
         isImmersive: true,

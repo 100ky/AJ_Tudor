@@ -22,15 +22,50 @@ String? apiKeyFromEnvironment() {
   return null;
 }
 
-/// Kvóta API klíče je vyčerpaná. Test se zastaví a dosavadní výsledky zůstanou uložené,
+/// Důvod zastavit celý běh. Hotové případy zůstanou uložené (pokračování přes `--resume`).
+sealed class StopRun implements Exception {}
+
+/// Kvóta API klíče je vyčerpaná. Test se zastaví hned u prvního modelu, který ji ohlásí,
 /// aby nespotřeboval limit, který potřebuje i aplikace (bezplatná úroveň).
-class QuotaExceeded implements Exception {
+class QuotaExceeded extends StopRun {
   QuotaExceeded(this.detail);
 
   final String detail;
 
   @override
   String toString() => 'Vyčerpaná kvóta API klíče ($detail)';
+}
+
+/// Běh vyčerpal povolený počet požadavků (`--max-requests`).
+class BudgetExhausted extends StopRun {
+  BudgetExhausted(this.limit);
+
+  final int limit;
+
+  @override
+  String toString() => 'Vyčerpaný rozpočet testu ($limit požadavků, --max-requests)';
+}
+
+/// Strop počtu požadavků na API za jeden běh. Každý pokus (i opakovaný a záložní model)
+/// se počítá, takže běh nikdy nepošle víc požadavků, než kolik dovolí `--max-requests`.
+abstract final class RequestBudget {
+  static int _limit = 0;
+  static int _used = 0;
+
+  /// Kolik požadavků běh zatím poslal.
+  static int get used => _used;
+
+  /// Nastaví strop pro tento běh.
+  static void start(int limit) {
+    _limit = limit;
+    _used = 0;
+  }
+
+  /// Započítá jeden požadavek; když by překročil strop, zastaví běh ([BudgetExhausted]).
+  static void take() {
+    if (_used >= _limit) throw BudgetExhausted(_limit);
+    _used++;
+  }
 }
 
 /// Zda chybová odpověď API hlásí vyčerpanou kvótu.
@@ -42,6 +77,7 @@ const Duration requestPause = Duration(seconds: 4);
 
 /// Volání `generateContent` přes REST.
 Future<Map<String, dynamic>> generateContent(String apiKey, String model, Map<String, Object?> body) async {
+  RequestBudget.take();
   final client = HttpClient()..connectionTimeout = const Duration(seconds: 15);
   try {
     final request = await client.postUrl(
@@ -65,6 +101,9 @@ Future<Map<String, dynamic>> generateContent(String apiKey, String model, Map<St
 }
 
 /// Strukturovaná odpověď (JSON podle [schema]) z prvního modelu, který odpoví.
+///
+/// Na další model se přechází jen při přetížení (503) nebo chybě. Vyčerpaná kvóta běh
+/// hned zastaví: záložní modely by jinak vyčerpaly i limity, na kterých běží aplikace.
 Future<(Map<String, dynamic>, String)> generateJson(
   String apiKey, {
   required String systemPrompt,
@@ -73,7 +112,6 @@ Future<(Map<String, dynamic>, String)> generateJson(
   List<String> models = textModels,
 }) async {
   Object? lastError;
-  var allQuota = true;
   for (final model in models) {
     try {
       final data = await generateContent(apiKey, model, {
@@ -95,13 +133,12 @@ Future<(Map<String, dynamic>, String)> generateJson(
       final parts = (data['candidates'] as List).first['content']['parts'] as List;
       final text = parts.map((p) => p['text'] ?? '').join();
       return (jsonDecode(text) as Map<String, dynamic>, model);
+    } on StopRun {
+      rethrow;
     } catch (e) {
-      // Kvóta se počítá pro každý model zvlášť: záložní model ještě může odpovědět
       lastError = e;
-      if (e is! QuotaExceeded) allQuota = false;
     }
   }
-  if (allQuota) throw QuotaExceeded('všechny modely: $lastError');
   throw StateError('Žádný model neodpověděl: $lastError');
 }
 
@@ -116,11 +153,22 @@ const Map<String, Object?> _verdictSchema = {
 
 /// Posouzení rozhodčím modelem: `{pass, reason, model}`, nebo `{pass: null, reason: chyba}`
 /// (odpověď pak zůstane nehodnocená). Vyčerpaná kvóta test zastaví ([QuotaExceeded]).
-Future<Map<String, Object?>> judge(String apiKey, {required String rules, required String question}) async {
+Future<Map<String, Object?>> judge(
+  String apiKey, {
+  required String rules,
+  required String question,
+  List<String> models = textModels,
+}) async {
   try {
-    final (verdict, model) = await generateJson(apiKey, systemPrompt: rules, userText: question, schema: _verdictSchema);
+    final (verdict, model) = await generateJson(
+      apiKey,
+      systemPrompt: rules,
+      userText: question,
+      schema: _verdictSchema,
+      models: models,
+    );
     return {'pass': verdict['pass'] == true, 'reason': verdict['reason'], 'model': model};
-  } on QuotaExceeded {
+  } on StopRun {
     rethrow;
   } catch (e) {
     return {'pass': null, 'reason': 'Rozhodčí selhal: $e'};
@@ -136,15 +184,15 @@ bool? replyPassed(Iterable<bool> checks, Map<String, Object?>? verdict) {
   return pass is bool ? pass : null;
 }
 
-/// Přetížené API občas spojení odmítne nebo zavře: zkusí to ještě dvakrát.
-/// Vyčerpanou kvótu znovu nezkouší.
+/// Přetížené API občas spojení odmítne nebo zavře: zkusí to ještě jednou.
+/// Vyčerpanou kvótu ani rozpočet znovu nezkouší.
 Future<T> withRetry<T>(Future<T> Function() action) async {
   for (var attempt = 1;; attempt++) {
     try {
       return await action();
     } catch (e) {
-      if (e is QuotaExceeded || attempt >= 3) rethrow;
-      await Future<void>.delayed(Duration(seconds: 3 * attempt));
+      if (e is StopRun || attempt >= 2) rethrow;
+      await Future<void>.delayed(const Duration(seconds: 5));
     }
   }
 }
@@ -168,12 +216,79 @@ Future<void> saveReport(Map<String, Object?> report, {bool announce = false}) as
   stdout.writeln('Výsledky: ${resultsDir.path}$label.json a .md');
 }
 
-/// Hotové případy z dřívějšího běhu [label] (pro `--resume`); prázdné, když běh neexistuje.
-List<Map<String, dynamic>> loadFinishedCases(String label) {
+/// Hotové případy z dřívějšího běhu [label] (pro `--resume`): ty, které mají aspoň
+/// [runs] vyhodnocených odpovědí. Ostatní se spustí znovu.
+List<Map<String, dynamic>> loadFinishedCases(String label, {required int runs}) {
   final file = File.fromUri(privateDir.resolve('results/$label.json'));
   if (!file.existsSync()) return [];
   final report = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
-  return (report['cases'] as List).cast<Map<String, dynamic>>();
+  return (report['cases'] as List).cast<Map<String, dynamic>>().where((c) {
+    final rated = (c['replies'] as List).where((r) => r is Map && r['passed'] != null).length;
+    return rated >= runs;
+  }).toList();
+}
+
+/// Ohodnotí rozhodčím uložené odpovědi běhu, které prošly automatickými kontrolami a ještě
+/// nemají verdikt. [question] sestaví otázku pro případ a odpověď. Ukládá po každém případu,
+/// při vyčerpané kvótě nebo rozpočtu skončí (pokračuje se stejným příkazem).
+Future<void> judgeSavedReplies({
+  required String apiKey,
+  required EvalOptions options,
+  required String rules,
+  required String Function(Map<String, dynamic> resultCase, Map<String, dynamic> reply) question,
+}) async {
+  final file = File.fromUri(privateDir.resolve('results/${options.label}.json'));
+  final report = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+  final cases = (report['cases'] as List).cast<Map<String, dynamic>>();
+  var judged = 0;
+  try {
+    for (final c in cases.where((c) => options.only.isEmpty || options.only.contains(c['id']))) {
+      for (final reply in (c['replies'] as List).cast<Map<String, dynamic>>()) {
+        final checks = ((reply['checks'] as List?) ?? const []).cast<Map<String, dynamic>>();
+        final verdictSoFar = reply['judge'] as Map<String, dynamic>?;
+        if (reply.containsKey('error') || checks.any((ch) => ch['passed'] != true)) continue;
+        if (verdictSoFar != null && verdictSoFar['pass'] != null) continue;
+        final verdict = await judge(apiKey, rules: rules, question: question(c, reply), models: options.judgeModels);
+        reply['judge'] = verdict;
+        reply['passed'] = replyPassed(checks.map((ch) => ch['passed'] == true), verdict);
+        judged++;
+        stdout.writeln('${c['id']} ${switch (reply['passed']) { true => '✓', false => '✗', _ => '?' }} '
+            '${verdict['pass'] == true ? '' : '— ${verdict['reason']}'}');
+        await Future<void>.delayed(requestPause);
+      }
+      report['judge'] = true;
+      await saveReport(report);
+    }
+  } on StopRun catch (e) {
+    stdout.writeln('\n⛔ $e. Hodnocení končí, verdikty jsou uložené (pokračování: stejný příkaz).');
+    exitCode = 3;
+  }
+  await saveReport(report, announce: true);
+  stdout.writeln('Ohodnoceno odpovědí: $judged, požadavků na API: ${RequestBudget.used} z ${options.maxRequests}');
+}
+
+/// Odhad tokenů textu pro `--dry-run` (čeština s angličtinou, zhruba 3 znaky na token).
+int estimateTokens(int chars) => (chars / 3).ceil();
+
+/// Vypíše plán běhu bez volání API: kolik požadavků a vstupních tokenů nejvýš spotřebuje.
+void printDryRun({
+  required String agent,
+  required String model,
+  required int cases,
+  required int runs,
+  required bool judge,
+  required int requestChars,
+  required int judgeChars,
+  int? judgedCases,
+}) {
+  final calls = cases * runs;
+  final judgeCalls = judge ? (judgedCases ?? cases) * runs : 0;
+  stdout.writeln('Plán běhu ($agent), nic se neposílá:');
+  stdout.writeln('  případů: $cases × opakování: $runs = $calls volání modelu $model');
+  stdout.writeln('  rozhodčí: nejvýš $judgeCalls volání (jen když projdou automatické kontroly)');
+  stdout.writeln('  požadavků celkem nejvýš: ${calls + judgeCalls} (+ jedno opakování po chybě)');
+  stdout.writeln('  vstupních tokenů zhruba: ${estimateTokens(requestChars * runs)} pro $model, '
+      '${judge ? estimateTokens(judgeChars * runs) : 0} pro rozhodčího');
 }
 
 /// Úspěšnost odpovědí podle druhu případu: druh → (prošlo, celkem).
@@ -294,6 +409,12 @@ class EvalOptions {
     required this.only,
     required this.judge,
     required this.resume,
+    required this.maxRequests,
+    required this.dryRun,
+    required this.original,
+    this.promptFile,
+    this.model,
+    this.judgeOnly = false,
     this.compare,
   });
 
@@ -304,14 +425,41 @@ class EvalOptions {
 
   /// Navázat na přerušený běh stejného názvu: hotové případy se přeskočí.
   final bool resume;
+
+  /// Nejvyšší počet požadavků na API za tento běh (povinné, kromě --dry-run a --compare).
+  final int maxRequests;
+
+  /// Jen vypsat plán a odhad spotřeby, nic neposílat.
+  final bool dryRun;
+
+  /// Režisér: vyhodnotit jeho skutečné výstupy z lekcí místo nového volání modelu.
+  final bool original;
+
+  /// Tutor: systémový prompt ze souboru místo z kódu (např. starý prompt pro výchozí stav).
+  final String? promptFile;
+
+  /// Model místo [textModels]: u režiséra pro jeho volání, u `--judge-only` pro rozhodčího.
+  final String? model;
+
+  /// Jen ohodnotit rozhodčím už uložené odpovědi běhu [label], nic dalšího nevolat.
+  final bool judgeOnly;
+
+  /// Modely pro rozhodčího: jeden zvolený (`--model`), nebo výchozí pořadí.
+  List<String> get judgeModels => model != null ? [model!] : textModels;
   final (String, String)? compare;
 
   static EvalOptions parse(List<String> args, {required String defaultLabel}) {
     var label = defaultLabel;
-    var runs = 3;
+    var runs = 2;
     var only = <String>{};
     var judge = true;
     var resume = false;
+    var maxRequests = 0;
+    var dryRun = false;
+    var original = false;
+    String? promptFile;
+    String? model;
+    var judgeOnly = false;
     (String, String)? compare;
     for (var i = 0; i < args.length; i++) {
       switch (args[i]) {
@@ -325,12 +473,43 @@ class EvalOptions {
           judge = false;
         case '--resume':
           resume = true;
+        case '--max-requests':
+          maxRequests = int.parse(args[++i]);
+        case '--dry-run':
+          dryRun = true;
+        case '--original':
+          original = true;
+        case '--prompt-file':
+          promptFile = args[++i];
+        case '--model':
+          model = args[++i];
+        case '--judge-only':
+          judgeOnly = true;
         case '--compare':
           compare = (args[++i], args[++i]);
         default:
           throw ArgumentError('Neznámý přepínač: ${args[i]}');
       }
     }
-    return EvalOptions(label: label, runs: runs, only: only, judge: judge, resume: resume, compare: compare);
+    // Bez volání API (porovnání, plán, skutečné výstupy bez rozhodčího) strop není potřeba
+    final callsApi = compare == null && !dryRun && !(original && !judge);
+    if (callsApi && maxRequests <= 0) {
+      throw ArgumentError('Chybí --max-requests N (strop požadavků na API pro tento běh). '
+          'Odhad spotřeby ukáže --dry-run.');
+    }
+    return EvalOptions(
+      label: label,
+      runs: runs,
+      only: only,
+      judge: judge,
+      resume: resume,
+      maxRequests: maxRequests,
+      dryRun: dryRun,
+      original: original,
+      promptFile: promptFile,
+      model: model,
+      judgeOnly: judgeOnly,
+      compare: compare,
+    );
   }
 }

@@ -55,16 +55,16 @@ final geminiAnalysisClientProvider = Provider<GeminiBatchClient?>((ref) {
 
 /// Specializovaný provider pro Voice Director Agenta (konverzační režisér na pozadí hovoru).
 /// 
-/// Využívá Gemini 3.8 Flash pro rychlou, inteligentní asynchronní analýzu transkriptu
-/// a generování instrukcí a tipů bez narušení audio latence.
+/// Režisér se volá každé tři repliky studenta, proto běží na flash-lite modelech (500 požadavků
+/// denně). Gemini 3.8 a 3.6 Flash mají na bezplatné úrovni jen 20 denně a režisér by je vyčerpal
+/// v první lekci, takže by nezbyly na rozbor po lekci a přípravu témat.
 final geminiDirectorClientProvider = Provider<GeminiBatchClient?>((ref) {
   final apiKey = ref.watch(apiKeyProvider);
-  const modelName = GeminiModels.flash3_8;
-  
   if (apiKey == null || apiKey.isEmpty) return null;
   return GeminiBatchClient(
-    apiKey, 
-    modelName,
+    apiKey,
+    GeminiModels.flashLite3_5,
+    fallbackModels: const [GeminiModels.flashLite3_1],
   );
 });
 

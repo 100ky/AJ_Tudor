@@ -76,7 +76,7 @@ test/
 │   │   └── flashcard_generation_service_test.dart # Kartičky z chyb, migrace starých zadání, nová slovíčka
 │   ├── gemini/
 │   │   ├── gemini_live_client_test.dart          # Spotřeba tokenů na konci tahu, vynucený reconnect, další řeč až po potvrzení konce předchozí
-│   │   ├── gemini_rest_core_test.dart            # Pořadí modelů, cooldown, třídění chyb, dekódování JSON
+│   │   ├── gemini_rest_core_test.dart            # Pořadí modelů, cooldown, denní a minutový limit, třídění chyb, dekódování JSON
 │   │   └── speech_transcription_service_test.dart # Opravný přepis (WAV, kontext tutora, ticho, záložní modely)
 │   ├── prompt/
 │   │   ├── live_tutor_prompts_test.dart          # Pokyny během hovoru (úvodní zpráva, skryté instrukce)

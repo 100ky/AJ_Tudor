@@ -147,11 +147,11 @@ class PronunciationService {
         }
       };
 
-      // Rychlé modely první, těžší 3.8 Flash bývá přetížený (503) nejčastěji
+      // Nejdřív flash-lite (500 požadavků denně), 3.6 a 3.8 Flash mají jen 20 denně
       const baseModels = [
         GeminiModels.flashLite3_5,
-        GeminiModels.flash3_6,
         GeminiModels.flashLite3_1,
+        GeminiModels.flash3_6,
         GeminiModels.flash3_8,
       ];
 
@@ -203,8 +203,10 @@ class PronunciationService {
             break;
           }
           if (kind == GeminiErrorKind.overloaded) {
-            _cooldowns.markOverloaded(model, const Duration(minutes: 3));
-            L.w('Model $model je přetížený (${e.response?.statusCode ?? 0} / ${e.type.name}). Dávám na 3min cooldown.');
+            _cooldowns.markFailure(model, e, otherwise: const Duration(minutes: 3));
+            L.w(isDailyQuotaError(e)
+                ? 'Model $model vyčerpal denní limit, výslovnost ho do obnovy kvóty vynechá.'
+                : 'Model $model je přetížený (${e.response?.statusCode ?? 0} / ${e.type.name}). Zkouším další.');
           } else if (kind == GeminiErrorKind.notFound) {
             // Model bez cooldownu by zůstal jediný „dostupný“, když jsou ostatní přetížené,
             // a další pokus by po jeho 404 hned skončil, místo aby zkusil ostatní znovu

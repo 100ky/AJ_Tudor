@@ -248,10 +248,14 @@ class GeminiTtsService {
           // Neexistující model (404) vyřadíme na delší dobu, ostatní chyby jen krátce
           final notFound = e is DioException &&
               classifyGeminiError(e) == GeminiErrorKind.notFound;
-          _cooldowns.markOverloaded(
-            model,
-            notFound ? const Duration(hours: 12) : const Duration(minutes: 3),
-          );
+          if (notFound) {
+            _cooldowns.markOverloaded(model, const Duration(hours: 12));
+          } else if (e is DioException) {
+            // gemini-3.8-flash-tts má na bezplatné úrovni jen 10 požadavků denně
+            _cooldowns.markFailure(model, e, otherwise: const Duration(minutes: 3));
+          } else {
+            _cooldowns.markOverloaded(model, const Duration(minutes: 3));
+          }
         }
       }
 

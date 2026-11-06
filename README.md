@@ -60,6 +60,7 @@ lib/
 - Provider služby leží ve stejném souboru nebo složce jako služba. Providery databáze, repozitářů a datových streamů jsou v `data/data_providers.dart`.
 - Texty promptů jsou jen v `services/prompt/`.
 - Volání Gemini REST API jdou přes `GeminiRestCore` (`services/gemini/gemini_rest_core.dart`). Jádro střídá modely, dává přetížené modely na cooldown a třídí chyby. Vlastní `Dio` jinde nevytvářejte.
+- Bezplatná úroveň má u `gemini-3.8-flash` a `gemini-3.6-flash` jen 20 požadavků denně, u flash-lite modelů 500 a u `gemini-3.8-flash-tts` 10. Často volané úlohy (režisér, překlad slov, výslovnost) proto začínají flash-lite modely a 3.8 Flash zůstává pro rozbor po lekci, přípravu témat a scénáře. Opravný přepis začíná 3.6 Flash kvůli kvalitě a po vyčerpání limitu přejde na flash-lite. Vyčerpaný denní limit (odpověď 429 s `PerDay`) vyřadí model ve všech službách až do obnovy kvóty (půlnoc pacifického času, u nás 9:00), minutový limit na minutu.
 - Soubor v `lib/` by neměl mít víc než zhruba 600 řádků. Výjimkou je generovaný `app_database.g.dart` a `system_prompt_builder.dart`.
 
 ### Použité balíčky (Dependencies)

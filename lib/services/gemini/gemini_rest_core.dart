@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 
 /// Druh chyby Gemini REST API – určuje, jak se služba zachová v kaskádě záložních modelů.
@@ -32,6 +34,39 @@ GeminiErrorKind classifyGeminiError(DioException e) {
   return GeminiErrorKind.other;
 }
 
+/// Zda chyba 429 hlásí vyčerpaný denní limit modelu (`quotaId` …PerDay…).
+///
+/// Bezplatná úroveň má u gemini-3.8-flash a gemini-3.6-flash jen 20 požadavků denně,
+/// flash-lite modely 500. Minutový limit vrací 429 taky, ale bez `PerDay`.
+bool isDailyQuotaError(DioException e) {
+  if (e.response?.statusCode != 429) return false;
+  final data = e.response?.data;
+  String text;
+  try {
+    text = data is String ? data : jsonEncode(data);
+  } catch (_) {
+    text = data.toString();
+  }
+  return text.contains('PerDay');
+}
+
+/// Kdy se obnoví denní kvóta: o půlnoci pacifického času, tedy v 8:00 UTC
+/// (v letním čase už v 7:00 UTC, model se pak vynechá o hodinu déle).
+DateTime nextDailyQuotaReset(DateTime now) {
+  final utc = now.toUtc();
+  final today = DateTime.utc(utc.year, utc.month, utc.day, 8);
+  return today.isAfter(utc) ? today : today.add(const Duration(days: 1));
+}
+
+/// Jak dlouho model po chybě [e] vynechat: při vyčerpaném denním limitu až do jeho obnovy,
+/// při minutovém limitu minutu, jinak [otherwise] (přetížení, timeout).
+Duration cooldownAfter(DioException e, {required Duration otherwise, DateTime? now}) {
+  final at = now ?? DateTime.now();
+  if (isDailyQuotaError(e)) return nextDailyQuotaReset(at).difference(at.toUtc());
+  if (e.response?.statusCode == 429) return const Duration(minutes: 1);
+  return otherwise;
+}
+
 /// Vytáhne čitelnou chybovou zprávu z [DioException] (pole `error.message` v těle odpovědi).
 String geminiErrorMessage(DioException e) {
   try {
@@ -59,6 +94,10 @@ class ModelCooldownTracker {
   final Map<String, DateTime> _cooldownUntil = {};
   String? _preferredModel;
 
+  // Denní kvóta platí pro model v celém projektu: když ji vyčerpá jedna služba,
+  // vynechají ho do obnovy kvóty i ostatní (dřív to zkoušely každé 2–3 minuty znovu).
+  static final Map<String, DateTime> _dailyQuotaUntil = {};
+
   /// Naposledy úspěšně použitý model (pokud si ho služba pamatuje přes [markSuccess]).
   String? get preferredModel => _preferredModel;
 
@@ -79,7 +118,8 @@ class ModelCooldownTracker {
     final now = DateTime.now();
     final available = ordered.where((model) {
       final until = _cooldownUntil[model];
-      return until == null || now.isAfter(until);
+      final quotaUntil = _dailyQuotaUntil[model];
+      return (until == null || now.isAfter(until)) && (quotaUntil == null || now.isAfter(quotaUntil));
     }).toList();
     return available.isEmpty ? ordered : available;
   }
@@ -89,15 +129,25 @@ class ModelCooldownTracker {
     _cooldownUntil[model] = DateTime.now().add(duration);
   }
 
+  /// Model selhal chybou [e]: dostane cooldown podle [cooldownAfter]. Vyčerpaný denní
+  /// limit ho vyřadí ve všech službách až do obnovy kvóty. Vrátí délku cooldownu.
+  Duration markFailure(String model, DioException e, {required Duration otherwise}) {
+    final cooldown = cooldownAfter(e, otherwise: otherwise);
+    markOverloaded(model, cooldown);
+    if (isDailyQuotaError(e)) _dailyQuotaUntil[model] = DateTime.now().add(cooldown);
+    return cooldown;
+  }
+
   /// Zruší cooldown modelu, který uspěl; s [remember] si ho zapamatuje jako preferovaný.
   void markSuccess(String model, {bool remember = false}) {
     _cooldownUntil.remove(model);
     if (remember) _preferredModel = model;
   }
 
-  /// Vymaže všechny cooldowny i preferovaný model.
+  /// Vymaže všechny cooldowny i preferovaný model (i sdílenou denní kvótu, pro testy).
   void clear() {
     _cooldownUntil.clear();
+    _dailyQuotaUntil.clear();
     _preferredModel = null;
   }
 }

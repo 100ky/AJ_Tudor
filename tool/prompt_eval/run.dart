@@ -4,7 +4,10 @@
 // a jednu repliku studenta a vyhodnotí jeho odpověď: automatické kontroly
 // (checks.dart) a rozhodčí model podle očekávaného chování z případu.
 //
-//   dart run tool/prompt_eval/run.dart --label baseline [--runs 3] [--only 19-568,2-40] [--no-judge] [--resume]
+//   dart run tool/prompt_eval/run.dart --dry-run                       (jen plán a odhad spotřeby)
+//   dart run tool/prompt_eval/run.dart --label baseline --max-requests 120 [--runs 2] [--only 19-568,2-40] [--no-judge] [--resume]
+//   dart run tool/prompt_eval/run.dart --label candidate --judge-only --model gemini-3.6-flash --max-requests 100
+//                                          (ohodnotí uložené odpovědi rozhodčím)
 //   dart run tool/prompt_eval/run.dart --compare baseline candidate
 //
 // Klíč se čte z proměnné prostředí GEMINI_API_KEY. Případy i výsledky obsahují
@@ -26,51 +29,95 @@ Future<void> main(List<String> args) async {
     await compareRuns(options.compare!.$1, options.compare!.$2);
     return;
   }
-  final apiKey = apiKeyFromEnvironment();
-  if (apiKey == null) return;
-
   final data = jsonDecode(await File.fromUri(privateDir.resolve('cases.json')).readAsString())
       as Map<String, dynamic>;
   final profile = data['profile'] as Map<String, dynamic>;
-  final systemPrompt = SystemPromptBuilder.buildTutorPrompt(
-    targetLevel: profile['targetLevel'] as String? ?? 'B1',
-    recurringErrors: profile['recurringErrors'] as String?,
-    vocabulary: profile['vocabulary'] as String?,
-    recentTopics: profile['topicPreferences'] as String?,
-    memoryBriefing: profile['memoryBriefing'] as String?,
-    userFacts: profile['userFacts'] as String?,
-  );
+  final promptFile = options.promptFile;
+  final systemPrompt = promptFile != null
+      ? await File(promptFile).readAsString()
+      : SystemPromptBuilder.buildTutorPrompt(
+          targetLevel: profile['targetLevel'] as String? ?? 'B1',
+          recurringErrors: profile['recurringErrors'] as String?,
+          vocabulary: profile['vocabulary'] as String?,
+          recentTopics: profile['topicPreferences'] as String?,
+          memoryBriefing: profile['memoryBriefing'] as String?,
+          userFacts: profile['userFacts'] as String?,
+        );
   final opening = LiveTutorPrompts.opening(briefing: profile['memoryBriefing'] as String?);
 
   final cases = (data['cases'] as List)
       .cast<Map<String, dynamic>>()
       .where((c) => options.only.isEmpty || options.only.contains(c['id']))
       .toList();
+
+  if (options.judgeOnly) {
+    final apiKey = apiKeyFromEnvironment();
+    if (apiKey == null) return;
+    RequestBudget.start(options.maxRequests);
+    final byId = {for (final c in cases) c['id']: c};
+    await judgeSavedReplies(
+      apiKey: apiKey,
+      options: options,
+      rules: _judgeRules,
+      question: (resultCase, reply) =>
+          _judgeQuestion(byId[resultCase['id']]!, reply['text'] as String),
+    );
+    return;
+  }
   stdout.writeln('Prompt: ${systemPrompt.length} znaků, případů: ${cases.length}, opakování: ${options.runs}');
 
-  final results = options.resume ? loadFinishedCases(options.label) : <Map<String, dynamic>>[];
+  final results = options.resume ? loadFinishedCases(options.label, runs: options.runs) : <Map<String, dynamic>>[];
   final finished = {for (final c in results) c['id']};
+  final pending = cases.where((c) => !finished.contains(c['id'])).toList();
+
+  if (options.dryRun) {
+    var requestChars = 0;
+    var judgeChars = 0;
+    for (final c in pending) {
+      final history = (c['history'] as List).cast<Map<String, dynamic>>();
+      requestChars += systemPrompt.length + opening.length + (c['student'] as String).length;
+      requestChars += history.fold(0, (sum, t) => sum + (t['text'] as String).length);
+      final recentSix = history.length > 6 ? history.sublist(history.length - 6) : history;
+      // Otázka pro rozhodčího: konec rozhovoru, odpověď tutora (~300 znaků) a očekávání
+      judgeChars += _judgeRules.length + transcriptOf(recentSix).length + (c['expect'] as String).length + 300;
+    }
+    printDryRun(
+      agent: 'tutor',
+      model: GeminiModels.defaultLiveModel,
+      cases: pending.length,
+      runs: options.runs,
+      judge: options.judge,
+      requestChars: requestChars,
+      judgeChars: judgeChars,
+    );
+    return;
+  }
+  final apiKey = apiKeyFromEnvironment();
+  if (apiKey == null) return;
+  RequestBudget.start(options.maxRequests);
   Map<String, Object?> report() => {
         'label': options.label,
         'agent': 'tutor',
         'date': DateTime.now().toIso8601String(),
         'promptChars': systemPrompt.length,
+        'promptFile': promptFile,
         'runs': options.runs,
         'judge': options.judge,
         'cases': results,
       };
 
   try {
-    for (final testCase in cases.where((c) => !finished.contains(c['id']))) {
+    for (final testCase in pending) {
       results.add(await _runCase(apiKey, systemPrompt, opening, testCase, options));
       // Průběžné uložení: přerušený běh jde navázat přes --resume
       await saveReport(report());
     }
-  } on QuotaExceeded catch (e) {
+  } on StopRun catch (e) {
     stdout.writeln('\n⛔ $e. Test končí, hotové případy jsou uložené (pokračování: --resume).');
     exitCode = 3;
   }
   await saveReport(report(), announce: true);
+  stdout.writeln('Požadavků na API v tomto běhu: ${RequestBudget.used} z ${options.maxRequests}');
 }
 
 Future<Map<String, Object?>> _runCase(
@@ -96,7 +143,7 @@ Future<Map<String, Object?>> _runCase(
     String reply;
     try {
       reply = await withRetry(() => _askTutor(apiKey, systemPrompt, turns));
-    } on QuotaExceeded {
+    } on StopRun {
       rethrow;
     } catch (e) {
       stdout.writeln('${testCase['id']} [$run] ⚠️ tutor neodpověděl: $e');
@@ -105,18 +152,15 @@ Future<Map<String, Object?>> _runCase(
     }
     final checks = checkReply(kind, reply, earlierTutorLines: earlierTutorLines, recentContext: recentContext);
     Map<String, Object?>? verdict;
-    if (options.judge) {
+    // Rozhodčí jen u odpovědí, které prošly automatickými kontrolami: jinak neprošla tak jako tak
+    if (options.judge && checks.every((c) => c.passed)) {
       await Future<void>.delayed(requestPause);
-      final recentSix = history.length > 6 ? history.sublist(history.length - 6) : history;
-      verdict = await judge(apiKey, rules: _judgeRules, question: '''Konec rozhovoru:
-${transcriptOf(recentSix)}
-Student: $student
-
-Odpověď tutora: $reply
-
-Očekávané chování: ${testCase['expect']}
-
-Splňuje odpověď tutora očekávané chování? Vrať pass a zdůvodnění (jedna věta česky).''');
+      verdict = await judge(
+        apiKey,
+        rules: _judgeRules,
+        question: _judgeQuestion(testCase, reply),
+        models: options.judgeModels,
+      );
     }
     final passed = replyPassed(checks.map((c) => c.passed), verdict);
     replies.add({
@@ -138,6 +182,21 @@ Splňuje odpověď tutora očekávané chování? Vrať pass a zdůvodnění (je
     'expect': testCase['expect'],
     'replies': replies,
   };
+}
+
+/// Otázka pro rozhodčího: konec rozhovoru, odpověď tutora a očekávané chování z případu.
+String _judgeQuestion(Map<String, dynamic> testCase, String reply) {
+  final history = (testCase['history'] as List).cast<Map<String, dynamic>>();
+  final recentSix = history.length > 6 ? history.sublist(history.length - 6) : history;
+  return '''Konec rozhovoru:
+${transcriptOf(recentSix)}
+Student: ${testCase['student']}
+
+Odpověď tutora: $reply
+
+Očekávané chování: ${testCase['expect']}
+
+Splňuje odpověď tutora očekávané chování? Vrať pass a zdůvodnění (jedna věta česky).''';
 }
 
 const String _judgeRules = '''Jsi přísný, ale férový hodnotitel odpovědí AI tutora angličtiny pro českého studenta (úroveň B1).
@@ -171,6 +230,7 @@ List<Map<String, Object>> _turns(String opening, List<Map<String, dynamic>> hist
 /// Jeden živý hovor: stejný setup jako aplikace, historie jako clientContent,
 /// odpověď tutora z přepisu jeho řeči (outputTranscription).
 Future<String> _askTutor(String apiKey, String systemPrompt, List<Map<String, Object>> turns) async {
+  RequestBudget.take();
   final socket = await WebSocket.connect(
     'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=$apiKey',
   ).timeout(const Duration(seconds: 15));
