@@ -32,6 +32,9 @@ void main() {
       // Test promptu (lekce 2–19): tutor opravoval členy a předložky místo času slovesa,
       // nevracel se k druhé chybě a stáčel hovor k jídlu a koníčkům z profilu
       expect(normalPrompt, contains('DROBNOST (tu neopravuj)'));
+      // Student chce opravovat i předložky at/on/in, drobnost je jen člen a množné číslo
+      expect(normalPrompt, contains('špatná předložka (student si přeje opravovat hlavně at/on/in'));
+      expect(normalPrompt, isNot(contains('drobná předložka')));
       expect(normalPrompt, contains('v tomto pořadí důležitosti: české slovo nebo výraz, čas slovesa'));
       expect(normalPrompt, contains('vrať se k ní HNED v tomto tahu'));
       expect(normalPrompt, contains('Tato pravidla mají přednost před pamětí z minulé lekce'));

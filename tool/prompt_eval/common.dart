@@ -247,7 +247,7 @@ Future<void> judgeSavedReplies({
         final checks = ((reply['checks'] as List?) ?? const []).cast<Map<String, dynamic>>();
         final verdictSoFar = reply['judge'] as Map<String, dynamic>?;
         if (reply.containsKey('error') || checks.any((ch) => ch['passed'] != true)) continue;
-        if (verdictSoFar != null && verdictSoFar['pass'] != null) continue;
+        if (verdictSoFar != null && verdictSoFar['pass'] != null && !options.rejudge) continue;
         final verdict = await judge(apiKey, rules: rules, question: question(c, reply), models: options.judgeModels);
         reply['judge'] = verdict;
         reply['passed'] = replyPassed(checks.map((ch) => ch['passed'] == true), verdict);
@@ -415,6 +415,7 @@ class EvalOptions {
     this.promptFile,
     this.model,
     this.judgeOnly = false,
+    this.rejudge = false,
     this.compare,
   });
 
@@ -444,6 +445,9 @@ class EvalOptions {
   /// Jen ohodnotit rozhodčím už uložené odpovědi běhu [label], nic dalšího nevolat.
   final bool judgeOnly;
 
+  /// S [judgeOnly] ohodnotit znovu i odpovědi, které už verdikt mají (např. po změně pravidel).
+  final bool rejudge;
+
   /// Modely pro rozhodčího: jeden zvolený (`--model`), nebo výchozí pořadí.
   List<String> get judgeModels => model != null ? [model!] : textModels;
   final (String, String)? compare;
@@ -460,6 +464,7 @@ class EvalOptions {
     String? promptFile;
     String? model;
     var judgeOnly = false;
+    var rejudge = false;
     (String, String)? compare;
     for (var i = 0; i < args.length; i++) {
       switch (args[i]) {
@@ -485,6 +490,9 @@ class EvalOptions {
           model = args[++i];
         case '--judge-only':
           judgeOnly = true;
+        case '--rejudge':
+          judgeOnly = true;
+          rejudge = true;
         case '--compare':
           compare = (args[++i], args[++i]);
         default:
@@ -509,6 +517,7 @@ class EvalOptions {
       promptFile: promptFile,
       model: model,
       judgeOnly: judgeOnly,
+      rejudge: rejudge,
       compare: compare,
     );
   }

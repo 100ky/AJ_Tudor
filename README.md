@@ -259,3 +259,4 @@ Refaktoring proběhl ve větvi `refactor/structure` ve čtyřech fázích. Sché
 8. **Tutor občas pochválí špatně zopakovanou opravu**, např. „I will call.“ místo „I will code.“ → „Exactly!“. Nejspíš studenta špatně slyší. Zatím neřešeno.
 9. **Diakritika v cestě k projektu.** Kvůli `Programování` v cestě nefunguje `flutter analyze`, `aapt` vypisuje chyby a AGP potřebuje `android.overridePathCheck=true` v `android/gradle.properties`. Přejmenováním složky na `Programovani` by všechny tyhle obcházky odpadly.
 10. **Upgrade AGP a Kotlinu (hotovo).** Projekt je na AGP 9.1.0, Kotlinu 2.4.0 a Gradlu 9.3.1, tedy na verzích ze šablony Flutteru 3.47.5. Příznaky `android.newDsl=false` a `android.builtInKotlin=false` v `android/gradle.properties` zůstaly ze šablony.
+11. **Plán vylepšení výuky** (kartičky v hovoru, režim Lekce, gramatický cíl lekce a další): [`docs/plan-vyuky.md`](docs/plan-vyuky.md).
