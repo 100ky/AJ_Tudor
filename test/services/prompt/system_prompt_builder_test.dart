@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:aj_tudor/services/prompt/system_prompt_builder.dart';
+import 'package:aj_tudor/services/flashcards/conversation_cards.dart';
 
 void main() {
   group('SystemPromptBuilder - Tutor Prompt Tests', () {
@@ -308,6 +309,31 @@ void main() {
       expect(required.contains('studentHint'), true);
       expect(required.contains('newLearnedFacts'), true);
       expect(required.contains('incrementalSummary'), true);
+    });
+
+    test('the director gets the flashcards to weave in only when there are some', () {
+      final withCards = SystemPromptBuilder.buildDirectorPrompt(
+        targetLevel: 'B1',
+        cards: [ConversationCard(id: 7, czech: 'vzít si volno', english: 'take a sick day')],
+      );
+      expect(withCards, contains('KARTIČKY K PROCVIČENÍ'));
+      expect(withCards, contains('#7: vzít si volno → take a sick day'));
+      expect(withCards, contains('Rada ani studentHint nesmí obsahovat anglický výraz z kartičky'));
+      expect(withCards, contains('flashcardId=0'));
+
+      final withoutCards = SystemPromptBuilder.buildDirectorPrompt(targetLevel: 'B1');
+      expect(withoutCards, isNot(contains('KARTIČKY K PROCVIČENÍ (výrazy')));
+
+      final schema = SystemPromptBuilder.getDirectorResponseSchema();
+      expect((schema['properties'] as Map).containsKey('flashcardId'), isTrue);
+      expect(schema['required'] as List, contains('flashcardId'));
+    });
+
+    test('the lesson analysis turns asked phrases into cards and orders errors', () {
+      final prompt = SystemPromptBuilder.buildAnalysisPrompt();
+      expect(prompt, contains('VÝRAZY, NA KTERÉ SE STUDENT ZEPTAL'));
+      expect(prompt, contains('Kartičky vzniknou jen z prvních šesti'));
+      expect(prompt, contains('"at least", ne "least"'));
     });
   });
 }

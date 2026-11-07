@@ -33,7 +33,14 @@ abstract final class LiveTutorPrompts {
       '[SYSTEM INSTRUCTION - NOT FROM STUDENT] $instruction';
 
   /// Rada režiséra hovoru (VoiceDirectorAgent) pro tutora.
-  static String directorWhisper(String whisper) => '[DIRECTOR WHISPER] $whisper';
+  ///
+  /// [cardTarget] je výraz z kartičky, ke kterému rada vede: student ho má říct sám,
+  /// zopakování po tutorovi kartičku nesplní.
+  static String directorWhisper(String whisper, {String? cardTarget}) {
+    if (cardTarget == null || cardTarget.isEmpty) return '[DIRECTOR WHISPER] $whisper';
+    return '[DIRECTOR WHISPER] $whisper (Flashcard practice: the student is learning to say "$cardTarget". '
+        'Let them say it themselves, so do not say it first. If they say it in Czech or ask how to say it, help them as usual.)';
+  }
 
   /// Student odpovídá opakovaně jen pár slovy – zmírnit a odlehčit.
   static const String frustrationRecalibration =

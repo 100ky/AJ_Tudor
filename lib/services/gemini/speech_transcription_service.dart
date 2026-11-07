@@ -22,21 +22,28 @@ class SpeechTranscriptionService {
   /// Cooldown přetížených modelů a naposledy funkční model.
   static final ModelCooldownTracker _cooldowns = ModelCooldownTracker();
 
-  /// Rychlé modely s audio vstupem (stejné pořadí jako u výslovnosti).
-  static const List<String> _models = [
-    GeminiModels.flash3_6,     // Nejstabilnější rychlý model
+  /// Rychlé modely s audio vstupem. Přepisuje se každá replika studenta, proto se začíná
+  /// flash-lite (500 požadavků denně). 3.6 Flash má jen 20 denně: dřív ho první hodinu
+  /// hovoru spotřeboval opravný přepis a rozbor po lekci pak skončil na flash-lite (lekce 22).
+  static const List<String> models = [
     GeminiModels.flashLite3_5,
     GeminiModels.flashLite3_1,
+    GeminiModels.flash3_6,
   ];
 
   static final RegExp _silence = RegExp(r'^\(ticho\)\.?$', caseSensitive: false);
+
+  /// Jak dlouho čekat na odpověď jednoho modelu. Přepis repliky běžně trvá 1–5 s a celý
+  /// opravný přepis má 20 s, takže se při zaseknutém modelu stihne zkusit další
+  /// (lekce 22: flash-lite neodpovídal 20 s a uložil se jen neúplný živý přepis).
+  static const Duration modelTimeout = Duration(seconds: 9);
 
   /// [api] lze v testech nahradit vlastním REST jádrem.
   SpeechTranscriptionService(this._ref, {GeminiRestCore? api})
       : _api = api ??
             GeminiRestCore(
               connectTimeout: const Duration(seconds: 5),
-              receiveTimeout: const Duration(seconds: 20),
+              receiveTimeout: modelTimeout,
             );
 
   /// Resetuje cooldowny modelů (pro testy).
@@ -73,7 +80,7 @@ class SpeechTranscriptionService {
       ],
     };
 
-    for (final model in _cooldowns.order(_models, preferLastWorking: true)) {
+    for (final model in _cooldowns.order(models, preferLastWorking: true)) {
       try {
         final data = await _api.generateContent(apiKey: apiKey, model: model, body: body);
         final text = GeminiRestCore.extractText(data);

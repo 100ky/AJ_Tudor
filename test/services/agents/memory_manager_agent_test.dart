@@ -170,6 +170,7 @@ void main() {
           {
             "type": "grammar",
             "userSaid": "I am work as a software engineer for 5 years.",
+            "targetWordOrPhrase": "have been working",
             "correctForm": "I have been working as a software engineer for 5 years.",
             "explanation": "Předpřítomný průběhový čas vyjadřující děj trvající až do současnosti.",
             "czechTranslation": "Pracuji jako softwarový inženýr již 5 let."
@@ -220,7 +221,8 @@ void main() {
       final cards = await flashcardRepo.getAllFlashcards();
       expect(cards.length, 1);
       expect(cards.first.frontText, 'Pracuji jako softwarový inženýr již 5 let.');
-      expect(cards.first.backText, 'I have been working as a software engineer for 5 years.');
+      expect(cards.first.backText, 'have been working');
+      expect(cards.first.sourceSentence, 'I have been working as a software engineer for 5 years.');
       expect(cards.first.errorType, 'grammar');
 
       // 8. ScenarioPlanner and TopicPreparation triggered
@@ -349,6 +351,50 @@ void main() {
       expect(card.backText, 'clear one\'s head');
       expect(card.sourceSentence, 'Running clears my head.');
       expect(card.explanation.contains("clear one's head"), true);
+    });
+
+    test('one lesson makes at most six cards and none from a whole sentence', () async {
+      final s = (await repo.startNewSession()).getOrThrow();
+      await repo.addTranscript(sessionId: s, speaker: 'user', content: 'First line');
+      await repo.addTranscript(sessionId: s, speaker: 'user', content: 'Second line');
+
+      Map<String, String> error(String target) => {
+            'type': 'vocabulary',
+            'userSaid': 'Jak se řekne $target?',
+            'targetWordOrPhrase': target,
+            'czechCue': 'cz $target',
+            'correctForm': 'I said $target.',
+            'explanation': 'Výraz z hovoru',
+            'czechTranslation': 'cz $target',
+          };
+      final mockJson = jsonEncode({
+        'topicSummary': 'Strop kartiček',
+        'fluencyScore': 0.7,
+        'estimatedLevel': 'B1',
+        'totalErrors': 8,
+        'briefing': '',
+        'resolvedErrors': [],
+        'vocabulary': [],
+        'newLearnedUserFacts': [],
+        'errors': [
+          error('mashed potatoes'),
+          // Celá věta místo výrazu: kartička nevznikne, chyba se ale zapíše
+          error('to start things off what is your very first sentence'),
+          for (final word in ['winterize', 'take a sick day', 'at least', 'take place', 'refill', 'harvest'])
+            error(word),
+        ],
+      });
+      when(() => mockGemini.sendMessage(
+        any(),
+        responseSchema: any(named: 'responseSchema'),
+        systemPrompt: any(named: 'systemPrompt'),
+      )).thenAnswer((_) async => mockJson);
+
+      await container.read(memoryManagerAgentProvider).analyzeSession(s);
+
+      final backs = (await flashcardRepo.getAllFlashcards()).map((c) => c.backText).toSet();
+      expect(backs, {'mashed potatoes', 'winterize', 'take a sick day', 'at least', 'take place', 'refill'});
+      expect(await repo.watchAllErrorLogs().first, hasLength(8));
     });
 
     test('analyzeSession skips errors whose transcript STT rendered in a foreign language', () async {

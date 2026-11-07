@@ -45,4 +45,14 @@ void main() {
     expect(LiveTutorPrompts.directorWhisper('Ask about the trip.'),
         '[DIRECTOR WHISPER] Ask about the trip.');
   });
+
+  test('a whisper with a flashcard tells the tutor to let the student say the phrase', () {
+    final whisper = LiveTutorPrompts.directorWhisper(
+      'Ask what he does when he feels ill.',
+      cardTarget: 'take a sick day',
+    );
+    expect(whisper, startsWith('[DIRECTOR WHISPER] Ask what he does when he feels ill.'));
+    expect(whisper, contains('"take a sick day"'));
+    expect(whisper, contains('do not say it first'));
+  });
 }

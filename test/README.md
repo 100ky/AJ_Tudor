@@ -61,11 +61,11 @@ test/
 │   └── prompt_eval_checks_test.dart             # Automatické kontroly testu promptu tutora (otázky, opravy, odbočení, opakování)
 ├── services/                                     # Testy aplikačních služeb a agentů
 │   ├── agents/
-│   │   ├── memory_manager_agent_test.dart        # Analýza session, Structured Outputs, memory pruning, fakta, přepis v cizím jazyce, zkrácení paměti
+│   │   ├── memory_manager_agent_test.dart        # Analýza session, Structured Outputs, memory pruning, fakta, přepis v cizím jazyce, zkrácení paměti, nejvýš 6 kartiček z lekce
 │   │   ├── scenario_planner_agent_test.dart      # Plánování scénářů, integrace slabých kartiček, custom scénáře
 │   │   ├── topic_preparation_agent_test.dart     # Příprava témat, 12h čerstvost, wildcard, facts bootstrap
-│   │   ├── voice_director_agent_test.dart        # Režisér konverzace (cooldown, tipy, briefing pro reconnect)
-│   │   ├── voice_tutor_agent_test.dart           # Stavový automat tutora, ruční detekce řeči (activityStart/End), opravný přepis, reconnect a lhůta na odpověď, fronta pokynů, start/stop, pauza
+│   │   ├── voice_director_agent_test.dart        # Režisér konverzace (cooldown, tipy, briefing pro reconnect, vpletená kartička)
+│   │   ├── voice_tutor_agent_test.dart           # Stavový automat tutora, ruční detekce řeči (activityStart/End), opravný přepis, reconnect a lhůta na odpověď, fronta pokynů, start/stop, pauza, kartičky splněné v hovoru
 │   │   └── voice_tutor/
 │   │       ├── pre_roll_buffer_test.dart         # Úvod řeči před activityStart (limit bajtů, vyprázdnění)
 │   │       ├── speech_activity_detector_test.dart # Detekce řeči (prahy, hystereze, adaptace na šum, délka hlasu)
@@ -73,6 +73,7 @@ test/
 │   │       ├── tutor_text_analysis_test.dart     # Čištění přepisu, počet slov, opakování tutora
 │   │       └── tutor_timers_test.dart            # Časovače tutora (spuštění, zrušení, cancelAll)
 │   ├── flashcards/
+│   │   ├── conversation_cards_test.dart          # Kartičky v hovoru: porovnání výrazu, zopakování po tutorovi, zásoba pro režiséra
 │   │   └── flashcard_generation_service_test.dart # Kartičky z chyb, migrace starých zadání, nová slovíčka
 │   ├── gemini/
 │   │   ├── gemini_live_client_test.dart          # Spotřeba tokenů na konci tahu, vynucený reconnect, další řeč až po potvrzení konce předchozí

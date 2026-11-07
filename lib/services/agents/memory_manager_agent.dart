@@ -4,6 +4,7 @@ import '../../data/data_providers.dart';
 import '../gemini/gemini_providers.dart';
 import '../../data/repositories/flashcard_repository.dart';
 import '../../core/utils/logger.dart';
+import '../flashcards/conversation_cards.dart';
 import '../prompt/system_prompt_builder.dart';
 import 'scenario_planner_agent.dart';
 import 'topic_preparation_agent.dart';
@@ -26,6 +27,16 @@ class MemoryManagerAgent {
 
   /// Nejvyšší délka kritiky tutora připojené za briefing.
   static const int maxTutorFeedbackChars = 300;
+
+  /// Kolik kartiček nejvýš vznikne z jedné lekce (z chyb i z výrazů, na které se student
+  /// zeptal). Rozbor řadí chyby od nejdůležitější, takže zbytek se zapíše jen do logu chyb.
+  static const int maxNewCardsPerLesson = 6;
+
+  /// Zda je cíl kartičky krátký výraz, ne celá věta (tu by student doslova nezopakoval).
+  static bool isAtomicCardTarget(String target) {
+    final words = ConversationCards.normalize(target).split(' ').where((w) => w.isNotEmpty);
+    return words.isNotEmpty && words.length <= ConversationCards.maxTargetWords;
+  }
 
   /// Zkrátí [text] na nejvýš [max] znaků, pokud to jde, za koncem věty.
   static String clipBriefing(String text, int max) {
@@ -228,6 +239,7 @@ class MemoryManagerAgent {
       // 5. Uložení jednotlivých gramatických/výslovnostních chyb do detailního chybového logu a profilu
       if (data['errors'] != null && data['errors'] is List) {
         final List<String> newErrors = [];
+        var cardsCreated = 0;
         for (var err in data['errors']) {
           if (err is Map) {
             final type = err['type']?.toString() ?? 'grammar';
@@ -290,6 +302,15 @@ class MemoryManagerAgent {
                 ? correctForm
                 : (userSaid.isNotEmpty ? userSaid : null);
 
+            if (cardsCreated >= maxNewCardsPerLesson) {
+              L.i('Kartička "$cardBack" nevznikla: z lekce už je $maxNewCardsPerLesson kartiček.');
+              continue;
+            }
+            if (!isAtomicCardTarget(cardBack)) {
+              L.w('Kartička "$cardBack" nevznikla: cíl má víc než ${ConversationCards.maxTargetWords} slova.');
+              continue;
+            }
+
             // Automatické vytvoření Smart Flashcard pro studenta v češtině k procvičení
             await flashcardRepo.addFlashcard(
               frontText: cardFront,
@@ -299,6 +320,7 @@ class MemoryManagerAgent {
               sourceSentence: contextExample,
               errorLogId: errorLogRes.valueOrNull,
             );
+            cardsCreated++;
           }
         }
         

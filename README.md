@@ -60,7 +60,7 @@ lib/
 - Provider služby leží ve stejném souboru nebo složce jako služba. Providery databáze, repozitářů a datových streamů jsou v `data/data_providers.dart`.
 - Texty promptů jsou jen v `services/prompt/`.
 - Volání Gemini REST API jdou přes `GeminiRestCore` (`services/gemini/gemini_rest_core.dart`). Jádro střídá modely, dává přetížené modely na cooldown a třídí chyby. Vlastní `Dio` jinde nevytvářejte.
-- Bezplatná úroveň má u `gemini-3.8-flash` a `gemini-3.6-flash` jen 20 požadavků denně, u flash-lite modelů 500 a u `gemini-3.8-flash-tts` 10. Často volané úlohy (režisér, překlad slov, výslovnost) proto začínají flash-lite modely a 3.8 Flash zůstává pro rozbor po lekci, přípravu témat a scénáře. Opravný přepis začíná 3.6 Flash kvůli kvalitě a po vyčerpání limitu přejde na flash-lite. Vyčerpaný denní limit (odpověď 429 s `PerDay`) vyřadí model ve všech službách až do obnovy kvóty (půlnoc pacifického času, u nás 9:00), minutový limit na minutu.
+- Bezplatná úroveň má u `gemini-3.8-flash` a `gemini-3.6-flash` jen 20 požadavků denně, u flash-lite modelů 500 a u `gemini-3.8-flash-tts` 10. Často volané úlohy (režisér, překlad slov, výslovnost) proto začínají flash-lite modely a 3.8 Flash zůstává pro rozbor po lekci, přípravu témat a scénáře. Opravný přepis běží u každé repliky studenta, proto taky začíná flash-lite a 3.6 Flash je až poslední záloha (dřív začínal 3.6 Flash a jedna lekce spotřebovala celý jeho denní limit). Vyčerpaný denní limit (odpověď 429 s `PerDay`) vyřadí model ve všech službách až do obnovy kvóty (půlnoc pacifického času, u nás 9:00), minutový limit na minutu.
 - Soubor v `lib/` by neměl mít víc než zhruba 600 řádků. Výjimkou je generovaný `app_database.g.dart` a `system_prompt_builder.dart`.
 
 ### Použité balíčky (Dependencies)
@@ -118,7 +118,7 @@ Po prvním spuštění přejděte na záložku **Settings** (Nastavení) a vlož
    ```
 3. **Výstup z AI**: Model v reálném čase vrací 24 000 Hz PCM audio chunky a STT textový přepis.
 4. **Ruční detekce řeči**: Serverová detekce řeči je vypnutá (`automaticActivityDetection.disabled`). Začátek a konec řeči studenta určuje místní detekce (`SpeechActivityDetector`) a aplikace je serveru ohlašuje zprávami `activityStart` a `activityEnd`. Replika se začne nahrávat po 200 ms souvislého hlasu, krátký ruch (klepnutí, nádech, dozvuk reproduktoru) ji tedy ani nezačne. Serveru se pošle (`activityStart` a dosud nahraný zvuk) až od 0,7 s hlasu. Kratší replika („yes“, ale i zakašlání nebo „hm“) se během ticha po ní ověří opravným přepisem. Tudorovi se pošle, jen když v ní je řeč, jinak se zahodí, takže na ruch nereaguje a živý přepis z něj neudělá „¿Qué?“. Zvuk se posílá jen mezi `activityStart` a `activityEnd`, zhruba půl sekundy úvodu před zjištěnou řečí doplní `PreRollBuffer`. Konec řeči nastane po tichu „trpělivost učitele + 0,5 s“ a model pak hned odpoví. Pauza rozpracovanou řeč neukončí, po obnovení může student větu dokončit. Server oba signály potvrzuje zprávou `voiceActivity`. Začátek další řeči i s jejím zvukem odejde až po potvrzení konce té předchozí, nejpozději po 3 s, protože dřív poslaný `activityStart` server zahodí a na řeč už neodpoví. Když server konec řeči do 3 s nepotvrdí, tah se ztratil a spojení se obnoví hned. Jinak se obnoví, když model do 11 s od první nezodpovězené repliky neodpoví, a tutor pak na poslední repliku hned odpoví. Další replika studenta („Haló?“) lhůtu nevynuluje, jen modelu dá na odpověď aspoň 5 s. Uprostřed řeči studenta se spojení neobnoví.
-5. **Opravný přepis**: Živý přepis Gemini Live občas zapíše řeč studenta jiným jazykem („¿Qué?“). Zvuk každé repliky (`StudentUtterance`) se proto po jejím konci přepíše znovu přes `SpeechTranscriptionService` s pokynem, že student mluví česky nebo anglicky. Výsledek nahradí text v bublině a do databáze se uloží až ten. Když přepis selže, uloží se živý přepis. Když opravný přepis v nahrávce řeč neslyší, krátký živý přepis (nejvýš dvě slova, typicky „¿Qué?“ na ruch) se zahodí i z bubliny. Konec lekce na rozpracované přepisy počká nejvýš 8 s.
+5. **Opravný přepis**: Živý přepis Gemini Live občas zapíše řeč studenta jiným jazykem („¿Qué?“). Zvuk každé repliky (`StudentUtterance`) se proto po jejím konci přepíše znovu přes `SpeechTranscriptionService` s pokynem, že student mluví česky nebo anglicky. Výsledek nahradí text v bublině a do databáze se uloží až ten. Na jeden model čeká nejvýš 9 s, aby se při zaseknutí stihl zkusit další, celý přepis má 20 s. Když přepis selže, uloží se živý přepis. Když opravný přepis v nahrávce řeč neslyší, krátký živý přepis (nejvýš dvě slova, typicky „¿Qué?“ na ruch) se zahodí i z bubliny. Konec lekce na rozpracované přepisy počká nejvýš 8 s.
 6. **Skryté pokyny**: Rady režiséra (`VoiceDirectorAgent`) a další pokyny během hovoru jdou jako `clientContent`. Taková zpráva podle dokumentace Live API přeruší odpověď, kterou model právě generuje, proto pokyny čekají ve frontě a odešlou se až po `turnComplete` tutora. Hned se posílá jen „Změnit téma“, kde je přerušení záměr.
 
 ---
@@ -174,12 +174,21 @@ Automatické testy nepokryjí mikrofon, přehrávání zvuku ani skutečné vol�
 - [ ] Scroll přes text tutora v drilu i v hlasové lekci, česká slova nejdou označit
 - [ ] Tlačítko „Do kartiček“ u opravy v chatové bublině
 - [ ] Opakování kartiček: odpověď hlasem, napsáním i „Nevím“ (pak jde jen „Znovu“), přehrání nahlas
+- [ ] Kartičky v hovoru: výraz z dnešní kartičky řečený sám od sebe ukáže „Kartička splněna v hovoru“, po konci hovoru přijde souhrn a kartička zmizí z dnešního opakování; zopakování po tutorovi kartičku nesplní
 - [ ] Chat nad lekcí (detail lekce v záložce Pokrok) a gramatický dril
 - [ ] Nastavení: přepínače, úroveň angličtiny, přidání a smazání faktu „O mně“
 - [ ] Záloha a import
 - [ ] Reset paměti, jen pokud vám nevadí přijít o to, co si Tudor pamatuje
 
 ---
+
+## 🛠️ Úpravy po ručním testu (7. 11. 2026)
+
+Úpravy vzešly z lekce 22 (první test kartiček v hovoru, viz [plán výuky](docs/plan-vyuky.md), fáze 1).
+
+- **Kontext po obnově spojení:** model na repliku neodpověděl a spojení se obnovilo, jenže student mezitím krátce promluvil. Ověření té repliky doběhlo až během obnovy a přepnulo stav z „reconnecting“ na „thinking“, takže agent nové spojení nepovažoval za obnovu a kontext mu neposlal. Tutor pak studenta znovu pozdravil. Obnovu teď agent pozná podle vlastního příznaku, ne podle stavu na displeji.
+- **Opravný přepis se při zaseknutí přepne na další model:** jeden model měl na odpověď 20 s, stejně jako celý přepis. Když flash-lite neodpovídal, další model se už nezkusil a uložil se neúplný živý přepis (z 50 s řeči jen „Jak se řekne propojení?“). Teď má každý model 9 s.
+- **Opravný přepis začíná flash-lite:** začínal `gemini-3.6-flash`, který má jen 20 požadavků denně. V lekci 22 došel po šesti minutách hovoru a rozbor po lekci pak při přetížení 3.8 Flash skončil na flash-lite, který udělal jednu špatnou kartičku. 3.6 Flash je teď poslední záloha přepisu.
 
 ## 🛠️ Úpravy po ručním testu (1. 11. 2026)
 

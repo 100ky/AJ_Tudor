@@ -9,6 +9,7 @@ import 'package:aj_tudor/services/gemini/gemini_live_client.dart';
 import 'package:aj_tudor/services/gemini/speech_transcription_service.dart';
 import 'package:aj_tudor/services/prompt/live_tutor_prompts.dart';
 import 'package:aj_tudor/services/audio/audio_session_controller.dart';
+import 'package:aj_tudor/data/repositories/flashcard_repository.dart';
 import 'package:aj_tudor/data/repositories/profile_repository.dart';
 import 'package:aj_tudor/data/repositories/session_repository.dart';
 import 'package:aj_tudor/services/gemini/gemini_providers.dart';
@@ -22,11 +23,13 @@ import 'package:aj_tudor/core/utils/result.dart';
 import 'package:aj_tudor/data/database/app_database.dart';
 import 'package:aj_tudor/data/models/chat_message.dart';
 import 'package:aj_tudor/services/agents/voice_director_agent.dart';
+import 'package:aj_tudor/services/flashcards/conversation_cards.dart';
 
 class MockGeminiLiveClient extends Mock implements GeminiLiveClient {}
 class MockAudioSessionController extends Mock implements AudioSessionController {}
 class MockSessionRepository extends Mock implements SessionRepository {}
 class MockProfileRepository extends Mock implements ProfileRepository {}
+class MockFlashcardRepository extends Mock implements FlashcardRepository {}
 class MockMemoryManagerAgent extends Mock implements MemoryManagerAgent {}
 class MockWakelockService extends Mock implements WakelockService {}
 class MockSharedPreferences extends Mock implements SharedPreferences {}
@@ -35,7 +38,8 @@ class MockFlutterSecureStorage extends Mock implements FlutterSecureStorage {}
 
 /// Režisér, který neanalyzuje, jen si schová callbacky pro předání rady.
 class _CapturingDirector extends VoiceDirectorAgent {
-  final List<void Function(String whisper)> whisperCallbacks = [];
+  final List<void Function(String whisper, ConversationCard? card)> whisperCallbacks = [];
+  final List<List<ConversationCard>> cardPools = [];
 
   @override
   Future<void> onTurnCompleted({
@@ -44,11 +48,27 @@ class _CapturingDirector extends VoiceDirectorAgent {
     required String targetLevel,
     required String? userFacts,
     required String? recentTopics,
-    required void Function(String whisper) onWhisperReady,
+    required void Function(String whisper, ConversationCard? card) onWhisperReady,
+    List<ConversationCard> cards = const [],
   }) async {
     whisperCallbacks.add(onWhisperReady);
+    cardPools.add(cards);
   }
 }
+
+/// Kartička na dnešní opakování.
+Flashcard _dueCard(int id, String front, String back, {String type = 'vocabulary'}) => Flashcard(
+      id: id,
+      frontText: front,
+      backText: back,
+      explanation: '',
+      errorType: type,
+      intervalDays: 1,
+      repetitionCount: 0,
+      masteryScore: 0,
+      nextReviewAt: DateTime(2026, 11, 1),
+      createdAt: DateTime(2026, 11, 1),
+    );
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -59,6 +79,7 @@ void main() {
   late MockAudioSessionController mockAudio;
   late MockSessionRepository mockRepo;
   late MockProfileRepository mockProfileRepo;
+  late MockFlashcardRepository mockFlashcardRepo;
   late MockMemoryManagerAgent mockMemory;
   late MockWakelockService mockWakelock;
   late MockSharedPreferences mockPrefs;
@@ -97,6 +118,12 @@ void main() {
       timestamp: any(named: 'timestamp'),
     )).thenAnswer((_) async => Result.success(null));
     when(() => mockMemory.analyzeSession(any())).thenAnswer((_) async {});
+    mockFlashcardRepo = MockFlashcardRepository();
+    when(() => mockFlashcardRepo.getDueFlashcards()).thenAnswer((_) async => []);
+    when(() => mockFlashcardRepo.reviewFlashcard(
+          flashcardId: any(named: 'flashcardId'),
+          rating: any(named: 'rating'),
+        )).thenAnswer((_) async => Result.success(null));
     // Ruční detekce řeči a opravný přepis (bez API klíče přepis nevrátí nic)
     when(() => mockClient.sendActivityStart()).thenReturn(true);
     when(() => mockClient.sendActivityEnd()).thenReturn(true);
@@ -111,6 +138,7 @@ void main() {
         audioSessionControllerProvider.overrideWithValue(mockAudio),
         sessionRepositoryProvider.overrideWithValue(mockRepo),
         profileRepositoryProvider.overrideWithValue(mockProfileRepo),
+        flashcardRepositoryProvider.overrideWithValue(mockFlashcardRepo),
         memoryManagerAgentProvider.overrideWithValue(mockMemory),
         wakelockServiceProvider.overrideWithValue(mockWakelock),
         sharedPreferencesProvider.overrideWithValue(mockPrefs),
@@ -1064,6 +1092,47 @@ void main() {
         await agent.stopSession('test');
       });
 
+      testWidgets('a short reply checked during the reconnect does not lose the conversation context',
+          (tester) async {
+        final agent = container.read(voiceTutorAgentProvider.notifier);
+        await agent.startSession();
+
+        // Lekce 22: model neodpověděl, student mezitím krátce promluvil a ověření té repliky
+        // doběhlo až během obnovy spojení. Stav se přepnul na thinking, nové spojení nedostalo
+        // kontext a tutor studenta znovu pozdravil.
+        await speakAndPause(tester);
+        userTranscript!('I think Power Automate slowing down the process.');
+        await tester.pump(const Duration(seconds: 9));
+
+        final check = Completer<String?>();
+        when(() => mockTranscriber.transcribe(any(), previousTutorLine: any(named: 'previousTutorLine')))
+            .thenAnswer((_) => check.future);
+        speak(3);
+        mic(quiet);
+        await tester.pump(const Duration(milliseconds: 2100));
+        await tester.pump(const Duration(seconds: 2));
+        verify(() => mockClient.forceReconnect()).called(1);
+
+        // Nové spojení ještě nemá hotový setup, takže replika se serveru neodešle
+        when(() => mockClient.sendActivityStart()).thenReturn(false);
+        check.complete('Hello?');
+        await tester.pump();
+        expect(container.read(voiceTutorAgentProvider).status, TutorState.reconnecting);
+
+        when(() => mockClient.sendActivityStart()).thenReturn(true);
+        connectionStatus!(true);
+        verify(() => mockClient.sendClientContent(
+              role: 'user',
+              text: any(
+                named: 'text',
+                that: allOf(contains('Power Automate'), contains(LiveTutorPrompts.answerAfterReconnect)),
+              ),
+              turnComplete: true,
+            )).called(1);
+
+        await agent.stopSession('test');
+      });
+
       testWidgets('the student speaking when the wait runs out postpones the reconnect', (tester) async {
         final agent = container.read(voiceTutorAgentProvider.notifier);
         await agent.startSession();
@@ -1158,7 +1227,7 @@ void main() {
           final whisperFromFirstTurn = director.whisperCallbacks.first;
 
           await exchange(tester, 'With my wife.', 'Lovely! Was the water warm?');
-          whisperFromFirstTurn('Ask about the boat.');
+          whisperFromFirstTurn('Ask about the boat.', null);
           await exchange(tester, 'Yes, quite warm.', 'Great!');
           expect(whisperSent('Ask about the boat.'), isTrue);
 
@@ -1174,11 +1243,86 @@ void main() {
 
           await exchange(tester, 'With my wife.', 'Lovely! Was the water warm?');
           await exchange(tester, 'Yes, quite warm.', 'Great! Anything else?');
-          whisperFromFirstTurn('Ask about the boat.');
+          whisperFromFirstTurn('Ask about the boat.', null);
           await exchange(tester, 'Bye, good night.', 'Good night!');
           expect(whisperSent('Ask about the boat.'), isFalse);
 
           await agent.stopSession('test');
+        });
+
+        group('flashcards in the conversation', () {
+          setUp(() {
+            when(() => mockFlashcardRepo.getDueFlashcards()).thenAnswer((_) async => [
+                  _dueCard(7, 'vzít si volno ze zdravotních důvodů', 'take a sick day'),
+                  _dueCard(8, 'alespoň', 'least'),
+                  _dueCard(9, 'zazimovat', 'winterize', type: 'pronunciation'),
+                ]);
+          });
+
+          testWidgets('the director gets only cards the conversation can check', (tester) async {
+            final agent = container.read(voiceTutorAgentProvider.notifier);
+            await agent.startSession();
+            await exchange(tester, 'I went to the lake.', 'Nice! Who did you go with?');
+
+            // Krátké běžné slovo ani výslovnost hovor neověří
+            expect(director.cardPools.single.map((c) => c.id), [7]);
+
+            await agent.stopSession('test');
+          });
+
+          testWidgets('a card phrase the student says himself completes the card', (tester) async {
+            final agent = container.read(voiceTutorAgentProvider.notifier);
+            await agent.startSession();
+            await exchange(tester, "I'm ill, I will take a sick day tomorrow.", 'Oh no, get well soon!');
+
+            verify(() => mockFlashcardRepo.reviewFlashcard(flashcardId: 7, rating: 2)).called(1);
+            expect(container.read(voiceTutorAgentProvider).completedCards.map((c) => c.id), [7]);
+
+            await exchange(tester, 'Yes, I take a sick day.', 'Good idea.');
+            // Splněná kartička se ohodnotí jen jednou
+            verifyNever(() => mockFlashcardRepo.reviewFlashcard(flashcardId: 7, rating: 2));
+
+            await agent.stopSession('test');
+          });
+
+          testWidgets('repeating the phrase after the tutor does not complete the card', (tester) async {
+            final agent = container.read(voiceTutorAgentProvider.notifier);
+            await agent.startSession();
+            await exchange(tester, 'I am ill.', 'Pozor, řekneme take a sick day. Zkus to říct: I will take a sick day.');
+            await exchange(tester, 'I will take a sick day.', 'Spot on!');
+
+            verifyNever(() => mockFlashcardRepo.reviewFlashcard(
+                  flashcardId: any(named: 'flashcardId'),
+                  rating: any(named: 'rating'),
+                ));
+            expect(container.read(voiceTutorAgentProvider).completedCards, isEmpty);
+
+            await agent.stopSession('test');
+          });
+
+          testWidgets('a whisper with a card asks the tutor not to say the phrase first', (tester) async {
+            final agent = container.read(voiceTutorAgentProvider.notifier);
+            await agent.startSession();
+            await exchange(tester, 'I work a lot.', 'That sounds tiring. Do you rest enough?');
+            final card = director.cardPools.single.single;
+            final whisperFromFirstTurn = director.whisperCallbacks.single;
+
+            await exchange(tester, 'Not really.', 'I see.');
+            whisperFromFirstTurn('Ask what he does when he feels ill on a workday.', card);
+            await exchange(tester, 'Maybe.', 'Hmm.');
+
+            expect(
+              sentContent.any((text) =>
+                  text.contains('Ask what he does when he feels ill on a workday.') &&
+                  text.contains('"take a sick day"') &&
+                  text.contains('do not say it first')),
+              isTrue,
+            );
+            // Vpletená kartička se v tomto hovoru znovu nenabídne (a další až za dvě minuty)
+            expect(director.cardPools.last, isEmpty);
+
+            await agent.stopSession('test');
+          });
         });
       });
 

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/utils/logger.dart';
 import '../../data/models/chat_message.dart';
+import '../flashcards/conversation_cards.dart';
 import '../gemini/gemini_json.dart';
 import '../gemini/gemini_providers.dart';
 
@@ -161,13 +162,17 @@ class VoiceDirectorAgent extends Notifier<VoiceDirectorState> {
   ///
   /// Vyhodnotí, zda je vhodný čas pro spuštění asynchronní režijní analýzy,
   /// a v případě potřeby odešle whisper instrukci do živého hovoru.
+  ///
+  /// [cards] jsou dnešní kartičky, které může režisér do rady vplést. Vpletenou kartičku
+  /// dostane [onWhisperReady] spolu s radou, jinak null.
   Future<void> onTurnCompleted({
     required int sessionId,
     required List<ChatMessage> messages,
     required String targetLevel,
     required String? userFacts,
     required String? recentTopics,
-    required void Function(String whisper) onWhisperReady,
+    required void Function(String whisper, ConversationCard? card) onWhisperReady,
+    List<ConversationCard> cards = const [],
   }) async {
     if (state.isAnalyzing) return;
 
@@ -224,6 +229,7 @@ class VoiceDirectorAgent extends Notifier<VoiceDirectorState> {
         userFacts: userFacts,
         recentTopics: recentTopics,
         rollingSummary: state.rollingSummary,
+        cards: cards,
       );
 
       L.director('Spouštím asynchronní analýzu transkriptu přes Gemini 3.8 Flash...');
@@ -240,7 +246,13 @@ class VoiceDirectorAgent extends Notifier<VoiceDirectorState> {
       final topicHealth = (data['topicHealth'] as num?)?.toInt() ?? 8;
       final needsPivot = data['needsPivot'] as bool? ?? false;
       final whisper = data['whisperToTutor']?.toString().trim();
-      final tip = data['studentHint']?.toString().trim();
+      var tip = data['studentHint']?.toString().trim();
+      final card = _wovenCard(data['flashcardId'], cards, whisper: whisper);
+      // Nápověda na displeji nesmí prozradit výraz z kartičky, student by ho jen přečetl
+      if (card != null && tip != null && card.matches(ConversationCards.normalize(tip))) {
+        L.d('VoiceDirector: Nápověda prozrazuje výraz z kartičky, nezobrazím ji: "$tip"');
+        tip = null;
+      }
       final newFactsRaw = data['newLearnedFacts'] as List?;
       final newFacts = newFactsRaw
               ?.map((e) => e.toString().trim())
@@ -254,6 +266,9 @@ class VoiceDirectorAgent extends Notifier<VoiceDirectorState> {
       directorLog.writeln('🔋 Vitalita tématu (Health): $topicHealth/10 | Změna směru (Pivot): ${needsPivot ? "DOPORUČENA" : "není nutná"}');
       if (whisper != null && whisper.isNotEmpty) {
         directorLog.writeln('🤫 Našeptáno tutorovi: "$whisper"');
+      }
+      if (card != null) {
+        directorLog.writeln('🃏 Vplétá kartičku #${card.id}: "${card.czech}" → "${card.english}"');
       }
       if (tip != null && tip.isNotEmpty) {
         directorLog.writeln('💡 Nápověda na displej: "$tip"');
@@ -298,7 +313,7 @@ class VoiceDirectorAgent extends Notifier<VoiceDirectorState> {
         if (ref.mounted && state.repeatTarget != null) {
           L.d('VoiceDirector: Šepot zahazuji – tutor mezitím začal opravu a režisér ho nesmí přebít.');
         } else {
-          onWhisperReady(whisper);
+          onWhisperReady(whisper, card);
         }
       }
 
@@ -328,6 +343,20 @@ class VoiceDirectorAgent extends Notifier<VoiceDirectorState> {
       }
     }
   }
+}
+
+/// Kartička, kterou režisér vpletl do rady [whisper], jen z nabídnutých [cards].
+///
+/// Režisér (flash-lite) občas napíše výraz z kartičky přímo do rady, i když nemá. Kartička
+/// tím nepropadá: tutor dostane k radě pokyn, ať výraz neřekne první, a kdyby ho řekl,
+/// student ho jen zopakuje a kartičku nesplní (viz [ConversationCards.completeBy]).
+ConversationCard? _wovenCard(Object? flashcardId, List<ConversationCard> cards, {required String? whisper}) {
+  final id = flashcardId is num ? flashcardId.toInt() : int.tryParse('${flashcardId ?? ''}');
+  if (id == null || id <= 0 || whisper == null || whisper.isEmpty) return null;
+  for (final card in cards) {
+    if (card.id == id) return card;
+  }
+  return null;
 }
 
 /// Poskytuje globální instanci [VoiceDirectorAgent] pro správu režie hlasového hovoru.

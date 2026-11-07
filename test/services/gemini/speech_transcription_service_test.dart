@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:aj_tudor/core/config/config_providers.dart';
+import 'package:aj_tudor/core/constants/gemini_models.dart';
 import 'package:aj_tudor/services/gemini/gemini_rest_core.dart';
 import 'package:aj_tudor/services/gemini/speech_transcription_service.dart';
 
@@ -99,6 +100,11 @@ void main() {
           model: any(named: 'model'),
           body: any(named: 'body'),
         ));
+  });
+
+  test('flash-lite goes first, 3.6 Flash with only 20 requests a day is the last resort', () {
+    expect(SpeechTranscriptionService.models.first, GeminiModels.flashLite3_5);
+    expect(SpeechTranscriptionService.models.last, GeminiModels.flash3_6);
   });
 
   test('overloaded models fall back to the next one, a rejected key stops at once', () async {

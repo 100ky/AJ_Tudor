@@ -22,6 +22,10 @@ class StudentUtterance {
   /// Poslední replika tutora před touto, jako kontext pro opravný přepis.
   String? previousTutorLine;
 
+  /// Poslední repliky tutora před touto (i rozmluvená). Výraz z kartičky, který v nich
+  /// zazněl, student jen zopakoval, takže kartičku nesplní.
+  List<String> recentTutorLines = const [];
+
   /// Živý přepis z Gemini Live.
   String liveText = '';
 

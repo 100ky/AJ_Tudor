@@ -11,12 +11,14 @@ import '../../data/repositories/profile_repository.dart';
 import '../../data/repositories/scenario_repository.dart';
 import '../../data/repositories/session_repository.dart';
 import '../../data/models/chat_message.dart';
+import '../../data/repositories/flashcard_repository.dart';
 import '../../core/constants/gemini_models.dart';
 import '../../core/utils/logger.dart';
 import '../../core/utils/result.dart';
 import '../prompt/live_tutor_prompts.dart';
 import '../prompt/system_prompt_builder.dart';
 import '../audio/audio_session_controller.dart';
+import '../flashcards/conversation_cards.dart';
 import '../system/wakelock_service.dart';
 import '../gemini/gemini_live_client.dart';
 import '../gemini/speech_transcription_service.dart';
@@ -65,6 +67,8 @@ class VoiceTutorState {
   final int? selectedScenarioId;
   /// Kontext/Role-play instrukce pro vybraný scénář.
   final String? scenarioContext;
+  /// Kartičky, které student v této lekci splnil v hovoru.
+  final List<ConversationCard> completedCards;
 
   /// Vytvoří výchozí nebo specifický stav Voice Tutora.
   VoiceTutorState({
@@ -74,6 +78,7 @@ class VoiceTutorState {
     this.errorMessage = '',
     this.selectedScenarioId,
     this.scenarioContext,
+    this.completedCards = const [],
   });
 
   /// Vytvoří kopii aktuálního stavu s modifikovanými vlastnostmi.
@@ -85,6 +90,7 @@ class VoiceTutorState {
     int? selectedScenarioId,
     String? scenarioContext,
     bool clearScenario = false,
+    List<ConversationCard>? completedCards,
   }) {
     return VoiceTutorState(
       status: status ?? this.status,
@@ -93,6 +99,7 @@ class VoiceTutorState {
       errorMessage: errorMessage ?? this.errorMessage,
       selectedScenarioId: clearScenario ? null : (selectedScenarioId ?? this.selectedScenarioId),
       scenarioContext: clearScenario ? null : (scenarioContext ?? this.scenarioContext),
+      completedCards: completedCards ?? this.completedCards,
     );
   }
 }
@@ -149,6 +156,11 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   bool _awaitingResponse = false;
   bool _responseOverdue = false;
 
+  // Spojení spadlo uprostřed hovoru a nové ještě nedostalo kontext. Podle stavu na displeji
+  // se to poznat nedá: replika studenta ověřená během obnovy ho přepnula z reconnecting na
+  // thinking a nové spojení pak kontext nedostalo (lekce 22: tutor znovu pozdravil).
+  bool _reconnectPending = false;
+
   /// Jak dlouho od první nezodpovězené repliky studenta smí model mlčet.
   static const Duration _responseTimeout = Duration(seconds: 11);
 
@@ -175,6 +187,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   late final AudioSessionController _audio;
   late final SessionRepository _repo;
   late final ProfileRepository _profileRepo;
+  late final FlashcardRepository _flashcardRepo;
   late final ScenarioRepository _scenarioRepo;
   late final MemoryManagerAgent _memory;
   late final VoiceDirectorAgent _director;
@@ -184,6 +197,10 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   String? _userFactsSnapshot;
   String? _recentTopicsSnapshot;
 
+  // Dnešní kartičky, které může splnit tento hovor (null = nenačetly se, hovor běží bez nich)
+  ConversationCards? _conversationCards;
+  int? _conversationCardsSessionId;
+
   @override
   VoiceTutorState build() {
     // Inicializace závislých služeb přes Riverpod
@@ -191,6 +208,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     _audio = ref.read(audioSessionControllerProvider);
     _repo = ref.read(sessionRepositoryProvider);
     _profileRepo = ref.read(profileRepositoryProvider);
+    _flashcardRepo = ref.read(flashcardRepositoryProvider);
     _scenarioRepo = ref.read(scenarioRepositoryProvider);
     _memory = ref.read(memoryManagerAgentProvider);
     _director = ref.read(voiceDirectorAgentProvider.notifier);
@@ -305,7 +323,10 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       errorMessage: '',
       messages: [],
       currentTranscript: '',
+      completedCards: const [],
     );
+    _conversationCards = null;
+    _conversationCardsSessionId = null;
     HapticFeedback.mediumImpact();
     _wakelock.enable(); // Zabrání uspání displeje během konverzace
 
@@ -363,8 +384,11 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       _targetLevelSnapshot = targetLevel;
       _userFactsSnapshot = userProfile?.userFacts;
       _recentTopicsSnapshot = userProfile?.topicPreferences;
+      final conversationCards = await _loadConversationCards();
       // Stop během čekání na DB už lekci uzavřel – hovor bez lekce by se neuložil ani nevyhodnotil
       if (_isStartCancelled(generation)) return;
+      _conversationCards = conversationCards;
+      _conversationCardsSessionId = newSessionId;
       final voice = ref.read(voiceProvider);
       final isImmersive = ref.read(immersiveModeProvider);
 
@@ -492,6 +516,55 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     }
   }
 
+  /// Kartičky na dnešní opakování, které může splnit hovor (výslovnost hovor neověří).
+  /// Když se nenačtou, hovor běží bez nich.
+  Future<ConversationCards?> _loadConversationCards() async {
+    try {
+      final due = await _flashcardRepo.getDueFlashcards();
+      final cards = ConversationCards([
+        for (final card in due)
+          if (card.errorType != 'pronunciation')
+            ConversationCard(id: card.id, czech: card.frontText.trim(), english: card.backText.trim()),
+      ]);
+      L.i('🃏 Kartičky pro hovor: ${cards.cards.length} z ${due.length} dnešních '
+          '(režisér dostane nejvýš ${ConversationCards.poolSize}).');
+      return cards;
+    } catch (e) {
+      L.w('Kartičky pro hovor se nenačetly, hovor poběží bez nich: $e');
+      return null;
+    }
+  }
+
+  /// Zkontroluje, jestli student v replice sám řekl výraz z některé dnešní kartičky.
+  /// Splněná kartička dostane hodnocení „Dobré“ a dnes už v kartičkách nebude.
+  void _checkConversationCards(StudentUtterance utterance, String text) {
+    final cards = _conversationCards;
+    if (cards == null || utterance.sessionId != _conversationCardsSessionId) return;
+    final done = cards.completeBy(text, recentTutorLines: utterance.recentTutorLines);
+    if (done.isEmpty) return;
+    for (final card in done) {
+      L.i('🃏 Kartička #${card.id} splněna v hovoru: "${card.czech}" → "${card.english}"');
+      _flashcardRepo.reviewFlashcard(flashcardId: card.id, rating: 2).then((result) {
+        if (result.isFailure) L.w('Splněnou kartičku #${card.id} se nepodařilo uložit.');
+      });
+    }
+    if (ref.mounted) {
+      state = state.copyWith(completedCards: [...state.completedCards, ...done]);
+    }
+  }
+
+  /// Poslední repliky tutora (i ta, kterou právě říká) pro kontrolu kartiček.
+  List<String> _recentTutorLines() {
+    final lines = <String>[
+      if (state.currentTranscript.trim().isNotEmpty) state.currentTranscript,
+    ];
+    for (final message in state.messages.reversed) {
+      if (lines.length >= ConversationCards.tutorLinesChecked) break;
+      if (!message.isUser) lines.add(message.text);
+    }
+    return lines;
+  }
+
   /// Zda byla lekce během spouštění ukončena (nebo agent zanikl).
   bool _isStartCancelled(int generation) {
     if (generation == _sessionGeneration && ref.mounted) return false;
@@ -606,7 +679,9 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     if (_utterance != null) return;
     final sessionId = _currentSessionId;
     if (sessionId == null) return;
-    final utterance = StudentUtterance(sessionId: sessionId)..previousTutorLine = _lastTutorLine();
+    final utterance = StudentUtterance(sessionId: sessionId)
+      ..previousTutorLine = _lastTutorLine()
+      ..recentTutorLines = _recentTutorLines();
     _pendingUtterances.add(utterance);
     _utterance = utterance;
     for (final chunk in _preRoll.drain()) {
@@ -663,7 +738,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   /// Ohlásí konec řeči studenta – model začne odpovídat.
   void _endStudentSpeech(GeminiLiveClient client) {
     _closeActivity(client);
-    state = state.copyWith(status: TutorState.thinking);
+    state = state.copyWith(status: _reconnectPending ? TutorState.reconnecting : TutorState.thinking);
     _resetThinkingTimer();
     _awaitResponse();
   }
@@ -803,6 +878,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         content: text,
         timestamp: utterance.endedAt,
       );
+      _checkConversationCards(utterance, text);
     }
     utterance.markSettled();
   }
@@ -1021,7 +1097,8 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         targetLevel: _targetLevelSnapshot,
         userFacts: _userFactsSnapshot,
         recentTopics: _recentTopicsSnapshot,
-        onWhisperReady: (whisper) {
+        cards: _conversationCards?.directorPool() ?? const [],
+        onWhisperReady: (whisper, card) {
           // Rada se předá až po dalším tahu tutora. Když mezitím student promluvil
           // víckrát, hovor je jinde (lekce 19: rada „přejdi na narozeniny“ dorazila
           // po pěti tazích, zrovna když se student loučil).
@@ -1031,7 +1108,11 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
             return;
           }
           L.i('VoiceDirector: Našeptávám tutorovi: "$whisper"');
-          injectMidSessionGuidance(LiveTutorPrompts.directorWhisper(whisper), turnComplete: false);
+          if (card != null) _conversationCards?.markWoven(card);
+          injectMidSessionGuidance(
+            LiveTutorPrompts.directorWhisper(whisper, cardTarget: card?.english),
+            turnComplete: false,
+          );
         },
       );
     }
@@ -1093,13 +1174,16 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         // Výpadek uprostřed aktivního hovoru → reconnecting
         _metrics.reconnects++;
         L.w('Spojení ztraceno během hovoru, přepínám na reconnecting... (reconnect #${_metrics.reconnects})');
+        _reconnectPending = true;
         state = state.copyWith(status: TutorState.reconnecting);
       } else if (state.status == TutorState.connecting) {
         // Výpadek při inicializaci (např. 1007 od preview API) → zůstáváme v connecting
         L.w('Spojení uzavřeno při inicializaci. Auto-reconnect probíhá, zůstávám v connecting...');
       }
-    } else if (isConnected && (state.status == TutorState.reconnecting || state.status == TutorState.connecting)) {
-      final wasReconnecting = state.status == TutorState.reconnecting;
+    } else if (isConnected &&
+        (_reconnectPending || state.status == TutorState.reconnecting || state.status == TutorState.connecting)) {
+      final wasReconnecting = _reconnectPending || state.status == TutorState.reconnecting;
+      _reconnectPending = false;
       // Nové spojení rozpracovanou řeč nezná
       _dropActivityAfterDisconnect();
       // Na poslední repliku studenta staré spojení neodpovědělo, odpoví na ni tutor v novém
@@ -1195,6 +1279,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     L.i('Ukončování session (Důvod: $reason)');
     _isStopping = true;
     _sessionGeneration++;
+    _reconnectPending = false;
 
     try {
       // Zrušení časovačů
@@ -1288,6 +1373,11 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
 
         // ─── SESSION SUMMARY ───
         _metrics.logSummary(sessionId);
+        final completedCards = _conversationCards?.completed ?? const <ConversationCard>[];
+        if (completedCards.isNotEmpty) {
+          L.i('🃏 V hovoru splněno kartiček: ${completedCards.length} '
+              '(${completedCards.map((c) => c.english).join(', ')})');
+        }
         
         _currentSessionId = null;
         if (ref.mounted) {

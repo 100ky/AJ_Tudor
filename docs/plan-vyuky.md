@@ -1,4 +1,4 @@
-# Plán vylepšení výuky (stav k 6. 11. 2026)
+# Plán vylepšení výuky (stav k 7. 11. 2026)
 
 ## Princip
 
@@ -14,13 +14,24 @@ Model ale neví nic o studentovi: co mu jde, co pořád opakuje a co si už proc
 - **Modely podle limitů bezplatné úrovně:** častá volání na flash-lite (500 denně), 3.8 Flash (20 denně) jen pro rozbor po lekci a témata, vyčerpaný denní limit se vynechá do 9:00.
 - **Test promptu** na skutečných replikách z lekcí: [`tool/prompt_eval/`](../tool/prompt_eval/README.md).
 
-## Fáze 0: vyhodnotit úpravy promptu (7. 11.)
+## Fáze 0: vyhodnotit úpravy promptu (hotovo 7. 11.)
 
-Rozhodčí ohodnotí odpovědi starého a nového promptu tutora i režiséra. Nasadí se jen to, co není horší v žádné kategorii případů.
+Rozhodčí (`gemini-3.5-flash-lite`) ohodnotil starý a nový prompt tutora na 63 případech po dvou odpovědích: celkem 81 % → 91 %. Oprava chyby 58 → 88 %, návrat k druhé chybě 54 → 69 %, pokračování po opravě 38 → 63 %, držet se tématu 75 → 81 %. Horší je jen „nechat domluvit“ (75 → 63 %), protože jedna věcně správná odpověď měla víc než 8 slov. Odbočení k jídlu (93 % v obou verzích) způsoboval hlavně starý profil v testovacích případech: se současným profilem neodbočila ani jedna z 22 odpovědí (dřív 4).
 
-## Fáze 1: kartičky v pokecu
+## Fáze 1: kartičky v pokecu (v kódu 7. 11., čeká na test režiséra a ruční test)
 
-Hovor kartičky plní i opakuje.
+Hovor kartičky plní i opakuje. Jak je to udělané:
+
+- `ConversationCards` (`lib/services/flashcards/conversation_cards.dart`) načte na začátku hovoru dnešní kartičky. Vynechá výslovnost, cíle delší než 4 slova a jednoslovné cíle kratší než 6 písmen („go“, „has“, „least“ student řekne náhodou). Z kopie databáze ze 4. 11. jde v hovoru ověřit 55 kartiček z 66.
+- Režisér dostane nejvýš 15 nejdéle čekajících kartiček a vrátí `flashcardId` té, kterou vpletl. Tutor dostane k radě pokyn, ať výraz neřekne první. Nápověda na displeji, která výraz prozrazuje, se nezobrazí. Vpletená kartička se v hovoru znovu nenabídne a další přijde nejdřív za 2 minuty.
+- Test režiséra (7. 11., `gemini-3.5-flash-lite`, 70 chvil z lekcí): s kartičkami není horší (rozhodčí 85 → 88 %, po opravě mlčí 68 → 84 %, gramatika 94 = 94 %, jídlo 84 → 83 %). Kartičku vplete zřídka (5 ze 70 chvil) a ve 2 z 5 případů napíše výraz přímo do rady, i s příkladem v zadání. Proto výraz v radě kartičku nezahodí, pojistkou je pokyn tutorovi a kontrola zopakování. Výraz „unwind“ (odpočinout si) táhne hovor k odpočinku a koníčkům.
+- Výraz se porovnává s opravným přepisem repliky bez ohledu na velká písmena, interpunkci a zkratky (don't = do not). „be“ smí být v jakémkoli tvaru, „one's“ znamená my/your/his…, poznámka v závorce se ignoruje. Výraz, který tutor řekl v posledních 4 replikách, kartičku nesplní.
+- Splněná kartička dostane „Dobré“, na displeji se ukáže „Kartička splněna v hovoru“ a po konci hovoru souhrn.
+- Rozbor po lekci zařadí výrazy, na které se student zeptal, mezi chyby typu „vocabulary“ a dá je na začátek. Kartičky vzniknou nejvýš z prvních 6 a jen s cílem do 4 slov. Ostatní chyby jdou do logu chyb.
+
+- Ruční test 7. 11. (lekce 22, 15 minut o práci): v hovoru se splnily 3 kartičky (work on, need to fix, plan to refactor) a posunuly se na 9. a 11. 11. Režisér jednou vpletl „find a workaround“, rada výraz neobsahovala a tutor ho neřekl. Rozbor po lekci přidal 4 kartičky, mezi nimi „propojení → connection“ z otázky „jak se řekne“. Rozbor ale běžel na flash-lite (3.8 Flash byl přetížený, 3.6 Flash vyčerpaný opravným přepisem) a jedna kartička je špatně („trávit týdně na → spend a week on“).
+
+Původní zadání:
 
 - **Zásoba pro režiséra:** na začátku hovoru dostane až 15 kartiček, které jdou dnes na opakování. Vybírá si z nich ty, které sedí k aktuálnímu tématu, a tutorovi našeptá situaci, ve které je student přirozeně použije. Kartičku, která k tématu nesedí, netlačí. Přirozený hovor má přednost, realisticky jedna kartička za 2–3 minuty.
 - **Splnění kartičky:** student výraz řekne sám a správně. Aplikace porovná opravný přepis repliky s cílovým výrazem a ověří, že ho tutor v předchozích tazích sám neřekl, protože zopakování po tutorovi („Zkus to říct: …“) se nepočítá. Splněná kartička dostane hodnocení „Dobré“ (interval ×2) a dnes už v kartičkách nebude. Kontrola nepotřebuje další volání modelu.

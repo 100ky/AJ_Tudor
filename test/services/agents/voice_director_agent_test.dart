@@ -8,6 +8,7 @@ import 'package:aj_tudor/data/repositories/profile_repository.dart';
 import 'package:aj_tudor/data/models/chat_message.dart';
 import 'package:aj_tudor/services/gemini/gemini_providers.dart';
 import 'package:aj_tudor/data/data_providers.dart';
+import 'package:aj_tudor/services/flashcards/conversation_cards.dart';
 
 class MockGeminiBatchClient extends Mock implements GeminiBatchClient {}
 class MockProfileRepository extends Mock implements ProfileRepository {}
@@ -114,7 +115,7 @@ void main() {
         targetLevel: 'B1',
         userFacts: null,
         recentTopics: null,
-        onWhisperReady: (_) => whisperCalled = true,
+        onWhisperReady: (_, _) => whisperCalled = true,
       );
 
       expect(whisperCalled, false);
@@ -159,7 +160,7 @@ void main() {
         targetLevel: 'B1',
         userFacts: '["Student lives in Prague"]',
         recentTopics: '["Sports"]',
-        onWhisperReady: (whisper) => deliveredWhisper = whisper,
+        onWhisperReady: (whisper, _) => deliveredWhisper = whisper,
       );
 
       // Verify whisper was delivered to tutor
@@ -176,6 +177,92 @@ void main() {
       expect(state.sessionFacts.contains('Rád jezdí na kole (15km)'), true);
       expect(state.lastAnalyzedTurnIndex, messages.length);
       expect(state.isAnalyzing, false);
+    });
+
+    group('flashcards', () {
+      final card = ConversationCard(id: 7, czech: 'vzít si volno', english: 'take a sick day');
+      final messages = [
+        ChatMessage('I work a lot.', isUser: true),
+        ChatMessage('Do you rest enough?', isUser: false),
+        ChatMessage('Not really.', isUser: true),
+        ChatMessage('I see.', isUser: false),
+        ChatMessage('I am tired today.', isUser: true),
+        ChatMessage('Oh no!', isUser: false),
+      ];
+
+      Future<(String?, ConversationCard?)> analyse(Map<String, Object?> output) async {
+        when(() => mockDirectorClient.sendMessage(
+              any(),
+              systemPrompt: any(named: 'systemPrompt'),
+              responseSchema: any(named: 'responseSchema'),
+            )).thenAnswer((_) async => jsonEncode({
+              'topicHealth': 7,
+              'needsPivot': false,
+              'studentHint': '',
+              'newLearnedFacts': [],
+              'incrementalSummary': '',
+              ...output,
+            }));
+        final notifier = container.read(voiceDirectorAgentProvider.notifier)..reset();
+        String? whisper;
+        ConversationCard? woven;
+        await notifier.onTurnCompleted(
+          sessionId: 1,
+          messages: messages,
+          targetLevel: 'B1',
+          userFacts: null,
+          recentTopics: null,
+          cards: [card],
+          onWhisperReady: (w, c) {
+            whisper = w;
+            woven = c;
+          },
+        );
+        return (whisper, woven);
+      }
+
+      test('the cards go into the prompt and the woven one comes with the whisper', () async {
+        final (whisper, woven) = await analyse({
+          'whisperToTutor': 'Ask what he does when he feels ill on a workday.',
+          'flashcardId': 7,
+        });
+        expect(whisper, 'Ask what he does when he feels ill on a workday.');
+        expect(woven?.id, 7);
+
+        final prompt = verify(() => mockDirectorClient.sendMessage(
+              any(),
+              systemPrompt: captureAny(named: 'systemPrompt'),
+              responseSchema: any(named: 'responseSchema'),
+            )).captured.single as String;
+        expect(prompt, contains('#7: vzít si volno → take a sick day'));
+      });
+
+      test('a card the director did not offer, or one without a whisper, weaves nothing', () async {
+        var (whisper, woven) = await analyse({'whisperToTutor': 'Ask about his week.', 'flashcardId': 99});
+        expect(whisper, 'Ask about his week.');
+        expect(woven, isNull);
+
+        (whisper, woven) = await analyse({'whisperToTutor': '', 'flashcardId': 7});
+        expect(woven, isNull);
+      });
+
+      test('a whisper that says the phrase itself still weaves the card', () async {
+        // Tutor dostane pokyn, ať výraz neřekne první; zopakování po něm kartičku nesplní
+        final (_, woven) = await analyse({
+          'whisperToTutor': 'Ask whether he would take a sick day.',
+          'flashcardId': 7,
+        });
+        expect(woven?.id, 7);
+      });
+
+      test('a hint that gives the phrase away is not shown', () async {
+        await analyse({
+          'whisperToTutor': 'Ask what he does when he feels ill on a workday.',
+          'studentHint': 'Say: I will take a sick day.',
+          'flashcardId': 7,
+        });
+        expect(container.read(voiceDirectorAgentProvider).currentTip, isNull);
+      });
     });
 
     test('onTurnCompleted handles API error gracefully without crashing', () async {
@@ -203,7 +290,7 @@ void main() {
         targetLevel: 'B1',
         userFacts: null,
         recentTopics: null,
-        onWhisperReady: (_) => whisperCalled = true,
+        onWhisperReady: (_, _) => whisperCalled = true,
       );
 
       expect(whisperCalled, false);

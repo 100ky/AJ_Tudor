@@ -190,6 +190,41 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
     );
   }
 
+  /// Ohlásí kartičku, kterou student splnil v hovoru, a po konci hovoru jejich počet.
+  void _announceConversationCards(VoiceTutorState? previous, VoiceTutorState next) {
+    final before = previous?.completedCards.length ?? 0;
+    final messenger = ScaffoldMessenger.of(context);
+    if (next.completedCards.length > before) {
+      final targets = next.completedCards
+          .sublist(before)
+          .map((card) => '„${card.english}“')
+          .join(', ');
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('🃏 Kartička splněna v hovoru: $targets'),
+          duration: const Duration(seconds: 3),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+    final callEnded = previous != null &&
+        previous.status != TutorState.idle &&
+        next.status == TutorState.idle;
+    if (callEnded && next.completedCards.isNotEmpty) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            '🃏 Kartičky splněné v hovoru: ${next.completedCards.length}. '
+            'Dnes už je v kartičkách opakovat nemusíš.',
+          ),
+          duration: const Duration(seconds: 6),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
@@ -219,6 +254,7 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
           previous?.currentTranscript != next.currentTranscript) {
         _scrollToBottom();
       }
+      _announceConversationCards(previous, next);
     });
 
     // Aktivní volume stream dle stavu
