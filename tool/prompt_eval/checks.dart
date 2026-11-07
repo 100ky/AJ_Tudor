@@ -36,7 +36,22 @@ enum CaseKind {
   secondError,
 
   /// Téma dobíhá: zůstat u něj jednou otázkou, neuhnout k jídlu a koníčkům.
-  stayOnTopic;
+  stayOnTopic,
+
+  /// Lekce začíná: pozdrav a situace pro první výraz, výraz sám neříct.
+  lessonStart,
+
+  /// Student řekl výraz z lekce: pochválit a uvést situaci pro další výraz, ten neříct.
+  lessonNext,
+
+  /// Student výraz nepoužil: napovědět českou stranou kartičky, anglicky ho neříct.
+  lessonHint,
+
+  /// Student si nevzpomněl ani po nápovědě: říct výraz a nechat ho zopakovat.
+  lessonReveal,
+
+  /// Lekce končí: uzavřít ji česky a nabídnout pokec, další výraz nezačínat.
+  lessonEnd;
 
   /// Druh podle názvu v souboru s případy.
   static CaseKind parse(String name) => switch (name) {
@@ -50,6 +65,11 @@ enum CaseKind {
         'answer' => answer,
         'second_error' => secondError,
         'stay_on_topic' => stayOnTopic,
+        'lesson_start' => lessonStart,
+        'lesson_next' => lessonNext,
+        'lesson_hint' => lessonHint,
+        'lesson_reveal' => lessonReveal,
+        'lesson_end' => lessonEnd,
         _ => throw ArgumentError('Neznámý druh případu: $name'),
       };
 }
@@ -167,19 +187,24 @@ bool repeatsEarlierQuestion(String reply, Iterable<String> earlierTutorLines) {
 ///
 /// [earlierTutorLines] jsou dřívější repliky tutora v lekci, [recentContext] text
 /// posledních replik včetně té studentovy (z čeho téma smí vycházet).
+///
+/// [lessonTarget] je u případů lekce výraz, který má tutor uvést (nebo u [CaseKind.lessonReveal] říct).
 List<ReplyCheck> checkReply(
   CaseKind kind,
   String reply, {
   Iterable<String> earlierTutorLines = const [],
   String recentContext = '',
+  ConversationCard? lessonTarget,
 }) {
   final text = reply.trim();
   final questions = topicQuestions(text);
+  // V lekci téma určuje kartička (odpočinek, loď, zahrada), odbočení se nehlídá
+  final isLesson = lessonTarget != null || kind.name.startsWith('lesson');
   final checks = <ReplyCheck>[
     if (kind != CaseKind.wait) ReplyCheck('odpověď není prázdná', passed: text.isNotEmpty),
     ReplyCheck('nejvýš jedna otázka', passed: questions <= 1),
     ReplyCheck('neprozradí pokyny ani markdown', passed: !_leak.hasMatch(text)),
-    ReplyCheck('neodbočí k jídlu a koníčkům', passed: classicTopicDrift(text, recentContext).isEmpty),
+    if (!isLesson) ReplyCheck('neodbočí k jídlu a koníčkům', passed: classicTopicDrift(text, recentContext).isEmpty),
     // Zopakovat otázku je u „Haló?“ nebo nesrozumitelné repliky správně
     if (kind != CaseKind.clarify && kind != CaseKind.answer)
       ReplyCheck('neopakuje dřívější otázku', passed: !repeatsEarlierQuestion(text, earlierTutorLines)),
@@ -213,6 +238,26 @@ List<ReplyCheck> checkReply(
     case CaseKind.clarify:
     case CaseKind.answer:
       break;
+    case CaseKind.lessonStart:
+    case CaseKind.lessonNext:
+    case CaseKind.lessonHint:
+      // Česká nápověda („Zkus použít výraz…“) výzvou k zopakování opravené věty není
+      if (kind != CaseKind.lessonHint) {
+        checks.add(ReplyCheck('bez výzvy k zopakování', passed: !isCorrectionTurn(text)));
+      }
+      if (lessonTarget != null) {
+        checks.add(ReplyCheck(
+          'neřekne výraz z kartičky první',
+          passed: !lessonTarget.matches(ConversationCards.normalize(text)),
+        ));
+      }
+    case CaseKind.lessonReveal:
+      checks.add(ReplyCheck('skončí výzvou k zopakování', passed: endsWithRepeatRequest(text)));
+      if (lessonTarget != null) {
+        checks.add(ReplyCheck('řekne výraz z kartičky', passed: lessonTarget.matches(ConversationCards.normalize(text))));
+      }
+    case CaseKind.lessonEnd:
+      checks.add(ReplyCheck('bez výzvy k zopakování', passed: !isCorrectionTurn(text)));
   }
   return checks;
 }

@@ -417,6 +417,7 @@ class EvalOptions {
     this.model,
     this.judgeOnly = false,
     this.rejudge = false,
+    this.recheck = false,
     this.compare,
   });
 
@@ -452,6 +453,10 @@ class EvalOptions {
   /// S [judgeOnly] ohodnotit znovu i odpovědi, které už verdikt mají (např. po změně pravidel).
   final bool rejudge;
 
+  /// S [judgeOnly] nejdřív přepočítat automatické kontroly uložených odpovědí (bez API),
+  /// např. po opravě kontroly. Odpovědi, které nově projdou, pak ohodnotí rozhodčí.
+  final bool recheck;
+
   /// Modely pro rozhodčího: jeden zvolený (`--model`), nebo výchozí pořadí.
   List<String> get judgeModels => model != null ? [model!] : textModels;
   final (String, String)? compare;
@@ -470,6 +475,7 @@ class EvalOptions {
     String? model;
     var judgeOnly = false;
     var rejudge = false;
+    var recheck = false;
     (String, String)? compare;
     for (var i = 0; i < args.length; i++) {
       switch (args[i]) {
@@ -500,6 +506,9 @@ class EvalOptions {
         case '--rejudge':
           judgeOnly = true;
           rejudge = true;
+        case '--recheck':
+          judgeOnly = true;
+          recheck = true;
         case '--compare':
           compare = (args[++i], args[++i]);
         default:
@@ -526,6 +535,7 @@ class EvalOptions {
       model: model,
       judgeOnly: judgeOnly,
       rejudge: rejudge,
+      recheck: recheck,
       compare: compare,
     );
   }

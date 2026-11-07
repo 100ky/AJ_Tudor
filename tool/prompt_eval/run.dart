@@ -18,6 +18,8 @@ import 'dart:io';
 
 import 'package:aj_tudor/core/constants/gemini_models.dart';
 import 'package:aj_tudor/services/prompt/live_tutor_prompts.dart';
+import 'package:aj_tudor/data/models/error_category.dart';
+import 'package:aj_tudor/services/flashcards/conversation_cards.dart';
 import 'package:aj_tudor/services/prompt/system_prompt_builder.dart';
 
 import 'checks.dart';
@@ -36,17 +38,26 @@ Future<void> main(List<String> args) async {
       as Map<String, dynamic>;
   final profile = data['profile'] as Map<String, dynamic>;
   final promptFile = options.promptFile;
-  final systemPrompt = promptFile != null
-      ? await File(promptFile).readAsString()
-      : SystemPromptBuilder.buildTutorPrompt(
-          targetLevel: profile['targetLevel'] as String? ?? 'B1',
-          recurringErrors: profile['recurringErrors'] as String?,
-          vocabulary: profile['vocabulary'] as String?,
-          recentTopics: profile['topicPreferences'] as String?,
-          memoryBriefing: profile['memoryBriefing'] as String?,
-          userFacts: profile['userFacts'] as String?,
-        );
-  final opening = LiveTutorPrompts.opening(briefing: profile['memoryBriefing'] as String?);
+  final fixedPrompt = promptFile != null ? await File(promptFile).readAsString() : null;
+  // Případy lekce mají vlastní seznam výrazů, prompt i úvod se sestaví jako v aplikaci
+  String promptFor(Map<String, dynamic> testCase) =>
+      fixedPrompt ??
+      SystemPromptBuilder.buildTutorPrompt(
+        targetLevel: profile['targetLevel'] as String? ?? 'B1',
+        recurringErrors: profile['recurringErrors'] as String?,
+        vocabulary: profile['vocabulary'] as String?,
+        recentTopics: profile['topicPreferences'] as String?,
+        memoryBriefing: profile['memoryBriefing'] as String?,
+        userFacts: profile['userFacts'] as String?,
+        lessonCards: _lessonCards(testCase),
+        grammarGoal: ErrorCategory.parse(testCase['grammarGoal'] as String?),
+      );
+  String openingFor(Map<String, dynamic> testCase) => LiveTutorPrompts.opening(
+        briefing: profile['memoryBriefing'] as String?,
+        lesson: _lessonCards(testCase).isNotEmpty,
+      );
+  // Prompt běžného hovoru (bez lekce) pro výpis a hlášení
+  final systemPrompt = promptFor(const {});
 
   final cases = (data['cases'] as List)
       .cast<Map<String, dynamic>>()
@@ -58,6 +69,7 @@ Future<void> main(List<String> args) async {
     if (apiKey == null) return;
     RequestBudget.start(options.maxRequests);
     final byId = {for (final c in cases) c['id']: c};
+    if (options.recheck) await _recheckSaved(options.label, byId);
     await judgeSavedReplies(
       apiKey: apiKey,
       options: options,
@@ -78,7 +90,7 @@ Future<void> main(List<String> args) async {
     var judgeChars = 0;
     for (final c in pending) {
       final history = (c['history'] as List).cast<Map<String, dynamic>>();
-      requestChars += systemPrompt.length + opening.length + (c['student'] as String).length;
+      requestChars += promptFor(c).length + openingFor(c).length + (c['student'] as String).length;
       requestChars += history.fold(0, (sum, t) => sum + (t['text'] as String).length);
       final recentSix = history.length > 6 ? history.sublist(history.length - 6) : history;
       // Otázka pro rozhodčího: konec rozhovoru, odpověď tutora (~300 znaků) a očekávání
@@ -111,7 +123,7 @@ Future<void> main(List<String> args) async {
 
   try {
     for (final testCase in pending) {
-      results.add(await _runCase(apiKey, systemPrompt, opening, testCase, options));
+      results.add(await _runCase(apiKey, promptFor(testCase), openingFor(testCase), testCase, options));
       // Průběžné uložení: přerušený běh jde navázat přes --resume
       await saveReport(report());
     }
@@ -130,16 +142,9 @@ Future<Map<String, Object?>> _runCase(
   Map<String, dynamic> testCase,
   EvalOptions options,
 ) async {
-  final kind = CaseKind.parse(testCase['kind'] as String);
   final history = (testCase['history'] as List).cast<Map<String, dynamic>>();
   final student = testCase['student'] as String;
   final turns = _turns(opening, history, student);
-  final earlierTutorLines = [
-    for (final turn in history)
-      if (turn['role'] == 'model') turn['text'] as String,
-  ];
-  final recent = history.length > 4 ? history.sublist(history.length - 4) : history;
-  final recentContext = [...recent.map((t) => t['text'] as String), student].join('\n');
   final replies = <Map<String, Object?>>[];
 
   for (var run = 1; run <= options.runs; run++) {
@@ -153,7 +158,7 @@ Future<Map<String, Object?>> _runCase(
       replies.add({'error': e.toString()});
       continue;
     }
-    final checks = checkReply(kind, reply, earlierTutorLines: earlierTutorLines, recentContext: recentContext);
+    final checks = _checksFor(testCase, reply);
     Map<String, Object?>? verdict;
     // Rozhodčí jen u odpovědí, které prošly automatickými kontrolami: jinak neprošla tak jako tak
     if (options.judge && checks.every((c) => c.passed)) {
@@ -187,13 +192,77 @@ Future<Map<String, Object?>> _runCase(
   };
 }
 
+/// Automatické kontroly odpovědi [reply] tutora v případu [testCase].
+List<ReplyCheck> _checksFor(Map<String, dynamic> testCase, String reply) {
+  final history = (testCase['history'] as List).cast<Map<String, dynamic>>();
+  final student = testCase['student'] as String;
+  final recent = history.length > 4 ? history.sublist(history.length - 4) : history;
+  return checkReply(
+    CaseKind.parse(testCase['kind'] as String),
+    reply,
+    earlierTutorLines: [
+      for (final turn in history)
+        if (turn['role'] == 'model') turn['text'] as String,
+    ],
+    recentContext: [...recent.map((t) => t['text'] as String), student].join('\n'),
+    lessonTarget: _lessonTarget(testCase),
+  );
+}
+
+/// Přepočítá kontroly uložených odpovědí běhu [label] podle aktuálních pravidel.
+/// Odpověď, která nově prošla, přijde o starý výsledek a ohodnotí ji rozhodčí.
+Future<void> _recheckSaved(String label, Map<Object?, Map<String, dynamic>> byId) async {
+  final file = File.fromUri(privateDir.resolve('results/$label.json'));
+  final report = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+  var changed = 0;
+  for (final result in (report['cases'] as List).cast<Map<String, dynamic>>()) {
+    final testCase = byId[result['id']];
+    if (testCase == null) continue;
+    for (final reply in (result['replies'] as List).cast<Map<String, dynamic>>()) {
+      final text = reply['text'] as String?;
+      if (text == null) continue;
+      final checks = _checksFor(testCase, text);
+      final allPassed = checks.every((c) => c.passed);
+      final before = (reply['checks'] as List).cast<Map<String, dynamic>>().every((c) => c['passed'] == true);
+      reply['checks'] = [for (final c in checks) c.toJson()];
+      if (allPassed != before) changed++;
+      if (!allPassed) {
+        reply['passed'] = false;
+      } else if (!before) {
+        reply['judge'] = null;
+        reply['passed'] = null;
+      }
+    }
+  }
+  await saveReport(report);
+  stdout.writeln('Kontroly přepočítány, změnilo se odpovědí: $changed');
+}
+
+/// Výrazy lekce z případu (prázdné u běžného hovoru).
+List<ConversationCard> _lessonCards(Map<String, dynamic> testCase) => [
+      for (final card in (testCase['lessonCards'] as List? ?? const []).cast<Map<String, dynamic>>())
+        ConversationCard(id: card['id'] as int, czech: card['czech'] as String, english: card['english'] as String),
+    ];
+
+/// Výraz, který má tutor v případu lekce uvést nebo říct (pořadí ve [_lessonCards]).
+ConversationCard? _lessonTarget(Map<String, dynamic> testCase) {
+  final index = testCase['lessonTarget'] as int?;
+  final cards = _lessonCards(testCase);
+  return index == null || index >= cards.length ? null : cards[index];
+}
+
 /// Otázka pro rozhodčího: konec rozhovoru, odpověď tutora a očekávané chování z případu.
 String _judgeQuestion(Map<String, dynamic> testCase, String reply) {
   final history = (testCase['history'] as List).cast<Map<String, dynamic>>();
   final recentSix = history.length > 6 ? history.sublist(history.length - 6) : history;
-  return '''Konec rozhovoru:
-${transcriptOf(recentSix)}
-Student: ${testCase['student']}
+  final lesson = _lessonCards(testCase);
+  final lessonText = lesson.isEmpty
+      ? ''
+      : 'Režim lekce, výrazy v pořadí:\n${[for (var i = 0; i < lesson.length; i++) '${i + 1}. ${lesson[i].czech} → ${lesson[i].english}'].join('\n')}\n\n';
+  final student = testCase['student'] as String;
+  return '''${lessonText}Konec rozhovoru:
+${recentSix.isEmpty ? '(začátek hovoru)' : transcriptOf(recentSix)}
+${student.isEmpty ? '' : 'Student: $student'}
 
 Odpověď tutora: $reply
 
@@ -204,13 +273,14 @@ Splňuje odpověď tutora očekávané chování? Vrať pass a zdůvodnění (je
 
 const String _judgeRules = '''Jsi přísný, ale férový hodnotitel odpovědí AI tutora angličtiny pro českého studenta (úroveň B1).
 Pravidla tutora: skutečné chyby (čas, vazba, slovíčko, české slovo) opravuje česky, v tahu s opravou nepokládá otázku k tématu a skončí výzvou k zopakování. Drobnosti (člen, množné číslo) neopravuje. Předložky at/on/in opravuje (student si to přeje), ale až po čase a tvaru slovesa. Z jedné promluvy opraví v jednom tahu nejvýš jednu chybu. Měla-li promluva druhou významnou chybu, po zopakování první opravy pochválí a vrátí se k té druhé, jinak pochválí a vrátí se k tématu jednou otázkou. Neodbočuje k jídlu, vaření ani koníčkům, pokud o nich řeč není, a neklade otázky, které už v lekci položil. Když student přemýšlí (uh, um), počká. Na českou větu nebo „jak se řekne“ dá anglickou verzi bez „Pozor, v angličtině neříkáme“ a nemění téma. Nesrozumitelný přepis nechá zopakovat a nic si nedomýšlí. V jednom tahu klade nejvýš jednu otázku a mimo opravy mluví krátce.
+V režimu lekce (případ uvádí výrazy lekce) tutor provádí studenta výrazy z jeho kartiček: ke každému dá krátkou situaci nebo otázku, anglický výraz neříká první, když ho student nepoužije, napoví českou stranou kartičky, a když ani pak, řekne mu ho a nechá ho zopakovat. Po správném výrazu pochválí a v tomtéž tahu uvede další. Po posledním výrazu nebo po vypršení času lekci česky uzavře a nabídne volný pokec. Skryté zprávy „[SYSTEM INSTRUCTION …] Lekce: …“ jsou pokyny aplikace, ne slova studenta.
 Odpověď tutora je přepis jeho řeči, drobné chyby přepisu ignoruj. Posuzuj jen, zda odpověď splňuje OČEKÁVANÉ CHOVÁNÍ uvedené u případu.''';
 
 /// Úvodní skrytá zpráva, historie lekce a replika studenta jako tahy clientContent.
 /// Po sobě jdoucí repliky stejné strany se spojí do jednoho tahu.
 List<Map<String, Object>> _turns(String opening, List<Map<String, dynamic>> history, String student) {
   final merged = <({String role, String text})>[(role: 'user', text: opening)];
-  for (final turn in [...history, {'role': 'user', 'text': student}]) {
+  for (final turn in [...history, if (student.isNotEmpty) {'role': 'user', 'text': student}]) {
     final role = turn['role'] as String;
     final text = turn['text'] as String;
     if (merged.last.role == role) {
