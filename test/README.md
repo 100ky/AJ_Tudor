@@ -19,6 +19,7 @@ test/
 │   │   └── app_database_test.dart                # Opravy při otevření DB (deduplikace kartiček po restartu)
 │   ├── models/
 │   │   ├── chat_message_test.dart                # ChatMessage a opravy pro chytré bubliny
+│   │   ├── progress_trends_test.dart             # Co se zlepšuje: chyby podle druhu, podíl řeči, gramatický cíl lekce
 │   │   └── srs_scheduler_test.dart               # SRS plánovač (intervaly, mastery, meze)
 │   └── repositories/
 │       ├── session_repository_test.dart          # Lekce, transkripty, chyby, nahlášené problémy, kaskádový delete
@@ -31,7 +32,7 @@ test/
 │   ├── conversation/
 │   │   ├── conversation_screen_test.dart         # Gramatická cvičebna a interaktivní dril
 │   │   ├── grammar_drill_controller_test.dart    # Controller drilu (výběr chyb, start, odeslání, reset)
-│   │   ├── voice_tutor_screen_test.dart          # Hlasový tutor (režimy, transkript, volání, audio)
+│   │   ├── voice_tutor_screen_test.dart          # Hlasový tutor (režimy včetně Lekce, průběh lekce, transkript, volání, audio)
 │   │   └── widgets/
 │   │       ├── fluid_voice_wave_test.dart        # Vykreslování audio křivky (waveform, plynulé animace)
 │   │       ├── drill_input_bar_test.dart         # Bublina „tutor přemýšlí“ nepřeteče na úzkém displeji
@@ -46,7 +47,7 @@ test/
 │   ├── agents/
 │   │   └── agents_screen_test.dart               # Multi-agentní přehled, generování scénářů na míru
 │   ├── progress/
-│   │   └── progress_screen_test.dart             # Přehled pokroku, grafy (plynulost, chyby), paměť, statistiky
+│   │   └── progress_screen_test.dart             # Přehled pokroku, grafy (plynulost, chyby), co se zlepšuje, paměť, statistiky
 │   ├── flashcards/
 │   │   ├── flashcards_screen_test.dart           # Cvičebna kartiček, otočení až po odpovědi, „Nevím“, SRS hodnocení, TTS, rub s vysvětlením
 │   │   ├── review_session_test.dart              # Průběh opakování (pořadí, počítadla, odebrání karty)
@@ -61,11 +62,11 @@ test/
 │   └── prompt_eval_checks_test.dart             # Automatické kontroly testu promptu tutora (otázky, opravy, odbočení, opakování)
 ├── services/                                     # Testy aplikačních služeb a agentů
 │   ├── agents/
-│   │   ├── memory_manager_agent_test.dart        # Analýza session, Structured Outputs, memory pruning, fakta, přepis v cizím jazyce, zkrácení paměti, nejvýš 6 kartiček z lekce
+│   │   ├── memory_manager_agent_test.dart        # Analýza session, Structured Outputs, memory pruning, fakta, přepis v cizím jazyce, zkrácení paměti, nejvýš 6 kartiček z lekce, druh chyby, ustálená úroveň, počty slov
 │   │   ├── scenario_planner_agent_test.dart      # Plánování scénářů, integrace slabých kartiček, custom scénáře
 │   │   ├── topic_preparation_agent_test.dart     # Příprava témat, 12h čerstvost, wildcard, facts bootstrap
 │   │   ├── voice_director_agent_test.dart        # Režisér konverzace (cooldown, tipy, briefing pro reconnect, vpletená kartička)
-│   │   ├── voice_tutor_agent_test.dart           # Stavový automat tutora, ruční detekce řeči (activityStart/End), opravný přepis, reconnect a lhůta na odpověď, fronta pokynů, start/stop, pauza, kartičky splněné v hovoru
+│   │   ├── voice_tutor_agent_test.dart           # Stavový automat tutora, ruční detekce řeči (activityStart/End), opravný přepis, reconnect a lhůta na odpověď, fronta pokynů, start/stop, pauza, kartičky splněné v hovoru, lekce s kartičkami
 │   │   └── voice_tutor/
 │   │       ├── pre_roll_buffer_test.dart         # Úvod řeči před activityStart (limit bajtů, vyprázdnění)
 │   │       ├── speech_activity_detector_test.dart # Detekce řeči (prahy, hystereze, adaptace na šum, délka hlasu)
@@ -80,8 +81,8 @@ test/
 │   │   ├── gemini_rest_core_test.dart            # Pořadí modelů, cooldown, denní a minutový limit, třídění chyb, dekódování JSON
 │   │   └── speech_transcription_service_test.dart # Opravný přepis (WAV, kontext tutora, ticho, záložní modely)
 │   ├── prompt/
-│   │   ├── live_tutor_prompts_test.dart          # Pokyny během hovoru (úvodní zpráva, skryté instrukce)
-│   │   ├── system_prompt_builder_test.dart       # Sestavování promptů (tutor, CEFR, drill, schémata, fakta, rozbor neradí méně opravovat)
+│   │   ├── live_tutor_prompts_test.dart          # Pokyny během hovoru (úvodní zpráva, skryté instrukce, průběh lekce)
+│   │   ├── system_prompt_builder_test.dart       # Sestavování promptů (tutor, režim Lekce, CEFR, drill, schémata, fakta, rozbor neradí méně opravovat)
 │   │   ├── task_prompts_test.dart                # Krátké úlohové prompty (překlad, výslovnost, dril)
 │   │   └── user_facts_and_topic_prompts_test.dart # Prompty s fakty „O mně“ a příprava témat
 │   ├── system/

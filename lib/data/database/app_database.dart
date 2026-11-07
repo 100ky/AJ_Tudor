@@ -95,6 +95,24 @@ class AppDatabase extends _$AppDatabase {
           } catch (_) {
             // Sloupec již existuje
           }
+          // 5b. Odhad úrovně u lekce a jemnější druh chyby (7. 11. 2026)
+          try {
+            await customStatement('ALTER TABLE sessions ADD COLUMN estimated_level TEXT;');
+          } catch (_) {
+            // Sloupec již existuje
+          }
+          try {
+            await customStatement('ALTER TABLE error_logs ADD COLUMN category TEXT;');
+          } catch (_) {
+            // Sloupec již existuje
+          }
+          for (final column in ['student_words', 'tutor_words']) {
+            try {
+              await customStatement('ALTER TABLE sessions ADD COLUMN $column INTEGER;');
+            } catch (_) {
+              // Sloupec již existuje
+            }
+          }
           try {
             await customStatement(
                 'ALTER TABLE user_profiles ADD COLUMN prepared_topic_at INTEGER;');

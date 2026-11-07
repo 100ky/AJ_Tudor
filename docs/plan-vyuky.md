@@ -40,7 +40,7 @@ Původní zadání:
 - **Po lekci** se ukáže „N kartiček splněno v hovoru“.
 - **Ověření:** nové případy v testu promptu. Režisér má kartičku vplést přirozeně, nesmí vzniknout výslech a po opravě dál mlčí.
 
-## Fáze 2: režim Lekce vedle pokecu
+## Fáze 2: režim Lekce vedle pokecu (v kódu 7. 11., čeká na test promptu a ruční test)
 
 AJ Tudor zůstává hlavně kamarád na pokec. Lekce je samostatný režim, který si student vybere. Každý má vlastní zadání, takže se pravidla neperou.
 
@@ -56,13 +56,29 @@ AJ Tudor zůstává hlavně kamarád na pokec. Lekce je samostatný režim, kter
 - Na konci tutor lekci uzavře (co šlo, co příště) a nabídne pokračovat pokecem.
 - Kartičky splněné v pokecu i v lekci zapisují do stejného plánu opakování.
 
+Jak je to udělané:
+
+- Záložka „Lekce“ (`LessonTab`) ukáže, které výrazy lekce projde: nejvýš 10 nejdéle čekajících kartiček, které hovor dokáže ověřit (stejný výběr jako ve fázi 1). Bez takových kartiček poběží hovor jako pokec.
+- Lekci vede tutor, ne režisér. Dostane do promptu sekci REŽIM LEKCE se seznamem výrazů v pořadí a postupem: situace v angličtině, výraz neříct první, nápověda českou stranou kartičky, pak výraz říct a nechat zopakovat, po správném výrazu pochvala a rovnou další. Pravidla oprav zůstávají. Prompt pokecu se nemění.
+- Režisér je během lekce vypnutý, stejně jako změna tématu při opakování tutora a odlehčení po krátkých odpovědích (v lekci jsou krátké odpovědi běžné).
+- Splnění výrazu hlídá aplikace stejně jako v pokecu. Po každém splněném výrazu tutor skrytě dostane, co student už řekl a co zbývá. Po posledním výrazu nebo po 15 minutách dostane pokyn lekci uzavřít a hovor pak pokračuje pokecem, zase s režisérem.
+- Na obrazovce je během lekce „Lekce: 3/10 výrazů“ s ukazatelem, po hovoru souhrn. Po výpadku spojení dostane nové spojení i průběh lekce.
+- Gramatický cíl lekce viz fáze 3, bod 1.
+- Test promptu lekce (7. 11., 9 situací po dvou odpovědích, rozhodčí `gemini-3.5-flash-lite`): 72 %. Situace pro další výraz a česká nápověda prošly všechny. Tutor jednou prozradil výraz v otázce („how would you say that you didn't relax“), jednou si spletl dvě podobné kartičky („odpočinout“ a „neodpočinul si“) a jednou začal lekci znovu. Zadání jsem podle toho upravil a případ s vypršením času opravil (studentova věta měla chybu, tak ji tutor správně nejdřív opravil). Ověří se to dalším během.
+
 ## Fáze 3: další vylepšení výuky
 
+Body 1, 3, 4 a 5 jsou v kódu od 7. 11. Body 2 a 6 mění prompt pokecu, takže před nasazením potřebují celý test promptu (63 případů).
+
 1. **Gramatický cíl lekce.** Místo pasivního seznamu deseti starých chyb jedna věc na lekci (u studenta nejčastěji minulý čas, -s ve 3. osobě, předložky at/on/in). Tutor volí témata, ve kterých se přirozeně objeví (minulý čas: víkend, co se stalo v práci). V Lekci povinně, v pokecu nejvýš jako lehký směr.
+   *Hotovo jen v Lekci:* cíl je nejčastější gramatický druh chyby (čas, tvar slovesa, předložka, slovosled) z posledních 5 lekcí s rozborem podle druhů. Tutor podle něj volí situace k výrazům, chyby v něm opravuje vždy a při uzavření řekne, jak šel. Záložka Lekce cíl ukáže. V pokecu zatím ne, prompt pokecu se tím nemění.
 2. **Nechat studenta opravit se sám.** Nejdřív nápověda („Jak by to bylo v minulosti?“), hotová věta až když na to nepřijde. Prompt to u gramatiky chce, ale tutor skoro vždycky rovnou řekne správnou větu. Zpřísnit a ověřit testem.
 3. **Jemnější typy chyb.** Rozbor po lekci dělí chyby jen na gramatiku, slovíčka a výslovnost. Nově čas, -s, předložka, slovosled, slovíčko, české slovo. Obrazovka Pokrok pak ukáže, co se zlepšuje, a podle toho se vybírá cíl lekce (bod 1).
+   *Hotovo:* rozbor dává každé chybě `category` (`ErrorCategory`: čas, tvar slovesa, předložka, vazba a slovosled, volba slova, české slovo, výslovnost, ostatní) a ukládá ji do `error_logs.category`. Karta „Co se zlepšuje“ v Pokroku porovná chyby na lekci v posledních 3 lekcích se 3 předtím. Starší lekce druhy neznají, takže srovnání se naplní až s dalšími lekcemi.
 4. **Podíl řeči studenta.** Aplikace už počítá slova studenta i tutora. Zobrazit a hlídat, aby student mluvil aspoň polovinu času (v lekci 19 měl tutor dlouhé odpovědi).
+   *Hotovo:* rozbor po lekci spočítá slova z uloženého přepisu (`sessions.student_words`, `tutor_words`). Podíl je v detailu lekce a v kartě „Co se zlepšuje“. Když student měl méně než polovinu, rozbor napíše tutorovi do sebekritiky na příště, ať mimo opravy mluví kratčeji. Upozornění během hovoru zatím není, to by znamenalo další pokyn tutorovi a test.
 5. **Stálejší odhad úrovně.** Úroveň v profilu skáče mezi A2 a B1 podle jedné lekce a tutor mění styl. Průměr z posledních ~5 lekcí.
+   *Hotovo:* každá lekce si uloží odhad rozboru (`sessions.estimated_level`, krátké lekce ne) a profil dostane nejčastější odhad z posledních 5 lekcí, při shodě ten novější.
 6. **Kratší prompt tutora.** Kolem 20 tisíc znaků se zpracovává při každém tahu. Zkrátit opakovaná pravidla a velká písmena (dokumentace Gemini radí vyhýbat se přehnaně důraznému jazyku) a ověřit testem.
 
 ## Technické body z rozborů lekcí

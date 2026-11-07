@@ -174,6 +174,8 @@ Automatické testy nepokryjí mikrofon, přehrávání zvuku ani skutečné vol�
 - [ ] Scroll přes text tutora v drilu i v hlasové lekci, česká slova nejdou označit
 - [ ] Tlačítko „Do kartiček“ u opravy v chatové bublině
 - [ ] Opakování kartiček: odpověď hlasem, napsáním i „Nevím“ (pak jde jen „Znovu“), přehrání nahlas
+- [ ] Pokrok: karta „Co se zlepšuje“ (chyby podle druhu a podíl tvé řeči) se ukáže po první lekci s novým rozborem, detail lekce ukáže „Tvoje řeč: N % slov“
+- [ ] Lekce: záložka „Lekce“ ukáže výrazy, tutor je projde jeden po druhém (situace, česká nápověda, výraz a zopakování), na obrazovce „Lekce: N/10 výrazů“, po posledním výrazu nebo po 15 minutách lekci uzavře a nabídne pokec
 - [ ] Kartičky v hovoru: výraz z dnešní kartičky řečený sám od sebe ukáže „Kartička splněna v hovoru“, po konci hovoru přijde souhrn a kartička zmizí z dnešního opakování; zopakování po tutorovi kartičku nesplní
 - [ ] Chat nad lekcí (detail lekce v záložce Pokrok) a gramatický dril
 - [ ] Nastavení: přepínače, úroveň angličtiny, přidání a smazání faktu „O mně“

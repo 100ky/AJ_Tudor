@@ -15,6 +15,7 @@ import 'widgets/chat_bubble.dart';
 import 'widgets/smart_chat_bubble.dart';
 import 'widgets/voice_tutor/free_talk_tab.dart';
 import 'widgets/voice_tutor/history_topic_tab.dart';
+import 'widgets/voice_tutor/lesson_tab.dart';
 import 'widgets/voice_tutor/live_transcript.dart';
 import 'widgets/voice_tutor/scenarios_tab.dart';
 import 'widgets/voice_tutor/session_setup_view.dart';
@@ -167,11 +168,14 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
         }
       case TopicMode.freeTalk:
         _tutor.selectScenario(-1, '__free_talk__');
+      case TopicMode.lesson:
+        _tutor.selectLesson();
     }
   }
 
   /// Aktivní režim: vybraný scénář nebo volný hovor mají přednost před zvolenou záložkou.
   TopicMode _activeMode(VoiceTutorState state) {
+    if (state.lessonMode) return TopicMode.lesson;
     if (state.scenarioContext == '__free_talk__') return TopicMode.freeTalk;
     if (state.selectedScenarioId != null && state.selectedScenarioId! > 0) {
       return TopicMode.scenarios;
@@ -211,12 +215,15 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
     final callEnded = previous != null &&
         previous.status != TutorState.idle &&
         next.status == TutorState.idle;
-    if (callEnded && next.completedCards.isNotEmpty) {
+    if (callEnded && (next.completedCards.isNotEmpty || next.lessonCards.isNotEmpty)) {
       messenger.showSnackBar(
         SnackBar(
           content: Text(
-            '🃏 Kartičky splněné v hovoru: ${next.completedCards.length}. '
-            'Dnes už je v kartičkách opakovat nemusíš.',
+            next.lessonCards.isNotEmpty
+                ? '🎓 Lekce: splněno ${next.lessonCompleted} z ${next.lessonCards.length} výrazů. '
+                    'Splněné kartičky už dnes opakovat nemusíš.'
+                : '🃏 Kartičky splněné v hovoru: ${next.completedCards.length}. '
+                    'Dnes už je v kartičkách opakovat nemusíš.',
           ),
           duration: const Duration(seconds: 6),
           behavior: SnackBarBehavior.floating,
@@ -290,6 +297,14 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
             // ── Chybová zpráva ────────────────────────────────────────────────
             if (tutorState.errorMessage.isNotEmpty)
               TutorErrorBanner(tutorState.errorMessage),
+
+            // ── Průběh lekce s kartičkami ─────────────────────────────────────
+            if (isActive && tutorState.lessonCards.isNotEmpty)
+              LessonProgressBanner(
+                completed: tutorState.lessonCompleted,
+                total: tutorState.lessonCards.length,
+                finished: tutorState.lessonFinished,
+              ),
 
             // ── Hlavní konverzační prostor (bubliny + live přepis) ────────────
             Expanded(
@@ -377,6 +392,11 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
       case TopicMode.freeTalk:
         tabContent = FreeTalkTab(
           key: const ValueKey('free_talk_card'),
+          onCancel: _clearScenario,
+        );
+      case TopicMode.lesson:
+        tabContent = LessonTab(
+          key: const ValueKey('lesson_card'),
           onCancel: _clearScenario,
         );
     }

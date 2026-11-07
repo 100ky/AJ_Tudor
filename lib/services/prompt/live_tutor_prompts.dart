@@ -11,7 +11,9 @@ abstract final class LiveTutorPrompts {
     String? scenarioContext,
     String? preparedOpener,
     String? briefing,
+    bool lesson = false,
   }) {
+    if (lesson) return lessonOpening;
     var prompt = "Hello! Please greet me and start the conversation according to your instructions.";
     if (scenarioContext == '__free_talk__') {
       prompt += _casualGreeting;
@@ -26,6 +28,25 @@ abstract final class LiveTutorPrompts {
     }
     return prompt;
   }
+
+  /// Úvod hovoru v režimu Lekce (pozdrav a rovnou první výraz).
+  static const String lessonOpening =
+      "Hello! Please greet me in one short sentence and start today's flashcard lesson according to your "
+      "REŽIM LEKCE instructions: say how many expressions we will practise and give me the situation for the first one.";
+
+  /// Průběh lekce pro tutora: které výrazy student už řekl sám a které zbývají.
+  static String lessonProgress({required List<String> done, required List<String> remaining}) {
+    final said = done.map((e) => '"$e"').join(', ');
+    if (remaining.isEmpty) {
+      return 'Lekce: student už sám řekl všechny výrazy ($said). Až dokončíš aktuální krok, lekci uzavři.';
+    }
+    return 'Lekce: student už sám řekl ${said.isEmpty ? 'zatím žádný výraz' : said}. '
+        'Zbývá: ${remaining.map((e) => '"$e"').join(', ')}.';
+  }
+
+  /// Vypršel čas lekce.
+  static const String lessonTimeUp =
+      'Lekce: čas vypršel. Dokonči aktuální výraz a lekci uzavři, další výrazy už nezačínej.';
 
   /// Skrytá instrukce uprostřed hovoru – Live API po úvodním setupu nepodporuje
   /// roli `system`, proto ji posíláme jako `user` s tímto prefixem.

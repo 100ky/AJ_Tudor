@@ -46,6 +46,17 @@ void main() {
         '[DIRECTOR WHISPER] Ask about the trip.');
   });
 
+  test('a lesson opens with the first expression and keeps the tutor up to date', () {
+    expect(LiveTutorPrompts.opening(lesson: true, briefing: 'Last time: boats.'), LiveTutorPrompts.lessonOpening);
+    expect(LiveTutorPrompts.lessonOpening, contains('REŽIM LEKCE'));
+    expect(
+      LiveTutorPrompts.lessonProgress(done: ['take a sick day'], remaining: ['once a week', 'work on']),
+      'Lekce: student už sám řekl "take a sick day". Zbývá: "once a week", "work on".',
+    );
+    expect(LiveTutorPrompts.lessonProgress(done: ['work on'], remaining: []), contains('lekci uzavři'));
+    expect(LiveTutorPrompts.lessonTimeUp, contains('čas vypršel'));
+  });
+
   test('a whisper with a flashcard tells the tutor to let the student say the phrase', () {
     final whisper = LiveTutorPrompts.directorWhisper(
       'Ask what he does when he feels ill.',

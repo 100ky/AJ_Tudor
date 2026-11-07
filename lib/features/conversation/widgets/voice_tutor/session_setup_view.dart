@@ -12,6 +12,9 @@ enum TopicMode {
 
   /// Volný rozhovor.
   freeTalk,
+
+  /// Lekce s dnešními kartičkami.
+  lesson,
 }
 
 /// Prázdný stav před hovorem: přepínač režimu tématu a obsah vybrané záložky.
@@ -63,6 +66,11 @@ class SessionSetupView extends StatelessWidget {
                   value: TopicMode.freeTalk,
                   icon: Icon(Icons.chat_bubble_outline_rounded, size: 14),
                   label: Text('Volný', maxLines: 1),
+                ),
+                ButtonSegment<TopicMode>(
+                  value: TopicMode.lesson,
+                  icon: Icon(Icons.school_rounded, size: 14),
+                  label: Text('Lekce', maxLines: 1),
                 ),
               ],
               selected: {activeMode},

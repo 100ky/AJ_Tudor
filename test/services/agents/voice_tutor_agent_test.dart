@@ -118,6 +118,7 @@ void main() {
       timestamp: any(named: 'timestamp'),
     )).thenAnswer((_) async => Result.success(null));
     when(() => mockMemory.analyzeSession(any())).thenAnswer((_) async {});
+    when(() => mockRepo.getRecentCategorizedErrors()).thenAnswer((_) async => []);
     mockFlashcardRepo = MockFlashcardRepository();
     when(() => mockFlashcardRepo.getDueFlashcards()).thenAnswer((_) async => []);
     when(() => mockFlashcardRepo.reviewFlashcard(
@@ -1248,6 +1249,110 @@ void main() {
           expect(whisperSent('Ask about the boat.'), isFalse);
 
           await agent.stopSession('test');
+        });
+
+        group('lesson with flashcards', () {
+          setUp(() {
+            when(() => mockFlashcardRepo.getDueFlashcards()).thenAnswer((_) async => [
+                  _dueCard(7, 'vzít si volno', 'take a sick day'),
+                  _dueCard(8, 'alespoň', 'least'),
+                  _dueCard(11, 'jednou týdně', 'once a week'),
+                ]);
+          });
+
+          String sentPrompt() => verify(() => mockClient.connect(
+                modelName: any(named: 'modelName'),
+                systemPrompt: captureAny(named: 'systemPrompt'),
+                voiceName: any(named: 'voiceName'),
+              )).captured.last as String;
+
+          testWidgets('the tutor gets the cards in order and opens with the first one', (tester) async {
+            final agent = container.read(voiceTutorAgentProvider.notifier)..selectLesson();
+            await agent.startSession();
+
+            expect(container.read(voiceTutorAgentProvider).lessonCards.map((c) => c.id), [7, 11]);
+            expect(sentPrompt(), contains('1. vzít si volno → take a sick day\n2. jednou týdně → once a week'));
+            await tester.pump(const Duration(seconds: 1));
+            verify(() => mockClient.sendText(LiveTutorPrompts.lessonOpening)).called(1);
+
+            await agent.stopSession('test');
+            expect(container.read(voiceTutorAgentProvider).lessonMode, isFalse);
+          });
+
+          testWidgets('the director waits until the lesson is done, the tutor hears each said expression',
+              (tester) async {
+            final agent = container.read(voiceTutorAgentProvider.notifier)..selectLesson();
+            await agent.startSession();
+
+            await exchange(tester, 'I would take a sick day.', 'Great! Now, how often do you go swimming?');
+            expect(whisperSent('Lekce: student už sám řekl "take a sick day". Zbývá: "once a week".'), isTrue);
+            expect(container.read(voiceTutorAgentProvider).lessonCompleted, 1);
+            for (var i = 0; i < 3; i++) {
+              await exchange(tester, 'Hmm, every Monday.', 'Nice. Try another way to say it.');
+            }
+            expect(director.cardPools, isEmpty);
+
+            await exchange(tester, 'Once a week, on Mondays.', 'Perfect! That was the last one.');
+            expect(container.read(voiceTutorAgentProvider).lessonFinished, isTrue);
+            expect(whisperSent('všechny výrazy'), isTrue);
+
+            // Po lekci hovor pokračuje pokecem a zase s režisérem
+            await exchange(tester, 'Thanks, that was fun.', 'Glad you liked it!');
+            expect(director.cardPools, isNotEmpty);
+
+            await agent.stopSession('test');
+          });
+
+          testWidgets('the most frequent grammar error of the last lessons becomes the lesson goal',
+              (tester) async {
+            ErrorLog error(int id, String category) => ErrorLog(
+                  id: id,
+                  sessionId: 1,
+                  errorType: 'grammar',
+                  userSaid: '',
+                  correctForm: '',
+                  explanation: '',
+                  timestamp: DateTime(2026, 11, 6),
+                  inFlashcard: false,
+                  category: category,
+                );
+            when(() => mockRepo.getRecentCategorizedErrors())
+                .thenAnswer((_) async => [error(1, 'preposition'), error(2, 'preposition'), error(3, 'tense')]);
+            final agent = container.read(voiceTutorAgentProvider.notifier)..selectLesson();
+            await agent.startSession();
+
+            final prompt = sentPrompt();
+            expect(prompt, contains('GRAMATICKÝ CÍL LEKCE'));
+            expect(prompt, contains('předložky at/on/in'));
+            await tester.pump(const Duration(seconds: 1));
+
+            await agent.stopSession('test');
+          });
+
+          testWidgets('when the time is up the tutor wraps the lesson up', (tester) async {
+            VoiceTutorAgent.lessonDuration = Duration.zero;
+            addTearDown(() => VoiceTutorAgent.lessonDuration = const Duration(minutes: VoiceTutorAgent.lessonMinutes));
+            final agent = container.read(voiceTutorAgentProvider.notifier)..selectLesson();
+            await agent.startSession();
+
+            await exchange(tester, 'I am not sure.', 'Take your time.');
+            expect(whisperSent(LiveTutorPrompts.lessonTimeUp), isTrue);
+            expect(container.read(voiceTutorAgentProvider).lessonFinished, isTrue);
+
+            await agent.stopSession('test');
+          });
+
+          testWidgets('without cards to practise the lesson is an ordinary conversation', (tester) async {
+            when(() => mockFlashcardRepo.getDueFlashcards()).thenAnswer((_) async => [_dueCard(8, 'alespoň', 'least')]);
+            final agent = container.read(voiceTutorAgentProvider.notifier)..selectLesson();
+            await agent.startSession();
+
+            expect(container.read(voiceTutorAgentProvider).lessonCards, isEmpty);
+            expect(sentPrompt(), isNot(contains('REŽIM LEKCE')));
+            await tester.pump(const Duration(seconds: 1));
+
+            await agent.stopSession('test');
+          });
         });
 
         group('flashcards in the conversation', () {

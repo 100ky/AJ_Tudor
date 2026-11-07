@@ -5,12 +5,14 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../data/data_providers.dart';
 import '../../data/repositories/profile_repository.dart';
 import '../../data/models/flashcard_stats.dart';
+import '../../data/models/progress_trends.dart';
 import '../../core/app_theme.dart';
 import '../skeleton/navigation_provider.dart';
 import 'widgets/error_distribution_card.dart';
 import 'widgets/fluency_chart_card.dart';
 import 'widgets/lesson_history_tab.dart';
 import 'widgets/mastery_overview_card.dart';
+import 'widgets/progress_trend_card.dart';
 import 'widgets/memory_card.dart';
 import 'widgets/recent_errors_card.dart';
 import 'widgets/summary_grid.dart';
@@ -31,6 +33,7 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen> {
   bool _isMemoryExpanded = false;
   bool _isVocabExpanded = false;
   bool _isRecentErrorsExpanded = false;
+  bool _isTrendsExpanded = true;
 
   @override
   Widget build(BuildContext context) {
@@ -39,6 +42,7 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen> {
     final sessions = ref.watch(allSessionsProvider).value ?? const [];
     final stats =
         ref.watch(flashcardStatsProvider).value ?? const FlashcardStats.empty();
+    final trends = ProgressTrends.from(sessions, errors);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -109,6 +113,15 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen> {
                             expanded: _isFluencyExpanded,
                             onToggle: () => setState(
                                 () => _isFluencyExpanded = !_isFluencyExpanded),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                        if (!trends.isEmpty) ...[
+                          ProgressTrendCard(
+                            trends: trends,
+                            expanded: _isTrendsExpanded,
+                            onToggle: () => setState(
+                                () => _isTrendsExpanded = !_isTrendsExpanded),
                           ),
                           const SizedBox(height: 12),
                         ],

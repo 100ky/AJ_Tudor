@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:aj_tudor/services/prompt/system_prompt_builder.dart';
 import 'package:aj_tudor/services/flashcards/conversation_cards.dart';
+import 'package:aj_tudor/data/models/error_category.dart';
 
 void main() {
   group('SystemPromptBuilder - Tutor Prompt Tests', () {
@@ -327,6 +328,48 @@ void main() {
       final schema = SystemPromptBuilder.getDirectorResponseSchema();
       expect((schema['properties'] as Map).containsKey('flashcardId'), isTrue);
       expect(schema['required'] as List, contains('flashcardId'));
+    });
+
+    test('a lesson gives the tutor the cards in order, a conversation without them stays the same', () {
+      final cards = [
+        ConversationCard(id: 7, czech: 'vzít si volno', english: 'take a sick day'),
+        ConversationCard(id: 11, czech: 'jednou týdně', english: 'once a week'),
+      ];
+      final lesson = SystemPromptBuilder.buildTutorPrompt(lessonCards: cards);
+      expect(lesson, contains('REŽIM LEKCE'));
+      expect(lesson, contains('1. vzít si volno → take a sick day\n2. jednou týdně → once a week'));
+      expect(lesson, contains('procvičíte 2 výrazy z kartiček'));
+      expect(SystemPromptBuilder.expressionCount(1), '1 výraz');
+      expect(SystemPromptBuilder.expressionCount(10), '10 výrazů');
+      expect(lesson, contains('Anglický výraz neříkej první'));
+      expect(lesson, contains('lekci uzavři'));
+
+      // Pokec se bez kartiček nemění, jeho prompt prošel testem promptu
+      expect(SystemPromptBuilder.buildTutorPrompt(), SystemPromptBuilder.buildTutorPrompt(lessonCards: const []));
+      expect(SystemPromptBuilder.buildTutorPrompt(), isNot(contains('REŽIM LEKCE')));
+    });
+
+    test('the lesson analysis knows the share of speech and sorts errors into categories', () {
+      final quiet = SystemPromptBuilder.buildAnalysisPrompt(studentShare: 0.3);
+      expect(quiet, contains('student řekl 30 % slov, tutor 70 %'));
+      expect(quiet, contains('ať tutor mimo opravy mluví kratčeji'));
+      expect(SystemPromptBuilder.buildAnalysisPrompt(studentShare: 0.6), isNot(contains('mluví kratčeji')));
+      expect(SystemPromptBuilder.buildAnalysisPrompt(), isNot(contains('PODÍL ŘEČI')));
+
+      final errors = (SystemPromptBuilder.getAnalysisResponseSchema()['properties'] as Map)['errors'] as Map;
+      final item = errors['items'] as Map;
+      expect(((item['properties'] as Map)['category'] as Map)['enum'], containsAll(['tense', 'verb_form', 'preposition']));
+      expect(item['required'] as List, contains('category'));
+    });
+
+    test('a lesson with a grammar goal asks the tutor to practise it', () {
+      final cards = [ConversationCard(id: 7, czech: 'vzít si volno', english: 'take a sick day')];
+      final withGoal = SystemPromptBuilder.buildTutorPrompt(lessonCards: cards, grammarGoal: ErrorCategory.tense);
+      expect(withGoal, contains('GRAMATICKÝ CÍL LEKCE'));
+      expect(withGoal, contains('minulý čas'));
+      expect(SystemPromptBuilder.buildTutorPrompt(lessonCards: cards), isNot(contains('GRAMATICKÝ CÍL')));
+      // V pokecu se cíl nepoužívá
+      expect(SystemPromptBuilder.buildTutorPrompt(grammarGoal: ErrorCategory.tense), isNot(contains('GRAMATICKÝ CÍL')));
     });
 
     test('the lesson analysis turns asked phrases into cards and orders errors', () {

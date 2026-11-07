@@ -130,14 +130,48 @@ class SessionRepository {
     required String topicSummary,
     required double fluencyScore,
     required int totalErrors,
+    String? estimatedLevel,
   }) async {
     await (_db.update(_db.sessions)..where((t) => t.id.equals(sessionId))).write(
       SessionsCompanion(
         topicSummary: Value(topicSummary),
         fluencyScore: Value(fluencyScore),
         totalErrors: Value(totalErrors),
+        estimatedLevel: estimatedLevel == null ? const Value.absent() : Value(estimatedLevel),
       ),
     );
+  }
+
+  /// Uloží, kolik slov v lekci řekl student a kolik tutor.
+  Future<void> updateSessionWordCounts({
+    required int sessionId,
+    required int studentWords,
+    required int tutorWords,
+  }) async {
+    await (_db.update(_db.sessions)..where((t) => t.id.equals(sessionId))).write(
+      SessionsCompanion(studentWords: Value(studentWords), tutorWords: Value(tutorWords)),
+    );
+  }
+
+  /// Chyby z posledních [lessons] lekcí, které rozbor už dělil podle druhů (mají odhad úrovně).
+  Future<List<ErrorLog>> getRecentCategorizedErrors({int lessons = 5}) async {
+    final recent = await (_db.select(_db.sessions)
+          ..where((t) => t.estimatedLevel.isNotNull())
+          ..orderBy([(t) => OrderingTerm.desc(t.startedAt), (t) => OrderingTerm.desc(t.id)])
+          ..limit(lessons))
+        .get();
+    if (recent.isEmpty) return const [];
+    return (_db.select(_db.errorLogs)..where((t) => t.sessionId.isIn([for (final s in recent) s.id]))).get();
+  }
+
+  /// Úrovně odhadnuté rozborem posledních [limit] lekcí, od nejnovější.
+  Future<List<String>> getRecentEstimatedLevels({int limit = 5}) async {
+    final rows = await (_db.select(_db.sessions)
+          ..where((t) => t.estimatedLevel.isNotNull())
+          ..orderBy([(t) => OrderingTerm.desc(t.startedAt), (t) => OrderingTerm.desc(t.id)])
+          ..limit(limit))
+        .get();
+    return [for (final row in rows) row.estimatedLevel!];
   }
 
   /// Uloží záznam o gramatické nebo výslovnostní chybě uživatele.
@@ -147,6 +181,7 @@ class SessionRepository {
     required String userSaid,
     required String correctForm,
     required String explanation,
+    String? category,
   }) async {
     try {
       final id = await _db.into(_db.errorLogs).insert(
@@ -157,6 +192,7 @@ class SessionRepository {
           correctForm: correctForm,
           explanation: explanation,
           timestamp: DateTime.now(),
+          category: Value(category),
         ),
       );
       return Result.success(id);

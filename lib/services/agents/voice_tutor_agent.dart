@@ -11,6 +11,8 @@ import '../../data/repositories/profile_repository.dart';
 import '../../data/repositories/scenario_repository.dart';
 import '../../data/repositories/session_repository.dart';
 import '../../data/models/chat_message.dart';
+import '../../data/models/error_category.dart';
+import '../../data/models/progress_trends.dart';
 import '../../data/repositories/flashcard_repository.dart';
 import '../../core/constants/gemini_models.dart';
 import '../../core/utils/logger.dart';
@@ -19,6 +21,7 @@ import '../prompt/live_tutor_prompts.dart';
 import '../prompt/system_prompt_builder.dart';
 import '../audio/audio_session_controller.dart';
 import '../flashcards/conversation_cards.dart';
+import '../flashcards/due_conversation_cards.dart';
 import '../system/wakelock_service.dart';
 import '../gemini/gemini_live_client.dart';
 import '../gemini/speech_transcription_service.dart';
@@ -69,6 +72,12 @@ class VoiceTutorState {
   final String? scenarioContext;
   /// Kartičky, které student v této lekci splnil v hovoru.
   final List<ConversationCard> completedCards;
+  /// Student si pro příští hovor vybral lekci s kartičkami (záložka „Lekce“).
+  final bool lessonMode;
+  /// Výrazy probíhající lekce v pořadí, v jakém je tutor projde; v pokecu prázdné.
+  final List<ConversationCard> lessonCards;
+  /// Lekce skončila (všechny výrazy splněné nebo vypršel čas), hovor pokračuje pokecem.
+  final bool lessonFinished;
 
   /// Vytvoří výchozí nebo specifický stav Voice Tutora.
   VoiceTutorState({
@@ -79,7 +88,14 @@ class VoiceTutorState {
     this.selectedScenarioId,
     this.scenarioContext,
     this.completedCards = const [],
+    this.lessonMode = false,
+    this.lessonCards = const [],
+    this.lessonFinished = false,
   });
+
+  /// Kolik výrazů lekce student už řekl sám.
+  int get lessonCompleted =>
+      lessonCards.where((card) => completedCards.any((done) => done.id == card.id)).length;
 
   /// Vytvoří kopii aktuálního stavu s modifikovanými vlastnostmi.
   VoiceTutorState copyWith({
@@ -91,6 +107,9 @@ class VoiceTutorState {
     String? scenarioContext,
     bool clearScenario = false,
     List<ConversationCard>? completedCards,
+    bool? lessonMode,
+    List<ConversationCard>? lessonCards,
+    bool? lessonFinished,
   }) {
     return VoiceTutorState(
       status: status ?? this.status,
@@ -100,6 +119,9 @@ class VoiceTutorState {
       selectedScenarioId: clearScenario ? null : (selectedScenarioId ?? this.selectedScenarioId),
       scenarioContext: clearScenario ? null : (scenarioContext ?? this.scenarioContext),
       completedCards: completedCards ?? this.completedCards,
+      lessonMode: lessonMode ?? this.lessonMode,
+      lessonCards: lessonCards ?? this.lessonCards,
+      lessonFinished: lessonFinished ?? this.lessonFinished,
     );
   }
 }
@@ -171,6 +193,21 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   /// Kolikrát smí student promluvit mezi spuštěním režiséra a příchodem jeho rady.
   /// Rada vzniká po tahu tutora a předá se po dalším, takže jedna replika studenta je běžná.
   static const int _maxStudentTurnsForWhisper = 1;
+
+  /// Kolik výrazů z kartiček projde jedna lekce (režim Lekce).
+  static const int lessonCardCount = 10;
+
+  /// Kolik minut nejvýš lekce trvá, pak ji tutor uzavře a hovor pokračuje pokecem.
+  static const int lessonMinutes = 15;
+
+  /// Délka lekce (testy ji zkracují).
+  @visibleForTesting
+  static Duration lessonDuration = const Duration(minutes: lessonMinutes);
+
+  DateTime? _lessonStartedAt;
+
+  /// Probíhá lekce s kartičkami (ještě neskončila).
+  bool get _lessonRunning => state.lessonCards.isNotEmpty && !state.lessonFinished;
 
   /// Počet replik studenta v aktuální lekci (z bublin chatu).
   int get _studentTurnCount => state.messages.where((m) => m.isUser).length;
@@ -285,10 +322,15 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   /// Nastaví aktivní scénář a jeho roli pro aktuální lekci.
   void selectScenario(int id, String context) {
     if (id == 0 || context.trim().isEmpty) {
-      state = state.copyWith(clearScenario: true);
+      state = state.copyWith(clearScenario: true, lessonMode: false);
     } else {
-      state = state.copyWith(selectedScenarioId: id, scenarioContext: context);
+      state = state.copyWith(selectedScenarioId: id, scenarioContext: context, lessonMode: false);
     }
+  }
+
+  /// Vybere pro příští hovor lekci s dnešními kartičkami (místo tématu nebo scénáře).
+  void selectLesson() {
+    state = state.copyWith(clearScenario: true, lessonMode: true);
   }
 
   /// Zahájí novou hlasovou lekci.
@@ -324,8 +366,11 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       messages: [],
       currentTranscript: '',
       completedCards: const [],
+      lessonCards: const [],
+      lessonFinished: false,
     );
     _conversationCards = null;
+    _lessonStartedAt = null;
     _conversationCardsSessionId = null;
     HapticFeedback.mediumImpact();
     _wakelock.enable(); // Zabrání uspání displeje během konverzace
@@ -389,6 +434,22 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       if (_isStartCancelled(generation)) return;
       _conversationCards = conversationCards;
       _conversationCardsSessionId = newSessionId;
+
+      // Lekce projde nejdéle čekající kartičky, které hovor dokáže ověřit
+      final lessonCards = state.lessonMode
+          ? (conversationCards?.cards.take(lessonCardCount).toList() ?? const <ConversationCard>[])
+          : const <ConversationCard>[];
+      if (state.lessonMode && lessonCards.isEmpty) {
+        L.w('🎓 Lekce: na dnešek nejsou kartičky, které by šly procvičit v hovoru. Hovor poběží jako pokec.');
+      }
+      if (lessonCards.isNotEmpty) {
+        L.i('🎓 Lekce: ${lessonCards.length} výrazů (${lessonCards.map((c) => c.english).join(', ')}).');
+        _lessonStartedAt = DateTime.now();
+      }
+      state = state.copyWith(lessonCards: lessonCards, lessonFinished: false);
+      // Gramatický cíl lekce: nejčastější gramatická chyba z posledních lekcí
+      final lessonGoal = lessonCards.isEmpty ? null : await _loadGrammarGoal();
+      if (lessonGoal != null) L.i('🎓 Gramatický cíl lekce: ${lessonGoal.label}.');
       final voice = ref.read(voiceProvider);
       final isImmersive = ref.read(immersiveModeProvider);
 
@@ -409,10 +470,14 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         memoryBriefing: userProfile?.memoryBriefing,
         userFacts: userProfile?.userFacts,
         personalFact: personalFact,
+        lessonCards: state.lessonCards,
+        grammarGoal: lessonGoal,
       );
 
       // ─── STRUKTUROVANÉ LOGOVÁNÍ STARTU SESSION ───
-      final scenarioLabel = state.scenarioContext == '__free_talk__'
+      final scenarioLabel = state.lessonCards.isNotEmpty
+          ? 'Lekce s kartičkami (${state.lessonCards.length} výrazů)'
+          : state.scenarioContext == '__free_talk__'
           ? 'Volná konverzace (Free Talk)'
           : state.scenarioContext != null
               ? 'Role-play scénář'
@@ -504,6 +569,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         scenarioContext: state.scenarioContext,
         preparedOpener: preparedOpener,
         briefing: userProfile?.memoryBriefing,
+        lesson: state.lessonCards.isNotEmpty,
       );
       Future.delayed(const Duration(milliseconds: 1000), _trySendOpener);
 
@@ -521,16 +587,22 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   Future<ConversationCards?> _loadConversationCards() async {
     try {
       final due = await _flashcardRepo.getDueFlashcards();
-      final cards = ConversationCards([
-        for (final card in due)
-          if (card.errorType != 'pronunciation')
-            ConversationCard(id: card.id, czech: card.frontText.trim(), english: card.backText.trim()),
-      ]);
+      final cards = conversationCardsFromDue(due);
       L.i('🃏 Kartičky pro hovor: ${cards.cards.length} z ${due.length} dnešních '
           '(režisér dostane nejvýš ${ConversationCards.poolSize}).');
       return cards;
     } catch (e) {
       L.w('Kartičky pro hovor se nenačetly, hovor poběží bez nich: $e');
+      return null;
+    }
+  }
+
+  /// Nejčastější gramatický druh chyby z posledních lekcí; null, když ještě není z čeho.
+  Future<ErrorCategory?> _loadGrammarGoal() async {
+    try {
+      return ProgressTrends.grammarGoal(await _repo.getRecentCategorizedErrors());
+    } catch (e) {
+      L.w('Gramatický cíl lekce se nenačetl: $e');
       return null;
     }
   }
@@ -550,7 +622,46 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     }
     if (ref.mounted) {
       state = state.copyWith(completedCards: [...state.completedCards, ...done]);
+      _reportLessonProgress(done);
     }
+  }
+
+  /// Splněný výraz z lekce: tutor se skrytě dozví, co zbývá. Po posledním lekce končí.
+  void _reportLessonProgress(List<ConversationCard> done) {
+    if (!_lessonRunning) return;
+    final lessonIds = {for (final card in state.lessonCards) card.id};
+    if (!done.any((card) => lessonIds.contains(card.id))) return;
+    L.i('🎓 Lekce: splněno ${state.lessonCompleted}/${state.lessonCards.length}.');
+    final note = _lessonProgressNote();
+    if (state.lessonCompleted == state.lessonCards.length) {
+      _finishLesson(note);
+    } else {
+      injectMidSessionGuidance(note);
+    }
+  }
+
+  /// Skrytá zpráva tutorovi, které výrazy lekce student už řekl a které zbývají.
+  String _lessonProgressNote() {
+    final doneIds = {for (final card in state.completedCards) card.id};
+    return LiveTutorPrompts.lessonProgress(
+      done: [for (final card in state.lessonCards) if (doneIds.contains(card.id)) card.english],
+      remaining: [for (final card in state.lessonCards) if (!doneIds.contains(card.id)) card.english],
+    );
+  }
+
+  /// Po [lessonDuration] tutor lekci uzavře (zkontroluje se na konci jeho tahu).
+  void _checkLessonTime() {
+    final started = _lessonStartedAt;
+    if (!_lessonRunning || started == null) return;
+    if (DateTime.now().difference(started) < lessonDuration) return;
+    L.i('🎓 Lekce: vypršel čas (${lessonDuration.inMinutes} min), tutor ji uzavře.');
+    _finishLesson(LiveTutorPrompts.lessonTimeUp);
+  }
+
+  /// Lekce skončila: tutor ji uzavře a hovor dál běží jako pokec (zase s režisérem).
+  void _finishLesson(String note) {
+    state = state.copyWith(lessonFinished: true);
+    injectMidSessionGuidance(note);
   }
 
   /// Poslední repliky tutora (i ta, kterou právě říká) pro kontrolu kartiček.
@@ -631,7 +742,8 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         // ─── METRIKA: délka odpovědi uživatele ───
         _metrics.recordUserAnswer(wordCount);
 
-        if (wordCount <= 3) {
+        // V lekci jsou krátké odpovědi běžné (student řekne výraz z kartičky)
+        if (wordCount <= 3 && !_lessonRunning) {
           _consecutiveShortAnswers++;
           if (_consecutiveShortAnswers >= 3) {
              _metrics.frustrationDetections++;
@@ -1048,7 +1160,8 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       // 2. Inter-turn repetition (opakování napříč tahy)
       final similarity = repeatedTurnSimilarity(finalTutorText, _tutorTextHistory);
 
-      if (similarity != null) {
+      // V lekci se tahy tutora podobají záměrně (pochvala a další výraz), téma se nemění
+      if (similarity != null && !_lessonRunning) {
          L.w('Detekována stagnace (Tutor se opakuje s podobností ${ (similarity * 100).toInt() }%). Vynucuji změnu tématu.');
          forceTopicChange(promptImmediateResponse: false);
          _tutorTextHistory.clear(); // Zabrání okamžitému dalšímu spuštění
@@ -1078,6 +1191,8 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       state = state.copyWith(currentTranscript: '', status: nextStatus);
     }
 
+    _checkLessonTime();
+
     // Model domluvil – teď můžeme bezpečně předat skryté pokyny, aniž bychom ho utnuli
     _flushPendingGuidance();
 
@@ -1088,8 +1203,9 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       _scheduleListeningAfterPlayback();
     }
 
-    // Asynchronní analýza a režie hovoru na pozadí (VoiceDirectorAgent)
-    if (_currentSessionId != null && state.messages.isNotEmpty) {
+    // Asynchronní analýza a režie hovoru na pozadí (VoiceDirectorAgent). V lekci vede hovor
+    // tutor podle kartiček a rada k tématu by ho od nich odváděla.
+    if (_currentSessionId != null && state.messages.isNotEmpty && !_lessonRunning) {
       final studentTurnsAtStart = _studentTurnCount;
       _director.onTurnCompleted(
         sessionId: _currentSessionId!,
@@ -1234,9 +1350,13 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   /// staré spojení neodpovědělo. Jinak čeká, až student promluví.
   void _restoreConversationContext(GeminiLiveClient client, {bool answerStudent = false}) {
     try {
-      final executiveBriefing = _director.getExecutiveBriefingForReconnect(
+      var executiveBriefing = _director.getExecutiveBriefingForReconnect(
         recentMessages: state.messages,
       );
+      // Nové spojení zná seznam výrazů ze systémového promptu, ne to, kam lekce došla
+      if (_lessonRunning) {
+        executiveBriefing += '\n${LiveTutorPrompts.systemInstruction(_lessonProgressNote())}';
+      }
 
       L.i('Obnovuji kontext konverzace po reconnectu s využitím living executive summary z VoiceDirectorAgenta...');
       L.director('Obnovuji kontext konverzace po reconnectu s využitím living executive summary...');
@@ -1373,6 +1493,9 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
 
         // ─── SESSION SUMMARY ───
         _metrics.logSummary(sessionId);
+        if (state.lessonCards.isNotEmpty) {
+          L.i('🎓 Lekce: splněno ${state.lessonCompleted} z ${state.lessonCards.length} výrazů.');
+        }
         final completedCards = _conversationCards?.completed ?? const <ConversationCard>[];
         if (completedCards.isNotEmpty) {
           L.i('🃏 V hovoru splněno kartiček: ${completedCards.length} '
@@ -1399,6 +1522,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
           status: TutorState.idle,
           currentTranscript: '',
           clearScenario: true,
+          lessonMode: false,
         );
         L.i('UI resetováno do stavu idle');
       }

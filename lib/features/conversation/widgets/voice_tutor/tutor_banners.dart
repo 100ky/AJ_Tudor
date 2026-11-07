@@ -108,6 +108,61 @@ class DirectorTipBanner extends StatelessWidget {
   }
 }
 
+/// Průběh lekce s kartičkami během hovoru („Lekce: 3/10 výrazů“).
+class LessonProgressBanner extends StatelessWidget {
+  final int completed;
+  final int total;
+  final bool finished;
+
+  const LessonProgressBanner({
+    super.key,
+    required this.completed,
+    required this.total,
+    required this.finished,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final label = finished ? 'Lekce hotová: $completed z $total' : 'Lekce: $completed/$total výrazů';
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+      child: GlassContainer(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        borderRadius: BorderRadius.circular(14),
+        color: AppTheme.accent.withValues(alpha: 0.08),
+        border: Border.all(color: AppTheme.accent.withValues(alpha: 0.25)),
+        shadows: const [],
+        child: Row(
+          children: [
+            Icon(finished ? Icons.check_circle_rounded : Icons.school_rounded, size: 16, color: AppTheme.accent),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.textColor(context),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: total == 0 ? 0 : completed / total,
+                  minHeight: 5,
+                  color: AppTheme.accent,
+                  backgroundColor: AppTheme.accent.withValues(alpha: 0.15),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// Výrazně vypíchnutá věta, kterou má student po opravě chyby zopakovat.
 class RepeatTargetBanner extends StatelessWidget {
   final String sentence;

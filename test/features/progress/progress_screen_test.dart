@@ -244,6 +244,41 @@ void main() {
       await drainTimers(tester);
     });
 
+    testWidgets('shows what improves: errors by category and the share of speech',
+        (WidgetTester tester) async {
+      configureViewport(tester);
+      final now = DateTime.now();
+      final sessionId = await db.into(db.sessions).insert(
+            SessionsCompanion.insert(
+              startedAt: now.subtract(const Duration(minutes: 10)),
+              endedAt: Value(now),
+              estimatedLevel: const Value('B1'),
+              studentWords: const Value(120),
+              tutorWords: const Value(200),
+            ),
+          );
+      await db.into(db.errorLogs).insert(
+            ErrorLogsCompanion.insert(
+              sessionId: sessionId,
+              errorType: 'grammar',
+              userSaid: 'Yesterday I go to work',
+              correctForm: 'Yesterday I went to work',
+              explanation: 'Minulý čas',
+              timestamp: now,
+              category: const Value('tense'),
+            ),
+          );
+
+      await tester.pumpWidget(buildTestWidget());
+      await tester.pumpAndSettle();
+
+      expect(find.text('Co se zlepšuje'), findsOneWidget);
+      expect(find.text('Mluvíš 38 %'), findsOneWidget);
+      expect(find.text('Čas slovesa'), findsOneWidget);
+
+      await drainTimers(tester);
+    });
+
     testWidgets('displays memory briefing and vocabulary cards when profile has data',
         (WidgetTester tester) async {
       configureViewport(tester);

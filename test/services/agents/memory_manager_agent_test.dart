@@ -353,6 +353,69 @@ void main() {
       expect(card.explanation.contains("clear one's head"), true);
     });
 
+    test('the level in the profile is the most common estimate of the last lessons', () {
+      expect(MemoryManagerAgent.stableLevel(const []), isNull);
+      expect(MemoryManagerAgent.stableLevel(['A2', 'B1', 'B1', 'A2', 'B1']), 'B1');
+      // Při shodě platí novější odhad
+      expect(MemoryManagerAgent.stableLevel(['A2', 'B1']), 'A2');
+      expect(MemoryManagerAgent.countWords("I don't know, uh, třeba zítra."), 6);
+    });
+
+    test('the analysis stores the error category, the level and the words of the lesson', () async {
+      // Dvě dřívější lekce s odhadem B1: jedna lekce s A2 úroveň v profilu nezmění
+      for (final level in ['B1', 'B1']) {
+        final old = (await repo.startNewSession()).getOrThrow();
+        await repo.updateSessionAnalysis(
+            sessionId: old, topicSummary: 'Dřív', fluencyScore: 0.6, totalErrors: 0, estimatedLevel: level);
+      }
+      final s = (await repo.startNewSession()).getOrThrow();
+      await repo.addTranscript(sessionId: s, speaker: 'tutor', content: 'What did you do yesterday at work?');
+      await repo.addTranscript(sessionId: s, speaker: 'user', content: 'Yesterday I go to work.');
+      await repo.addTranscript(sessionId: s, speaker: 'user', content: 'I fix bug.');
+
+      final mockJson = jsonEncode({
+        'topicSummary': 'Práce',
+        'fluencyScore': 0.5,
+        'estimatedLevel': 'A2',
+        'totalErrors': 1,
+        'briefing': '',
+        'resolvedErrors': [],
+        'vocabulary': [],
+        'newLearnedUserFacts': [],
+        'errors': [
+          {
+            'type': 'grammar',
+            'category': 'tense',
+            'userSaid': 'Yesterday I go to work.',
+            'targetWordOrPhrase': 'went to work',
+            'czechCue': 'šel jsem do práce',
+            'correctForm': 'Yesterday I went to work.',
+            'explanation': 'Minulý čas',
+            'czechTranslation': 'šel jsem do práce',
+          },
+        ],
+      });
+      String? prompt;
+      when(() => mockGemini.sendMessage(
+            any(),
+            responseSchema: any(named: 'responseSchema'),
+            systemPrompt: any(named: 'systemPrompt'),
+          )).thenAnswer((invocation) async {
+        prompt = invocation.namedArguments[#systemPrompt] as String;
+        return mockJson;
+      });
+
+      await container.read(memoryManagerAgentProvider).analyzeSession(s);
+
+      final session = (await repo.watchAllSessions().first).firstWhere((x) => x.id == s);
+      expect(session.estimatedLevel, 'A2');
+      expect(session.studentWords, 8);
+      expect(session.tutorWords, 7);
+      expect((await profileRepo.getUserProfile())?.targetLevel, 'B1');
+      expect((await repo.getErrorLogs(s)).single.category, 'tense');
+      expect(prompt, contains('student řekl 53 % slov'));
+    });
+
     test('one lesson makes at most six cards and none from a whole sentence', () async {
       final s = (await repo.startNewSession()).getOrThrow();
       await repo.addTranscript(sessionId: s, speaker: 'user', content: 'First line');

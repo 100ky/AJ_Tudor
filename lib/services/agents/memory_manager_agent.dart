@@ -4,6 +4,7 @@ import '../../data/data_providers.dart';
 import '../gemini/gemini_providers.dart';
 import '../../data/repositories/flashcard_repository.dart';
 import '../../core/utils/logger.dart';
+import '../../data/models/error_category.dart';
 import '../flashcards/conversation_cards.dart';
 import '../prompt/system_prompt_builder.dart';
 import 'scenario_planner_agent.dart';
@@ -31,6 +32,30 @@ class MemoryManagerAgent {
   /// Kolik kartiček nejvýš vznikne z jedné lekce (z chyb i z výrazů, na které se student
   /// zeptal). Rozbor řadí chyby od nejdůležitější, takže zbytek se zapíše jen do logu chyb.
   static const int maxNewCardsPerLesson = 6;
+
+  static final RegExp _word = RegExp(r"[\p{L}\p{N}']+", unicode: true);
+
+  /// Počet slov v [text] (pro podíl řeči studenta a tutora).
+  static int countWords(String text) => _word.allMatches(text).length;
+
+  /// Z kolika posledních lekcí se bere ustálená úroveň.
+  static const int levelWindow = 5;
+
+  /// Ustálená úroveň z odhadů posledních lekcí [recentNewestFirst]: nejčastější, při
+  /// shodě ta novější. Úroveň v profilu dřív skákala mezi A2 a B1 podle jedné lekce
+  /// a tutor pokaždé měnil styl.
+  static String? stableLevel(List<String> recentNewestFirst) {
+    if (recentNewestFirst.isEmpty) return null;
+    final counts = <String, int>{};
+    for (final level in recentNewestFirst) {
+      counts[level] = (counts[level] ?? 0) + 1;
+    }
+    var best = recentNewestFirst.first;
+    for (final level in recentNewestFirst) {
+      if (counts[level]! > counts[best]!) best = level;
+    }
+    return best;
+  }
 
   /// Zda je cíl kartičky krátký výraz, ne celá věta (tu by student doslova nezopakoval).
   static bool isAtomicCardTarget(String target) {
@@ -84,6 +109,15 @@ class MemoryManagerAgent {
         return;
       }
 
+      // Podíl řeči: student má mluvit aspoň polovinu, rozbor to tutorovi připomene
+      final studentWords = transcripts.where((t) => t.speaker == 'user').fold(0, (sum, t) => sum + countWords(t.content));
+      final tutorWords = transcripts.where((t) => t.speaker != 'user').fold(0, (sum, t) => sum + countWords(t.content));
+      await sessionRepo.updateSessionWordCounts(sessionId: sessionId, studentWords: studentWords, tutorWords: tutorWords);
+      final studentShare = studentWords + tutorWords == 0 ? null : studentWords / (studentWords + tutorWords);
+      if (studentShare != null) {
+        L.i('Podíl řeči: student ${(studentShare * 100).round()} % ($studentWords slov), tutor $tutorWords slov.');
+      }
+
       // Sestavení textové reprezentace rozhovoru zabalené do XML tagu pro lepší separaci dat
       final chatHistory = transcripts.map((t) => '${t.speaker}: ${t.content}').join('\n');
       final wrappedHistory = '<transcript>\n$chatHistory\n</transcript>';
@@ -107,6 +141,7 @@ class MemoryManagerAgent {
         systemPrompt: SystemPromptBuilder.buildAnalysisPrompt(
           previousBriefing: previousBriefing,
           knownFacts: userProfile?.userFacts,
+          studentShare: studentShare,
         ),
         responseSchema: SystemPromptBuilder.getAnalysisResponseSchema(),
       );
@@ -160,11 +195,15 @@ class MemoryManagerAgent {
         }
         L.blockList('ANALYSIS', 'Kartičky z chyb', errorItems);
       }
+      final estimatedLevel = data['estimatedLevel']?.toString().toUpperCase();
+      final isKnownLevel = ['A1', 'A2', 'B1', 'B2'].contains(estimatedLevel);
       await sessionRepo.updateSessionAnalysis(
         sessionId: sessionId,
         topicSummary: data['topicSummary']?.toString() ?? 'Bez popisu',
         fluencyScore: fluency,
         totalErrors: totalErr,
+        // Krátká lekce o úrovni nic neříká
+        estimatedLevel: isKnownLevel && !isTooShort ? estimatedLevel : null,
       );
 
       // --- ALGORITMUS ODNAUČOVÁNÍ (Memory Pruning) ---
@@ -204,13 +243,12 @@ class MemoryManagerAgent {
         await profileRepo.updateUserMemory(finalBriefing);
       }
       
-      // Aktualizace odhadované úrovně angličtiny v profilu studenta (pokud byla rozpoznána)
-      if (data['estimatedLevel'] != null) {
-        final estLevel = data['estimatedLevel'].toString().toUpperCase();
-        if (['A1', 'A2', 'B1', 'B2'].contains(estLevel)) {
-          L.i('Agent odhadl úroveň studenta na: $estLevel. Aktualizuji profil.');
-          await profileRepo.updateTargetLevel(estLevel);
-        }
+      // Úroveň v profilu: nejčastější odhad z posledních lekcí, ne jen z této
+      if (isKnownLevel && !isTooShort) {
+        final recent = await sessionRepo.getRecentEstimatedLevels(limit: levelWindow);
+        final level = stableLevel(recent) ?? estimatedLevel!;
+        L.i('Rozbor odhadl úroveň $estimatedLevel, z posledních lekcí (${recent.join(', ')}) platí $level.');
+        await profileRepo.updateTargetLevel(level);
       }
       
       // Uložení nově zaznamenaných slovíček do databáze
@@ -278,6 +316,7 @@ class MemoryManagerAgent {
               userSaid: userSaid,
               correctForm: correctForm,
               explanation: explanation,
+              category: ErrorCategory.parse(err['category']?.toString())?.id,
             );
             
             newErrors.add('Řekl: "$userSaid", ale správně je: "$correctForm" ($explanation)');

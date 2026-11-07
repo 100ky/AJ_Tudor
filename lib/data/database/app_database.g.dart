@@ -88,6 +88,39 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _estimatedLevelMeta = const VerificationMeta(
+    'estimatedLevel',
+  );
+  @override
+  late final GeneratedColumn<String> estimatedLevel = GeneratedColumn<String>(
+    'estimated_level',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _studentWordsMeta = const VerificationMeta(
+    'studentWords',
+  );
+  @override
+  late final GeneratedColumn<int> studentWords = GeneratedColumn<int>(
+    'student_words',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _tutorWordsMeta = const VerificationMeta(
+    'tutorWords',
+  );
+  @override
+  late final GeneratedColumn<int> tutorWords = GeneratedColumn<int>(
+    'tutor_words',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -97,6 +130,9 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
     totalUserUtterances,
     totalErrors,
     topicSummary,
+    estimatedLevel,
+    studentWords,
+    tutorWords,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -163,6 +199,30 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
         ),
       );
     }
+    if (data.containsKey('estimated_level')) {
+      context.handle(
+        _estimatedLevelMeta,
+        estimatedLevel.isAcceptableOrUnknown(
+          data['estimated_level']!,
+          _estimatedLevelMeta,
+        ),
+      );
+    }
+    if (data.containsKey('student_words')) {
+      context.handle(
+        _studentWordsMeta,
+        studentWords.isAcceptableOrUnknown(
+          data['student_words']!,
+          _studentWordsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('tutor_words')) {
+      context.handle(
+        _tutorWordsMeta,
+        tutorWords.isAcceptableOrUnknown(data['tutor_words']!, _tutorWordsMeta),
+      );
+    }
     return context;
   }
 
@@ -200,6 +260,18 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
         DriftSqlType.string,
         data['${effectivePrefix}topic_summary'],
       ),
+      estimatedLevel: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}estimated_level'],
+      ),
+      studentWords: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}student_words'],
+      ),
+      tutorWords: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}tutor_words'],
+      ),
     );
   }
 
@@ -217,6 +289,14 @@ class Session extends DataClass implements Insertable<Session> {
   final int totalUserUtterances;
   final int totalErrors;
   final String? topicSummary;
+
+  /// Úroveň (A1–B2), kterou odhadl rozbor této lekce. Profil z posledních lekcí bere
+  /// ustálenou úroveň, aby tutor neměnil styl podle jedné lekce.
+  final String? estimatedLevel;
+
+  /// Kolik slov řekl student a kolik tutor (z uloženého přepisu, spočítá rozbor po lekci).
+  final int? studentWords;
+  final int? tutorWords;
   const Session({
     required this.id,
     required this.startedAt,
@@ -225,6 +305,9 @@ class Session extends DataClass implements Insertable<Session> {
     required this.totalUserUtterances,
     required this.totalErrors,
     this.topicSummary,
+    this.estimatedLevel,
+    this.studentWords,
+    this.tutorWords,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -241,6 +324,15 @@ class Session extends DataClass implements Insertable<Session> {
     map['total_errors'] = Variable<int>(totalErrors);
     if (!nullToAbsent || topicSummary != null) {
       map['topic_summary'] = Variable<String>(topicSummary);
+    }
+    if (!nullToAbsent || estimatedLevel != null) {
+      map['estimated_level'] = Variable<String>(estimatedLevel);
+    }
+    if (!nullToAbsent || studentWords != null) {
+      map['student_words'] = Variable<int>(studentWords);
+    }
+    if (!nullToAbsent || tutorWords != null) {
+      map['tutor_words'] = Variable<int>(tutorWords);
     }
     return map;
   }
@@ -260,6 +352,15 @@ class Session extends DataClass implements Insertable<Session> {
       topicSummary: topicSummary == null && nullToAbsent
           ? const Value.absent()
           : Value(topicSummary),
+      estimatedLevel: estimatedLevel == null && nullToAbsent
+          ? const Value.absent()
+          : Value(estimatedLevel),
+      studentWords: studentWords == null && nullToAbsent
+          ? const Value.absent()
+          : Value(studentWords),
+      tutorWords: tutorWords == null && nullToAbsent
+          ? const Value.absent()
+          : Value(tutorWords),
     );
   }
 
@@ -278,6 +379,9 @@ class Session extends DataClass implements Insertable<Session> {
       ),
       totalErrors: serializer.fromJson<int>(json['totalErrors']),
       topicSummary: serializer.fromJson<String?>(json['topicSummary']),
+      estimatedLevel: serializer.fromJson<String?>(json['estimatedLevel']),
+      studentWords: serializer.fromJson<int?>(json['studentWords']),
+      tutorWords: serializer.fromJson<int?>(json['tutorWords']),
     );
   }
   @override
@@ -291,6 +395,9 @@ class Session extends DataClass implements Insertable<Session> {
       'totalUserUtterances': serializer.toJson<int>(totalUserUtterances),
       'totalErrors': serializer.toJson<int>(totalErrors),
       'topicSummary': serializer.toJson<String?>(topicSummary),
+      'estimatedLevel': serializer.toJson<String?>(estimatedLevel),
+      'studentWords': serializer.toJson<int?>(studentWords),
+      'tutorWords': serializer.toJson<int?>(tutorWords),
     };
   }
 
@@ -302,6 +409,9 @@ class Session extends DataClass implements Insertable<Session> {
     int? totalUserUtterances,
     int? totalErrors,
     Value<String?> topicSummary = const Value.absent(),
+    Value<String?> estimatedLevel = const Value.absent(),
+    Value<int?> studentWords = const Value.absent(),
+    Value<int?> tutorWords = const Value.absent(),
   }) => Session(
     id: id ?? this.id,
     startedAt: startedAt ?? this.startedAt,
@@ -310,6 +420,11 @@ class Session extends DataClass implements Insertable<Session> {
     totalUserUtterances: totalUserUtterances ?? this.totalUserUtterances,
     totalErrors: totalErrors ?? this.totalErrors,
     topicSummary: topicSummary.present ? topicSummary.value : this.topicSummary,
+    estimatedLevel: estimatedLevel.present
+        ? estimatedLevel.value
+        : this.estimatedLevel,
+    studentWords: studentWords.present ? studentWords.value : this.studentWords,
+    tutorWords: tutorWords.present ? tutorWords.value : this.tutorWords,
   );
   Session copyWithCompanion(SessionsCompanion data) {
     return Session(
@@ -328,6 +443,15 @@ class Session extends DataClass implements Insertable<Session> {
       topicSummary: data.topicSummary.present
           ? data.topicSummary.value
           : this.topicSummary,
+      estimatedLevel: data.estimatedLevel.present
+          ? data.estimatedLevel.value
+          : this.estimatedLevel,
+      studentWords: data.studentWords.present
+          ? data.studentWords.value
+          : this.studentWords,
+      tutorWords: data.tutorWords.present
+          ? data.tutorWords.value
+          : this.tutorWords,
     );
   }
 
@@ -340,7 +464,10 @@ class Session extends DataClass implements Insertable<Session> {
           ..write('fluencyScore: $fluencyScore, ')
           ..write('totalUserUtterances: $totalUserUtterances, ')
           ..write('totalErrors: $totalErrors, ')
-          ..write('topicSummary: $topicSummary')
+          ..write('topicSummary: $topicSummary, ')
+          ..write('estimatedLevel: $estimatedLevel, ')
+          ..write('studentWords: $studentWords, ')
+          ..write('tutorWords: $tutorWords')
           ..write(')'))
         .toString();
   }
@@ -354,6 +481,9 @@ class Session extends DataClass implements Insertable<Session> {
     totalUserUtterances,
     totalErrors,
     topicSummary,
+    estimatedLevel,
+    studentWords,
+    tutorWords,
   );
   @override
   bool operator ==(Object other) =>
@@ -365,7 +495,10 @@ class Session extends DataClass implements Insertable<Session> {
           other.fluencyScore == this.fluencyScore &&
           other.totalUserUtterances == this.totalUserUtterances &&
           other.totalErrors == this.totalErrors &&
-          other.topicSummary == this.topicSummary);
+          other.topicSummary == this.topicSummary &&
+          other.estimatedLevel == this.estimatedLevel &&
+          other.studentWords == this.studentWords &&
+          other.tutorWords == this.tutorWords);
 }
 
 class SessionsCompanion extends UpdateCompanion<Session> {
@@ -376,6 +509,9 @@ class SessionsCompanion extends UpdateCompanion<Session> {
   final Value<int> totalUserUtterances;
   final Value<int> totalErrors;
   final Value<String?> topicSummary;
+  final Value<String?> estimatedLevel;
+  final Value<int?> studentWords;
+  final Value<int?> tutorWords;
   const SessionsCompanion({
     this.id = const Value.absent(),
     this.startedAt = const Value.absent(),
@@ -384,6 +520,9 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     this.totalUserUtterances = const Value.absent(),
     this.totalErrors = const Value.absent(),
     this.topicSummary = const Value.absent(),
+    this.estimatedLevel = const Value.absent(),
+    this.studentWords = const Value.absent(),
+    this.tutorWords = const Value.absent(),
   });
   SessionsCompanion.insert({
     this.id = const Value.absent(),
@@ -393,6 +532,9 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     this.totalUserUtterances = const Value.absent(),
     this.totalErrors = const Value.absent(),
     this.topicSummary = const Value.absent(),
+    this.estimatedLevel = const Value.absent(),
+    this.studentWords = const Value.absent(),
+    this.tutorWords = const Value.absent(),
   }) : startedAt = Value(startedAt);
   static Insertable<Session> custom({
     Expression<int>? id,
@@ -402,6 +544,9 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     Expression<int>? totalUserUtterances,
     Expression<int>? totalErrors,
     Expression<String>? topicSummary,
+    Expression<String>? estimatedLevel,
+    Expression<int>? studentWords,
+    Expression<int>? tutorWords,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -412,6 +557,9 @@ class SessionsCompanion extends UpdateCompanion<Session> {
         'total_user_utterances': totalUserUtterances,
       if (totalErrors != null) 'total_errors': totalErrors,
       if (topicSummary != null) 'topic_summary': topicSummary,
+      if (estimatedLevel != null) 'estimated_level': estimatedLevel,
+      if (studentWords != null) 'student_words': studentWords,
+      if (tutorWords != null) 'tutor_words': tutorWords,
     });
   }
 
@@ -423,6 +571,9 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     Value<int>? totalUserUtterances,
     Value<int>? totalErrors,
     Value<String?>? topicSummary,
+    Value<String?>? estimatedLevel,
+    Value<int?>? studentWords,
+    Value<int?>? tutorWords,
   }) {
     return SessionsCompanion(
       id: id ?? this.id,
@@ -432,6 +583,9 @@ class SessionsCompanion extends UpdateCompanion<Session> {
       totalUserUtterances: totalUserUtterances ?? this.totalUserUtterances,
       totalErrors: totalErrors ?? this.totalErrors,
       topicSummary: topicSummary ?? this.topicSummary,
+      estimatedLevel: estimatedLevel ?? this.estimatedLevel,
+      studentWords: studentWords ?? this.studentWords,
+      tutorWords: tutorWords ?? this.tutorWords,
     );
   }
 
@@ -459,6 +613,15 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     if (topicSummary.present) {
       map['topic_summary'] = Variable<String>(topicSummary.value);
     }
+    if (estimatedLevel.present) {
+      map['estimated_level'] = Variable<String>(estimatedLevel.value);
+    }
+    if (studentWords.present) {
+      map['student_words'] = Variable<int>(studentWords.value);
+    }
+    if (tutorWords.present) {
+      map['tutor_words'] = Variable<int>(tutorWords.value);
+    }
     return map;
   }
 
@@ -471,7 +634,10 @@ class SessionsCompanion extends UpdateCompanion<Session> {
           ..write('fluencyScore: $fluencyScore, ')
           ..write('totalUserUtterances: $totalUserUtterances, ')
           ..write('totalErrors: $totalErrors, ')
-          ..write('topicSummary: $topicSummary')
+          ..write('topicSummary: $topicSummary, ')
+          ..write('estimatedLevel: $estimatedLevel, ')
+          ..write('studentWords: $studentWords, ')
+          ..write('tutorWords: $tutorWords')
           ..write(')'))
         .toString();
   }
@@ -1785,6 +1951,17 @@ class $ErrorLogsTable extends ErrorLogs
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _categoryMeta = const VerificationMeta(
+    'category',
+  );
+  @override
+  late final GeneratedColumn<String> category = GeneratedColumn<String>(
+    'category',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _userSaidMeta = const VerificationMeta(
     'userSaid',
   );
@@ -1849,6 +2026,7 @@ class $ErrorLogsTable extends ErrorLogs
     id,
     sessionId,
     errorType,
+    category,
     userSaid,
     correctForm,
     explanation,
@@ -1885,6 +2063,12 @@ class $ErrorLogsTable extends ErrorLogs
       );
     } else if (isInserting) {
       context.missing(_errorTypeMeta);
+    }
+    if (data.containsKey('category')) {
+      context.handle(
+        _categoryMeta,
+        category.isAcceptableOrUnknown(data['category']!, _categoryMeta),
+      );
     }
     if (data.containsKey('user_said')) {
       context.handle(
@@ -1954,6 +2138,10 @@ class $ErrorLogsTable extends ErrorLogs
         DriftSqlType.string,
         data['${effectivePrefix}error_type'],
       )!,
+      category: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}category'],
+      ),
       userSaid: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}user_said'],
@@ -1987,6 +2175,9 @@ class ErrorLog extends DataClass implements Insertable<ErrorLog> {
   final int id;
   final int sessionId;
   final String errorType;
+
+  /// Jemnější druh chyby (`ErrorCategory.id`); u záznamů z doby před ním chybí.
+  final String? category;
   final String userSaid;
   final String correctForm;
   final String explanation;
@@ -1996,6 +2187,7 @@ class ErrorLog extends DataClass implements Insertable<ErrorLog> {
     required this.id,
     required this.sessionId,
     required this.errorType,
+    this.category,
     required this.userSaid,
     required this.correctForm,
     required this.explanation,
@@ -2008,6 +2200,9 @@ class ErrorLog extends DataClass implements Insertable<ErrorLog> {
     map['id'] = Variable<int>(id);
     map['session_id'] = Variable<int>(sessionId);
     map['error_type'] = Variable<String>(errorType);
+    if (!nullToAbsent || category != null) {
+      map['category'] = Variable<String>(category);
+    }
     map['user_said'] = Variable<String>(userSaid);
     map['correct_form'] = Variable<String>(correctForm);
     map['explanation'] = Variable<String>(explanation);
@@ -2021,6 +2216,9 @@ class ErrorLog extends DataClass implements Insertable<ErrorLog> {
       id: Value(id),
       sessionId: Value(sessionId),
       errorType: Value(errorType),
+      category: category == null && nullToAbsent
+          ? const Value.absent()
+          : Value(category),
       userSaid: Value(userSaid),
       correctForm: Value(correctForm),
       explanation: Value(explanation),
@@ -2038,6 +2236,7 @@ class ErrorLog extends DataClass implements Insertable<ErrorLog> {
       id: serializer.fromJson<int>(json['id']),
       sessionId: serializer.fromJson<int>(json['sessionId']),
       errorType: serializer.fromJson<String>(json['errorType']),
+      category: serializer.fromJson<String?>(json['category']),
       userSaid: serializer.fromJson<String>(json['userSaid']),
       correctForm: serializer.fromJson<String>(json['correctForm']),
       explanation: serializer.fromJson<String>(json['explanation']),
@@ -2052,6 +2251,7 @@ class ErrorLog extends DataClass implements Insertable<ErrorLog> {
       'id': serializer.toJson<int>(id),
       'sessionId': serializer.toJson<int>(sessionId),
       'errorType': serializer.toJson<String>(errorType),
+      'category': serializer.toJson<String?>(category),
       'userSaid': serializer.toJson<String>(userSaid),
       'correctForm': serializer.toJson<String>(correctForm),
       'explanation': serializer.toJson<String>(explanation),
@@ -2064,6 +2264,7 @@ class ErrorLog extends DataClass implements Insertable<ErrorLog> {
     int? id,
     int? sessionId,
     String? errorType,
+    Value<String?> category = const Value.absent(),
     String? userSaid,
     String? correctForm,
     String? explanation,
@@ -2073,6 +2274,7 @@ class ErrorLog extends DataClass implements Insertable<ErrorLog> {
     id: id ?? this.id,
     sessionId: sessionId ?? this.sessionId,
     errorType: errorType ?? this.errorType,
+    category: category.present ? category.value : this.category,
     userSaid: userSaid ?? this.userSaid,
     correctForm: correctForm ?? this.correctForm,
     explanation: explanation ?? this.explanation,
@@ -2084,6 +2286,7 @@ class ErrorLog extends DataClass implements Insertable<ErrorLog> {
       id: data.id.present ? data.id.value : this.id,
       sessionId: data.sessionId.present ? data.sessionId.value : this.sessionId,
       errorType: data.errorType.present ? data.errorType.value : this.errorType,
+      category: data.category.present ? data.category.value : this.category,
       userSaid: data.userSaid.present ? data.userSaid.value : this.userSaid,
       correctForm: data.correctForm.present
           ? data.correctForm.value
@@ -2104,6 +2307,7 @@ class ErrorLog extends DataClass implements Insertable<ErrorLog> {
           ..write('id: $id, ')
           ..write('sessionId: $sessionId, ')
           ..write('errorType: $errorType, ')
+          ..write('category: $category, ')
           ..write('userSaid: $userSaid, ')
           ..write('correctForm: $correctForm, ')
           ..write('explanation: $explanation, ')
@@ -2118,6 +2322,7 @@ class ErrorLog extends DataClass implements Insertable<ErrorLog> {
     id,
     sessionId,
     errorType,
+    category,
     userSaid,
     correctForm,
     explanation,
@@ -2131,6 +2336,7 @@ class ErrorLog extends DataClass implements Insertable<ErrorLog> {
           other.id == this.id &&
           other.sessionId == this.sessionId &&
           other.errorType == this.errorType &&
+          other.category == this.category &&
           other.userSaid == this.userSaid &&
           other.correctForm == this.correctForm &&
           other.explanation == this.explanation &&
@@ -2142,6 +2348,7 @@ class ErrorLogsCompanion extends UpdateCompanion<ErrorLog> {
   final Value<int> id;
   final Value<int> sessionId;
   final Value<String> errorType;
+  final Value<String?> category;
   final Value<String> userSaid;
   final Value<String> correctForm;
   final Value<String> explanation;
@@ -2151,6 +2358,7 @@ class ErrorLogsCompanion extends UpdateCompanion<ErrorLog> {
     this.id = const Value.absent(),
     this.sessionId = const Value.absent(),
     this.errorType = const Value.absent(),
+    this.category = const Value.absent(),
     this.userSaid = const Value.absent(),
     this.correctForm = const Value.absent(),
     this.explanation = const Value.absent(),
@@ -2161,6 +2369,7 @@ class ErrorLogsCompanion extends UpdateCompanion<ErrorLog> {
     this.id = const Value.absent(),
     required int sessionId,
     required String errorType,
+    this.category = const Value.absent(),
     required String userSaid,
     required String correctForm,
     required String explanation,
@@ -2176,6 +2385,7 @@ class ErrorLogsCompanion extends UpdateCompanion<ErrorLog> {
     Expression<int>? id,
     Expression<int>? sessionId,
     Expression<String>? errorType,
+    Expression<String>? category,
     Expression<String>? userSaid,
     Expression<String>? correctForm,
     Expression<String>? explanation,
@@ -2186,6 +2396,7 @@ class ErrorLogsCompanion extends UpdateCompanion<ErrorLog> {
       if (id != null) 'id': id,
       if (sessionId != null) 'session_id': sessionId,
       if (errorType != null) 'error_type': errorType,
+      if (category != null) 'category': category,
       if (userSaid != null) 'user_said': userSaid,
       if (correctForm != null) 'correct_form': correctForm,
       if (explanation != null) 'explanation': explanation,
@@ -2198,6 +2409,7 @@ class ErrorLogsCompanion extends UpdateCompanion<ErrorLog> {
     Value<int>? id,
     Value<int>? sessionId,
     Value<String>? errorType,
+    Value<String?>? category,
     Value<String>? userSaid,
     Value<String>? correctForm,
     Value<String>? explanation,
@@ -2208,6 +2420,7 @@ class ErrorLogsCompanion extends UpdateCompanion<ErrorLog> {
       id: id ?? this.id,
       sessionId: sessionId ?? this.sessionId,
       errorType: errorType ?? this.errorType,
+      category: category ?? this.category,
       userSaid: userSaid ?? this.userSaid,
       correctForm: correctForm ?? this.correctForm,
       explanation: explanation ?? this.explanation,
@@ -2227,6 +2440,9 @@ class ErrorLogsCompanion extends UpdateCompanion<ErrorLog> {
     }
     if (errorType.present) {
       map['error_type'] = Variable<String>(errorType.value);
+    }
+    if (category.present) {
+      map['category'] = Variable<String>(category.value);
     }
     if (userSaid.present) {
       map['user_said'] = Variable<String>(userSaid.value);
@@ -2252,6 +2468,7 @@ class ErrorLogsCompanion extends UpdateCompanion<ErrorLog> {
           ..write('id: $id, ')
           ..write('sessionId: $sessionId, ')
           ..write('errorType: $errorType, ')
+          ..write('category: $category, ')
           ..write('userSaid: $userSaid, ')
           ..write('correctForm: $correctForm, ')
           ..write('explanation: $explanation, ')
@@ -3922,6 +4139,9 @@ typedef $$SessionsTableCreateCompanionBuilder =
       Value<int> totalUserUtterances,
       Value<int> totalErrors,
       Value<String?> topicSummary,
+      Value<String?> estimatedLevel,
+      Value<int?> studentWords,
+      Value<int?> tutorWords,
     });
 typedef $$SessionsTableUpdateCompanionBuilder =
     SessionsCompanion Function({
@@ -3932,6 +4152,9 @@ typedef $$SessionsTableUpdateCompanionBuilder =
       Value<int> totalUserUtterances,
       Value<int> totalErrors,
       Value<String?> topicSummary,
+      Value<String?> estimatedLevel,
+      Value<int?> studentWords,
+      Value<int?> tutorWords,
     });
 
 final class $$SessionsTableReferences
@@ -4034,6 +4257,21 @@ class $$SessionsTableFilterComposer
 
   ColumnFilters<String> get topicSummary => $composableBuilder(
     column: $table.topicSummary,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get estimatedLevel => $composableBuilder(
+    column: $table.estimatedLevel,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get studentWords => $composableBuilder(
+    column: $table.studentWords,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get tutorWords => $composableBuilder(
+    column: $table.tutorWords,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4156,6 +4394,21 @@ class $$SessionsTableOrderingComposer
     column: $table.topicSummary,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get estimatedLevel => $composableBuilder(
+    column: $table.estimatedLevel,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get studentWords => $composableBuilder(
+    column: $table.studentWords,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get tutorWords => $composableBuilder(
+    column: $table.tutorWords,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$SessionsTableAnnotationComposer
@@ -4193,6 +4446,21 @@ class $$SessionsTableAnnotationComposer
 
   GeneratedColumn<String> get topicSummary => $composableBuilder(
     column: $table.topicSummary,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get estimatedLevel => $composableBuilder(
+    column: $table.estimatedLevel,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get studentWords => $composableBuilder(
+    column: $table.studentWords,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get tutorWords => $composableBuilder(
+    column: $table.tutorWords,
     builder: (column) => column,
   );
 
@@ -4311,6 +4579,9 @@ class $$SessionsTableTableManager
                 Value<int> totalUserUtterances = const Value.absent(),
                 Value<int> totalErrors = const Value.absent(),
                 Value<String?> topicSummary = const Value.absent(),
+                Value<String?> estimatedLevel = const Value.absent(),
+                Value<int?> studentWords = const Value.absent(),
+                Value<int?> tutorWords = const Value.absent(),
               }) => SessionsCompanion(
                 id: id,
                 startedAt: startedAt,
@@ -4319,6 +4590,9 @@ class $$SessionsTableTableManager
                 totalUserUtterances: totalUserUtterances,
                 totalErrors: totalErrors,
                 topicSummary: topicSummary,
+                estimatedLevel: estimatedLevel,
+                studentWords: studentWords,
+                tutorWords: tutorWords,
               ),
           createCompanionCallback:
               ({
@@ -4329,6 +4603,9 @@ class $$SessionsTableTableManager
                 Value<int> totalUserUtterances = const Value.absent(),
                 Value<int> totalErrors = const Value.absent(),
                 Value<String?> topicSummary = const Value.absent(),
+                Value<String?> estimatedLevel = const Value.absent(),
+                Value<int?> studentWords = const Value.absent(),
+                Value<int?> tutorWords = const Value.absent(),
               }) => SessionsCompanion.insert(
                 id: id,
                 startedAt: startedAt,
@@ -4337,6 +4614,9 @@ class $$SessionsTableTableManager
                 totalUserUtterances: totalUserUtterances,
                 totalErrors: totalErrors,
                 topicSummary: topicSummary,
+                estimatedLevel: estimatedLevel,
+                studentWords: studentWords,
+                tutorWords: tutorWords,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -5272,6 +5552,7 @@ typedef $$ErrorLogsTableCreateCompanionBuilder =
       Value<int> id,
       required int sessionId,
       required String errorType,
+      Value<String?> category,
       required String userSaid,
       required String correctForm,
       required String explanation,
@@ -5283,6 +5564,7 @@ typedef $$ErrorLogsTableUpdateCompanionBuilder =
       Value<int> id,
       Value<int> sessionId,
       Value<String> errorType,
+      Value<String?> category,
       Value<String> userSaid,
       Value<String> correctForm,
       Value<String> explanation,
@@ -5346,6 +5628,11 @@ class $$ErrorLogsTableFilterComposer
 
   ColumnFilters<String> get errorType => $composableBuilder(
     column: $table.errorType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get category => $composableBuilder(
+    column: $table.category,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5442,6 +5729,11 @@ class $$ErrorLogsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get category => $composableBuilder(
+    column: $table.category,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get userSaid => $composableBuilder(
     column: $table.userSaid,
     builder: (column) => ColumnOrderings(column),
@@ -5505,6 +5797,9 @@ class $$ErrorLogsTableAnnotationComposer
 
   GeneratedColumn<String> get errorType =>
       $composableBuilder(column: $table.errorType, builder: (column) => column);
+
+  GeneratedColumn<String> get category =>
+      $composableBuilder(column: $table.category, builder: (column) => column);
 
   GeneratedColumn<String> get userSaid =>
       $composableBuilder(column: $table.userSaid, builder: (column) => column);
@@ -5607,6 +5902,7 @@ class $$ErrorLogsTableTableManager
                 Value<int> id = const Value.absent(),
                 Value<int> sessionId = const Value.absent(),
                 Value<String> errorType = const Value.absent(),
+                Value<String?> category = const Value.absent(),
                 Value<String> userSaid = const Value.absent(),
                 Value<String> correctForm = const Value.absent(),
                 Value<String> explanation = const Value.absent(),
@@ -5616,6 +5912,7 @@ class $$ErrorLogsTableTableManager
                 id: id,
                 sessionId: sessionId,
                 errorType: errorType,
+                category: category,
                 userSaid: userSaid,
                 correctForm: correctForm,
                 explanation: explanation,
@@ -5627,6 +5924,7 @@ class $$ErrorLogsTableTableManager
                 Value<int> id = const Value.absent(),
                 required int sessionId,
                 required String errorType,
+                Value<String?> category = const Value.absent(),
                 required String userSaid,
                 required String correctForm,
                 required String explanation,
@@ -5636,6 +5934,7 @@ class $$ErrorLogsTableTableManager
                 id: id,
                 sessionId: sessionId,
                 errorType: errorType,
+                category: category,
                 userSaid: userSaid,
                 correctForm: correctForm,
                 explanation: explanation,

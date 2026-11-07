@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/app_theme.dart';
 import '../../../data/database/app_database.dart';
+import '../../../data/models/progress_trends.dart';
 
 /// Rozbalovací hlavička detailu lekce s akcemi (analýza, kartičky z chyb, nahlášení problému, smazání).
 class SessionDetailHeader extends StatelessWidget {
@@ -131,6 +132,18 @@ class SessionDetailHeader extends StatelessWidget {
                 color: AppTheme.outlineLightColor(context),
               ),
               const SizedBox(height: 8),
+              if (ProgressTrends.studentShare(session) case final share?) ...[
+                Text(
+                  'Tvoje řeč: ${(share * 100).round()} % slov '
+                  '(ty ${session.studentWords}, tutor ${session.tutorWords})',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: share < 0.5 ? AppTheme.warning : AppTheme.mutedTextColor(context),
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
               SizedBox(
                 width: double.infinity,
                 child: Wrap(

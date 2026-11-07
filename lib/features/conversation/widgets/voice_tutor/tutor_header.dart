@@ -212,20 +212,24 @@ class _HeroHeader extends StatelessWidget {
           ],
 
           // Aktivní scénář / režim chip
-          if (tutorState.selectedScenarioId != null) ...[
+          if (tutorState.selectedScenarioId != null || tutorState.lessonMode) ...[
             const SizedBox(height: 8),
             Chip(
               avatar: Icon(
-                tutorState.scenarioContext == '__free_talk__'
-                    ? Icons.chat_bubble_outline_rounded
-                    : Icons.theater_comedy_rounded,
+                tutorState.lessonMode
+                    ? Icons.school_rounded
+                    : tutorState.scenarioContext == '__free_talk__'
+                        ? Icons.chat_bubble_outline_rounded
+                        : Icons.theater_comedy_rounded,
                 size: 14,
                 color: AppTheme.accent,
               ),
               label: Text(
-                tutorState.scenarioContext == '__free_talk__'
-                    ? 'Volný rozhovor aktivní'
-                    : 'Role-Play scénář aktivní',
+                tutorState.lessonMode
+                    ? 'Lekce s kartičkami aktivní'
+                    : tutorState.scenarioContext == '__free_talk__'
+                        ? 'Volný rozhovor aktivní'
+                        : 'Role-Play scénář aktivní',
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 12,
                   color: AppTheme.accent,

@@ -10,6 +10,7 @@ import 'package:aj_tudor/features/conversation/widgets/smart_chat_bubble.dart';
 import 'package:aj_tudor/data/database/app_database.dart';
 import 'package:aj_tudor/data/models/chat_message.dart';
 import 'package:aj_tudor/data/repositories/session_repository.dart';
+import 'package:aj_tudor/services/flashcards/conversation_cards.dart';
 import 'package:aj_tudor/features/conversation/voice_tutor_screen.dart';
 import 'package:aj_tudor/features/conversation/widgets/fluid_voice_wave.dart';
 import 'package:aj_tudor/core/config/config_providers.dart';
@@ -65,7 +66,7 @@ class FakeVoiceTutorAgent extends VoiceTutorAgent {
   @override
   void selectScenario(int? id, String? instruction) {
     selectedId = id;
-    state = state.copyWith(selectedScenarioId: id, scenarioContext: instruction);
+    state = state.copyWith(selectedScenarioId: id, scenarioContext: instruction, lessonMode: false);
   }
 }
 
@@ -144,9 +145,11 @@ void main() {
     FakeVoiceDirectorAgent? fakeDirectorAgent,
     TopicPreparationState? topicState,
     bool smartBubbles = true,
+    List<Flashcard>? dueCards,
   }) {
     return ProviderScope(
       overrides: [
+        if (dueCards != null) dueFlashcardsProvider.overrideWith((ref) => Stream.value(dueCards)),
         sharedPreferencesProvider.overrideWithValue(prefs),
         databaseProvider.overrideWithValue(db),
         sessionRepositoryProvider.overrideWithValue(repo),
@@ -216,6 +219,85 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.text('Historie'), findsOneWidget);
+
+      await drainTimers(tester);
+    });
+
+    testWidgets('the lesson tab shows today\'s cards and selects the lesson for the next call',
+        (WidgetTester tester) async {
+      configureViewport(tester);
+      Flashcard card(int id, String front, String back) => Flashcard(
+            id: id,
+            frontText: front,
+            backText: back,
+            explanation: '',
+            errorType: 'vocabulary',
+            intervalDays: 1,
+            repetitionCount: 0,
+            masteryScore: 0,
+            nextReviewAt: DateTime(2026, 11, 1),
+            createdAt: DateTime(2026, 11, 1),
+          );
+      final fakeAgent = FakeVoiceTutorAgent(VoiceTutorState(status: TutorState.idle));
+
+      await tester.pumpWidget(buildTestWidget(
+        fakeTutorAgent: fakeAgent,
+        dueCards: [
+          card(7, 'vzít si volno', 'take a sick day'),
+          card(11, 'jednou týdně', 'once a week'),
+          // Krátké běžné slovo hovor neověří, v lekci není
+          card(8, 'alespoň', 'least'),
+        ],
+      ));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.text('Lekce'));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Záložka se načte až po animaci přepnutí
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump();
+      expect(fakeAgent.state.lessonMode, isTrue);
+      expect(find.text('Projdeme 2 výrazy z tvých kartiček'), findsOneWidget);
+      expect(find.text('vzít si volno'), findsOneWidget);
+      expect(find.text('alespoň'), findsNothing);
+      expect(find.text('Lekce s kartičkami aktivní'), findsOneWidget);
+
+      await tester.tap(find.text('Historie'));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(fakeAgent.state.lessonMode, isFalse);
+
+      await drainTimers(tester);
+    });
+
+    testWidgets('four mode tabs fit a narrow phone', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 3.0; // 360 dp
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final fakeAgent = FakeVoiceTutorAgent(VoiceTutorState(status: TutorState.idle));
+
+      await tester.pumpWidget(buildTestWidget(fakeTutorAgent: fakeAgent));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Lekce'), findsOneWidget);
+
+      await drainTimers(tester);
+    });
+
+    testWidgets('during a lesson the progress is shown', (WidgetTester tester) async {
+      configureViewport(tester);
+      final card = ConversationCard(id: 7, czech: 'vzít si volno', english: 'take a sick day');
+      final fakeAgent = FakeVoiceTutorAgent(VoiceTutorState(
+        status: TutorState.listening,
+        lessonCards: [card, ConversationCard(id: 11, czech: 'jednou týdně', english: 'once a week')],
+        completedCards: [card],
+      ));
+
+      await tester.pumpWidget(buildTestWidget(fakeTutorAgent: fakeAgent));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('Lekce: 1/2 výrazů'), findsOneWidget);
 
       await drainTimers(tester);
     });
