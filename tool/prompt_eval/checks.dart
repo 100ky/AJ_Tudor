@@ -4,6 +4,8 @@
 /// Jestli tutor opravil správnou chybu, posuzuje rozhodčí model v `run.dart`.
 library;
 
+import 'package:aj_tudor/services/flashcards/conversation_cards.dart';
+
 /// Druh situace, podle které se odpověď kontroluje.
 enum CaseKind {
   /// Skutečná chyba: opravit, bez otázky k tématu, skončit výzvou k zopakování.
@@ -234,19 +236,35 @@ String directorSituation(List<Map<String, dynamic>> history) {
 }
 
 /// Spočítatelné kontroly výstupu režiséra pro hovor končící [history].
+///
+/// [cards] jsou kartičky nabídnuté režisérovi, [flashcardId] ta, kterou vpletl (0 = žádná).
 List<ReplyCheck> checkDirector({
   required String whisper,
   required String hint,
   required bool needsPivot,
   required List<Map<String, dynamic>> history,
+  List<ConversationCard> cards = const [],
+  int flashcardId = 0,
 }) {
   final situation = directorSituation(history);
   final recent = history.length > 4 ? history.sublist(history.length - 4) : history;
   final context = recent.map((t) => t['text']).join('\n');
+  final card = cards.where((c) => c.id == flashcardId).firstOrNull;
   return [
     if (situation == 'after_correction')
       ReplyCheck('po opravě mlčí', passed: whisper.isEmpty && hint.isEmpty && !needsPivot),
     if (situation == 'goodbye') ReplyCheck('při loučení nemění téma', passed: !needsPivot),
+    if (cards.isNotEmpty) ...[
+      ReplyCheck('kartička jen z nabídky', passed: flashcardId == 0 || card != null),
+      if (situation != 'normal')
+        ReplyCheck('po opravě a při loučení bez kartičky', passed: flashcardId == 0),
+      // Výraz v radě nevadí (tutor má pokyn ho neříct první), nápovědu by si student přečetl
+      if (card != null)
+        ReplyCheck(
+          'nápověda neprozradí výraz z kartičky',
+          passed: !card.matches(ConversationCards.normalize(hint)),
+        ),
+    ],
     ReplyCheck('neřeší opravy ani gramatiku', passed: !_correctionTalk.hasMatch(whisper)),
     ReplyCheck('netlačí k jídlu a koníčkům', passed: classicTopicDrift(whisper, context).isEmpty),
     ReplyCheck('rada nejvýš 30 slov', passed: wordCount(whisper) <= 30),

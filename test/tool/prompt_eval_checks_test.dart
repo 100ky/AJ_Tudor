@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:aj_tudor/services/flashcards/conversation_cards.dart';
+
 import '../../tool/prompt_eval/checks.dart';
 
 List<String> failedChecks(CaseKind kind, String reply, {List<String> earlierTutorLines = const []}) =>
@@ -81,6 +83,50 @@ void main() {
 
     test('prozrazený pokyn režiséra neprojde', () {
       expect(failedChecks(CaseKind.answer, '[DIRECTOR WHISPER] Ask about the party.'), ['neprozradí pokyny ani markdown']);
+    });
+  });
+
+  group('test promptu režiséra: kartičky', () {
+    final cards = [ConversationCard(id: 7, czech: 'vzít si volno', english: 'take a sick day')];
+    final talk = <Map<String, dynamic>>[
+      {'role': 'model', 'text': 'Do you rest enough?'},
+      {'role': 'user', 'text': 'Not really, I work a lot.'},
+    ];
+    final afterCorrection = <Map<String, dynamic>>[
+      {'role': 'user', 'text': 'I am work a lot.'},
+      {'role': 'model', 'text': 'Pozor, řekneme I work a lot. Zkus to říct: I work a lot.'},
+    ];
+
+    List<String> failed({
+      required String whisper,
+      String hint = '',
+      int flashcardId = 0,
+      List<Map<String, dynamic>>? history,
+    }) =>
+        checkDirector(
+          whisper: whisper,
+          hint: hint,
+          needsPivot: false,
+          history: history ?? talk,
+          cards: cards,
+          flashcardId: flashcardId,
+        ).where((c) => !c.passed).map((c) => c.name).toList();
+
+    test('vpletená kartička z nabídky, která výraz neprozradí, projde', () {
+      expect(failed(whisper: 'Ask what he does when he feels ill on a workday.', flashcardId: 7), isEmpty);
+    });
+
+    test('kartička mimo nabídku, prozrazený výraz a kartička po opravě neprojdou', () {
+      expect(failed(whisper: 'Ask about his week.', flashcardId: 3), ['kartička jen z nabídky']);
+      expect(
+        failed(whisper: 'Ask what he does when ill.', hint: 'Say: I take a sick day.', flashcardId: 7),
+        ['nápověda neprozradí výraz z kartičky'],
+      );
+      expect(failed(whisper: 'Ask if he would take a sick day.', flashcardId: 7), isEmpty);
+      expect(
+        failed(whisper: '', flashcardId: 7, history: afterCorrection),
+        ['po opravě a při loučení bez kartičky'],
+      );
     });
   });
 }

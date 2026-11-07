@@ -413,6 +413,7 @@ class EvalOptions {
     required this.dryRun,
     required this.original,
     this.promptFile,
+    this.casesFile,
     this.model,
     this.judgeOnly = false,
     this.rejudge = false,
@@ -439,6 +440,9 @@ class EvalOptions {
   /// Tutor: systémový prompt ze souboru místo z kódu (např. starý prompt pro výchozí stav).
   final String? promptFile;
 
+  /// Tutor: soubor s případy místo `private/cases.json` (např. jiný profil studenta).
+  final String? casesFile;
+
   /// Model místo [textModels]: u režiséra pro jeho volání, u `--judge-only` pro rozhodčího.
   final String? model;
 
@@ -462,6 +466,7 @@ class EvalOptions {
     var dryRun = false;
     var original = false;
     String? promptFile;
+    String? casesFile;
     String? model;
     var judgeOnly = false;
     var rejudge = false;
@@ -486,6 +491,8 @@ class EvalOptions {
           original = true;
         case '--prompt-file':
           promptFile = args[++i];
+        case '--cases':
+          casesFile = args[++i];
         case '--model':
           model = args[++i];
         case '--judge-only':
@@ -515,6 +522,7 @@ class EvalOptions {
       dryRun: dryRun,
       original: original,
       promptFile: promptFile,
+      casesFile: casesFile,
       model: model,
       judgeOnly: judgeOnly,
       rejudge: rejudge,

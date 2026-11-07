@@ -29,7 +29,10 @@ Future<void> main(List<String> args) async {
     await compareRuns(options.compare!.$1, options.compare!.$2);
     return;
   }
-  final data = jsonDecode(await File.fromUri(privateDir.resolve('cases.json')).readAsString())
+  final casesFile = options.casesFile != null
+      ? File(options.casesFile!)
+      : File.fromUri(privateDir.resolve('cases.json'));
+  final data = jsonDecode(await casesFile.readAsString())
       as Map<String, dynamic>;
   final profile = data['profile'] as Map<String, dynamic>;
   final promptFile = options.promptFile;
