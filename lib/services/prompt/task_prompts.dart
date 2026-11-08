@@ -140,6 +140,7 @@ Vrať VÝHRADNĚ validní JSON pole objektů bez formátování:
 Tvým úkolem je detailně analyzovat mluvenou nahrávku studenta a porovnat ji se vzorovým anglickým textem.
 ${instructionHint ?? ''}
 Vzorový anglický text: "$referenceText"
+Nepředpokládej, že student vzorový text řekl. Když v nahrávce není řeč, je nesrozumitelná nebo student řekl něco jiného, přepiš jen to, co opravdu zaznělo (bez řeči prázdný "transcribedText") a dej nízké "overallScore" (bez řeči 0).
 
 Vyhodnoť:
 1. "transcribedText": Přesný přepis toho, co student v angličtině skutečně vyslovil.

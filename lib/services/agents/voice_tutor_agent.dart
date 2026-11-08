@@ -674,9 +674,11 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   /// Skrytá zpráva tutorovi, které výrazy lekce student už řekl a které zbývají.
   String _lessonProgressNote() {
     final doneIds = {for (final card in state.completedCards) card.id};
+    // Gramatickou kartičku tutor zná jen česky (anglické znění by vkládal do otázek)
+    String label(ConversationCard card) => card.kind == CardKind.grammar ? card.czech : card.english;
     return LiveTutorPrompts.lessonProgress(
-      done: [for (final card in state.lessonCards) if (doneIds.contains(card.id)) card.english],
-      remaining: [for (final card in state.lessonCards) if (!doneIds.contains(card.id)) card.english],
+      done: [for (final card in state.lessonCards) if (doneIds.contains(card.id)) label(card)],
+      remaining: [for (final card in state.lessonCards) if (!doneIds.contains(card.id)) label(card)],
     );
   }
 
@@ -1594,6 +1596,17 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   /// Aktuální stav tutora pro bezpečný přístup mimo ref (např. v dispose).
   TutorState get currentStatus => state.status;
 
+  // Zapnutí a vypnutí mikrofonu při pauze a obnovení běží postupně v pořadí klepnutí.
+  // Stav se přepne hned, takže rychlé druhé klepnutí udělá opak a mikrofon se nezapne
+  // dřív, než se dokončí předchozí vypnutí (8. 11.: pauza a hned obnovení se zasekly).
+  Future<void> _micChain = Future.value();
+
+  Future<void> _queueMic(Future<void> Function() step) {
+    final next = _micChain.then((_) => step());
+    _micChain = next.catchError((Object _) {});
+    return next;
+  }
+
   /// Pozastaví probíhající konverzaci.
   ///
   /// Zastaví mikrofon, ale ponechá WebSocket otevřený pro rychlé obnovení.
@@ -1618,15 +1631,16 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
 
     // Zbytek rozpracované odpovědi tutora se během pauzy nepřehraje
     ref.read(geminiLiveClientProvider)?.muteOutput = true;
+    state = state.copyWith(status: TutorState.paused);
 
     // Zastavíme mikrofon, ale necháme WebSocket otevřený
-    try {
-      await _audio.stop();
-    } catch (e) {
-      L.w('Chyba při pozastavení mikrofonu: $e');
-    }
-
-    state = state.copyWith(status: TutorState.paused);
+    await _queueMic(() async {
+      try {
+        await _audio.stop();
+      } catch (e) {
+        L.w('Chyba při pozastavení mikrofonu: $e');
+      }
+    });
   }
 
   Future<void> resumeSession() async {
@@ -1642,27 +1656,30 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     }
     client.muteOutput = false;
     _preRoll.clear();
+    state = state.copyWith(status: TutorState.listening);
 
     // Znovu aktivujeme mikrofon bez ohledu na stav sítě,
     // aby mohl běžet na pozadí, jakmile se spojení obnoví.
-    try {
-      await _audio.start(onAudioChunk: (data) {
-        _handleIncomingAudioChunk(data, client);
-      });
-    } catch (e) {
-      L.e('Chyba mikrofonu při obnovení: $e');
-      state = state.copyWith(status: TutorState.error, errorMessage: 'Chyba mikrofonu: $e');
-      return;
-    }
-
-    if (!client.isConnected) {
-      L.w('WebSocket je aktuálně odpojen, přecházím do stavu reconnecting a spouštím reconnect...');
-      state = state.copyWith(status: TutorState.reconnecting);
-      client.forceReconnect();
-    } else {
-      state = state.copyWith(status: TutorState.listening);
-    }
-    _resetWatchdog();
+    await _queueMic(() async {
+      // Student mezitím zase pozastavil: mikrofon nechá vypnutý další krok ve frontě
+      if (state.status != TutorState.listening) return;
+      try {
+        await _audio.start(onAudioChunk: (data) {
+          _handleIncomingAudioChunk(data, client);
+        });
+      } catch (e) {
+        L.e('Chyba mikrofonu při obnovení: $e');
+        state = state.copyWith(status: TutorState.error, errorMessage: 'Chyba mikrofonu: $e');
+        return;
+      }
+      if (state.status != TutorState.listening) return;
+      if (!client.isConnected) {
+        L.w('WebSocket je aktuálně odpojen, přecházím do stavu reconnecting a spouštím reconnect...');
+        state = state.copyWith(status: TutorState.reconnecting);
+        client.forceReconnect();
+      }
+      _resetWatchdog();
+    });
   }
 
   /// Okamžitě přeruší probíhající řeč tutora a vrátí aplikaci do stavu poslechu (listening).

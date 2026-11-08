@@ -188,12 +188,15 @@ class PronunciationService {
           _cooldowns.markSuccess(model, remember: true);
           L.i('PronunciationService: Výslovnost úspěšně analyzována modelem $model.');
 
+          // Bez přepisu nebo skóre nejde o správnou odpověď (dřív chybějící skóre znamenalo 0,8)
+          final transcribed = json['transcribedText']?.toString().trim() ?? '';
+          final score = transcribed.isEmpty ? 0.0 : (double.tryParse(json['overallScore']?.toString() ?? '') ?? 0.0);
           return PronunciationAnalysis(
             referenceText: referenceText,
-            transcribedText: json['transcribedText']?.toString() ?? '',
-            overallScore: double.tryParse(json['overallScore']?.toString() ?? '0.8') ?? 0.8,
+            transcribedText: transcribed,
+            overallScore: score.clamp(0.0, 1.0),
             words: wordList,
-            feedback: json['feedback']?.toString() ?? 'Skvělá práce!',
+            feedback: json['feedback']?.toString() ?? (transcribed.isEmpty ? 'V nahrávce není slyšet řeč.' : ''),
           );
         } on DioException catch (e) {
           final kind = classifyGeminiError(e);

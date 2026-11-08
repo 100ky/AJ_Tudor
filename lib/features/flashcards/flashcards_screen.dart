@@ -217,7 +217,11 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
     }
   }
 
+  // Rozběhnuté zapnutí mikrofonu; zastavení na něj počká (dvojí rychlé klepnutí)
+  Future<void>? _recordingStarted;
+
   Future<void> _startRecording() async {
+    if (_isRecording || _isEvaluatingSpeech) return;
     HapticFeedback.mediumImpact();
 
     try {
@@ -228,11 +232,11 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
         _recordingVolume = 0.0;
       });
 
-      await _recorder.start(onVolume: (vol) {
+      await (_recordingStarted = _recorder.start(onVolume: (vol) {
         if (mounted) {
           setState(() => _recordingVolume = vol);
         }
-      });
+      }));
     } catch (e) {
       if (mounted) {
         setState(() => _isRecording = false);
@@ -247,9 +251,12 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
   }
 
   Future<void> _stopRecording(Flashcard card) async {
+    if (!_isRecording) return;
     HapticFeedback.mediumImpact();
 
     try {
+      // Mikrofon se možná ještě zapíná (klepnutí rychle za sebou)
+      await _recordingStarted;
       await _recorder.stop();
 
       setState(() {
@@ -257,11 +264,13 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
         _recordingVolume = 0.0;
       });
 
-      if (_recorder.isTooShort) {
+      if (_recorder.isTooShort || !_recorder.heardSpeech) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Nahrávka byla příliš krátká, zkuste to znovu.'),
+            SnackBar(
+              content: Text(_recorder.isTooShort
+                  ? 'Nahrávka byla příliš krátká, zkus to znovu.'
+                  : 'V nahrávce není slyšet řeč, zkus to znovu a mluv blíž k telefonu.'),
               behavior: SnackBarBehavior.floating,
             ),
           );

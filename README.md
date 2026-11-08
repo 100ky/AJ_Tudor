@@ -184,6 +184,19 @@ Automatické testy nepokryjí mikrofon, přehrávání zvuku ani skutečné vol�
 
 ---
 
+## 🛠️ Úpravy po ručním testu (8. 11. 2026)
+
+Úpravy vzešly z lekcí 23 (Lekce s kartičkami) a 25 (pokec).
+
+- **Lekce podle druhu kartičky:** slovíčko se tutor ptá česky jako kartička, gramatiku uzná vlastními slovy a splnění posoudí rozhodčí lekce (viz [plán výuky](docs/plan-vyuky.md), fáze 2).
+- **Podezřele krátký opravný přepis:** flash-lite přepsal 13 s řeči jako „Hm,“. Přepis nejvýš dvou slov z nahrávky delší než 4 s teď zkusí další model a platí, jen když ho nikdo nepřekoná. Značka „(ticho)“ před řečí se zahodí.
+- **Úroveň jen z delších lekcí:** odhad úrovně se ukládá a počítá jen z lekce, kde student řekl aspoň 150 slov.
+- **Skoro stejné kartičky:** nová kartička nevznikne, když existuje kartička lišící se jen tvarem slova (winterize a winterized, mow the lawn a mowing the lawn, `cardTextKey`).
+- **Kratší čekání u krátkých úloh:** příprava tématu čekala na zaseknutý 3.8 Flash 45 s. Krátké úlohy (téma, dril, chat, scénáře, kartičky) teď čekají na jeden model nejvýš 20 s, rozbor lekce dál 45 s.
+- **Profil dovedností v Pokroku:** jemnější úroveň se zdůvodněním, chyby na 100 slov, slova na repliku a podíl řeči.
+- **Pauza a hned obnovení:** stav se přepnul až po vypnutí mikrofonu, takže druhé rychlé klepnutí pauzu zopakovalo místo obnovení. Teď se stav přepne hned a mikrofon se zapíná a vypíná postupně v pořadí klepnutí.
+- **Mikrofon u kartiček:** dvojí rychlé klepnutí nahrálo zlomek vteřiny bez řeči a hodnocení ho uznalo jako správnou odpověď (chybějící skóre znamenalo 0,8). Teď se nahrávka kratší než 0,5 s nebo bez řeči nevyhodnocuje, zastavení počká na zapnutí mikrofonu a bez přepisu nebo skóre je odpověď špatně.
+
 ## 🛠️ Úpravy po ručním testu (7. 11. 2026)
 
 Úpravy vzešly z lekce 22 (první test kartiček v hovoru, viz [plán výuky](docs/plan-vyuky.md), fáze 1).

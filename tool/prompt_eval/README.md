@@ -20,7 +20,10 @@ dart run tool/prompt_eval/run.dart --label baseline --runs 3
 - `--no-judge` vynechá rozhodčí model,
 - `--cases tool/prompt_eval/private/cases_novy_profil.json` načte případy z jiného souboru (např. se současným profilem studenta),
 - `director.dart --cases tool/prompt_eval/private/director_cases_karticky.json` pustí test režiséra s dnešními kartičkami: soubor má navíc pole `dueCards` (kartičky na opakování od nejstarší) a režisér z nich dostane zásobu stejně jako v aplikaci. Kontroly hlídají, že vplete jen nabídnutou kartičku, po opravě a při loučení žádnou a že nápověda na displeji výraz neprozradí; rozhodčí posoudí, jestli kartička k hovoru sedí,
-- `--compare baseline candidate` porovná dva uložené běhy podle druhu případu i po jednotlivých případech.
+- `--compare baseline candidate` porovná dva uložené běhy podle druhu případu i po jednotlivých případech,
+- `--recheck` (s `--judge-only`) přepočítá automatické kontroly uložených odpovědí podle aktuálních pravidel bez volání API; odpovědi, které nově projdou, ohodnotí rozhodčí.
+
+Rozhodčí kartiček v lekci (`LessonCardJudge`) má vlastní test `lesson_judge.dart`: u replik studenta v `private/lesson_judge_cases.json`, u kterých je jasné, jestli kartičku splňují, porovná rozhodnutí flash-lite s očekáváním (`--dry-run`, `--max-requests`).
 
 Celý běh (63 případů × 3) trvá zhruba 30–45 minut. Před změnou promptu se uloží výchozí běh, po změně se pustí znovu pod jiným názvem a oba se porovnají. Změna má smysl, jen když není horší v žádném druhu případů.
 

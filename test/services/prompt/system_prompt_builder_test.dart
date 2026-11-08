@@ -343,12 +343,14 @@ void main() {
       expect(SystemPromptBuilder.expressionCount(10), '10 výrazů');
       // Slovíčko se ptá česky jako kartička, gramatiku splní i vlastní věta (lekce 23)
       expect(lesson, contains('[slovíčko]: zeptej se česky na výraz z kartičky'));
-      expect(lesson, contains('uznej jakoukoli správnou větu jeho vlastními slovy'));
-      expect(lesson, contains("nikdy „How would you say…“"));
+      expect(lesson, contains('Uznej jakoukoli jeho správnou větu a nechtěj jiná slova'));
+      expect(lesson, contains("Neptej se „How would you say…“"));
       final grammar = SystemPromptBuilder.buildTutorPrompt(
         lessonCards: [ConversationCard(id: 36, czech: 'neodpočíval', english: "didn't relax")],
       );
-      expect(grammar, contains("1. [gramatika] neodpočíval → didn't relax"));
+      // Anglické znění gramatické kartičky tutor nedostane (lekce 8. 11.: vkládal ho do otázek)
+      expect(grammar, contains('1. [gramatika] neodpočíval\n'));
+      expect(grammar, isNot(contains("didn't relax")));
       expect(lesson, contains('lekci uzavři'));
 
       // Pokec se bez kartiček nemění, jeho prompt prošel testem promptu

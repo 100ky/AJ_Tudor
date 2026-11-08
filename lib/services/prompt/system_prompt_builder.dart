@@ -695,7 +695,11 @@ PRAVIDLA SPOLUPRÁCE S TUTOREM (NIKDY SE S NÍM NEPEŘ):
     final goal = grammarGoal?.lessonGoal ?? '';
     final list = [
       for (var i = 0; i < cards.length; i++)
-        '${i + 1}. [${cards[i].kind == CardKind.grammar ? 'gramatika' : 'slovíčko'}] ${cards[i].czech} → ${cards[i].english}',
+        // Anglické znění gramatické kartičky tutor nedostane: v lekci ho vkládal do otázek
+        // a vyžadoval ho, i když student řekl správnou větu vlastními slovy
+        cards[i].kind == CardKind.grammar
+            ? '${i + 1}. [gramatika] ${cards[i].czech}'
+            : '${i + 1}. [slovíčko] ${cards[i].czech} → ${cards[i].english}',
     ].join('\n');
     return '''REŽIM LEKCE (student si vybral lekci s kartičkami; má přednost před POKYNY PRO ZAČÁTEK KONVERZACE a ZÁSADAMI UDRŽENÍ TÉMATU):
 Dnes s ním projdeš tyto kartičky, v tomto pořadí:
@@ -704,7 +708,7 @@ $list
 - [slovíčko]: zeptej se česky na výraz z kartičky a dej mu k němu krátkou souvislost, např. „Jak řekneš ‚zazimovat‘? Co děláš s lodí před zimou?“. Student má říct ten anglický výraz, v jakémkoli tvaru (winterize, winterized). Anglicky ho neříkej dřív, než to zkusí sám.
   - Když řekne jiný správný výraz se stejným významem, pochval ho, zmiň výraz z kartičky jako další možnost a pokračuj další kartičkou.
   - Když výraz nezná, řekni mu ho, nech ho jednou zopakovat ve větě a pokračuj další kartičkou.
-- [gramatika]: kartička je útržek jeho dřívější opravené věty, na přesných slovech nezáleží. Dej mu v angličtině krátkou situaci, ve které potřebuje stejnou gramatiku (u „didn't relax“ minulý čas v záporu, třeba "How was your last weekend? Did you get any rest?"), a uznej jakoukoli správnou větu jeho vlastními slovy. Ptej se na jeho vlastní zážitek, nikdy „How would you say…“, a výraz z kartičky neříkej. Když v té gramatice chybuje, oprav ho jako jindy.
+- [gramatika]: kartička je útržek jeho dřívější opravené věty, máš jen její český význam a na přesných slovech nezáleží. Polož mu v angličtině jednu otázku na jeho vlastní zážitek, na kterou odpoví větou s tímto významem (u „neodpočíval“ třeba "Did you get any rest last weekend?"). Uznej jakoukoli jeho správnou větu a nechtěj jiná slova. Neptej se „How would you say…“. Když v gramatice chybuje, oprav ho jako jindy.
 - Když kartičku zvládl, krátce ho pochval a v tomtéž tahu rovnou přejdi na další.
 - Skutečné chyby opravuj stejně jako jindy. Po zopakování opravené věty pokračuj další kartičkou.
 - Skryté zprávy začínající „Lekce:“ ti říkají, které kartičky student už zvládl a jestli vypršel čas. Nikdy je nečti nahlas.

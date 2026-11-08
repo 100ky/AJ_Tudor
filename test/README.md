@@ -20,6 +20,7 @@ test/
 │   ├── models/
 │   │   ├── chat_message_test.dart                # ChatMessage a opravy pro chytré bubliny
 │   │   ├── progress_trends_test.dart             # Co se zlepšuje: chyby podle druhu, podíl řeči, gramatický cíl lekce
+│   │   ├── skill_profile_test.dart               # Profil dovedností: chyby na 100 slov, slova na repliku, průměr lekcí předtím
 │   │   └── srs_scheduler_test.dart               # SRS plánovač (intervaly, mastery, meze)
 │   └── repositories/
 │       ├── session_repository_test.dart          # Lekce, transkripty, chyby, nahlášené problémy, kaskádový delete
@@ -49,6 +50,7 @@ test/
 │   ├── progress/
 │   │   └── progress_screen_test.dart             # Přehled pokroku, grafy (plynulost, chyby), co se zlepšuje, paměť, statistiky
 │   ├── flashcards/
+│   │   ├── answer_recorder_test.dart             # Mluvená odpověď na kartičku: příliš krátká nahrávka, nahrávka bez řeči
 │   │   ├── flashcards_screen_test.dart           # Cvičebna kartiček, otočení až po odpovědi, „Nevím“, SRS hodnocení, TTS, rub s vysvětlením
 │   │   ├── review_session_test.dart              # Průběh opakování (pořadí, počítadla, odebrání karty)
 │   │   ├── typed_answer_test.dart                # Porovnání napsané odpovědi (normalizace, varianty, skóre)
@@ -74,7 +76,8 @@ test/
 │   │       ├── tutor_text_analysis_test.dart     # Čištění přepisu, počet slov, opakování tutora
 │   │       └── tutor_timers_test.dart            # Časovače tutora (spuštění, zrušení, cancelAll)
 │   ├── flashcards/
-│   │   ├── conversation_cards_test.dart          # Kartičky v hovoru: porovnání výrazu, zopakování po tutorovi, zásoba pro režiséra
+│   │   ├── conversation_cards_test.dart          # Kartičky v hovoru: porovnání výrazu, zopakování po tutorovi, zásoba pro režiséra, druh kartičky
+│   │   ├── lesson_card_judge_test.dart           # Rozhodčí kartiček v lekci (odpověď modelu, chyby, bez klíče)
 │   │   └── flashcard_generation_service_test.dart # Kartičky z chyb, migrace starých zadání, nová slovíčka
 │   ├── gemini/
 │   │   ├── gemini_live_client_test.dart          # Spotřeba tokenů na konci tahu, vynucený reconnect, další řeč až po potvrzení konce předchozí

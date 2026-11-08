@@ -959,6 +959,50 @@ void main() {
       await agent.stopSession('test');
     });
 
+    testWidgets('pause and an immediate resume end listening, the mic starts only after it stopped',
+        (tester) async {
+      final agent = container.read(voiceTutorAgentProvider.notifier);
+      await agent.startSession();
+      // Vypnutí mikrofonu chvíli trvá
+      final stopped = Completer<void>();
+      final steps = <String>[];
+      when(() => mockAudio.stop()).thenAnswer((_) {
+        steps.add('stop');
+        return stopped.future;
+      });
+      when(() => mockAudio.start(onAudioChunk: any(named: 'onAudioChunk'))).thenAnswer((invocation) async {
+        steps.add('start');
+        mic = invocation.namedArguments[const Symbol('onAudioChunk')] as Function(List<int>);
+      });
+
+      final pause = agent.pauseSession();
+      expect(container.read(voiceTutorAgentProvider).status, TutorState.paused);
+      // Druhé klepnutí hned po prvním: obnovení, ne další pauza
+      final resume = agent.resumeSession();
+      expect(container.read(voiceTutorAgentProvider).status, TutorState.listening);
+      await tester.pump();
+      expect(steps, ['stop']);
+
+      stopped.complete();
+      await pause;
+      await resume;
+      expect(steps, ['stop', 'start']);
+      expect(container.read(voiceTutorAgentProvider).status, TutorState.listening);
+
+      // Obnovení a hned zase pauza: mikrofon zůstane vypnutý
+      when(() => mockAudio.stop()).thenAnswer((_) async => steps.add('stop'));
+      await agent.pauseSession();
+      final resumeAgain = agent.resumeSession();
+      final pauseAgain = agent.pauseSession();
+      await resumeAgain;
+      await pauseAgain;
+      expect(container.read(voiceTutorAgentProvider).status, TutorState.paused);
+      expect(steps.last, 'stop');
+      await tester.pump(const Duration(seconds: 1));
+
+      await agent.stopSession('test');
+    });
+
     testWidgets('the corrected transcript replaces the live one in the bubble and in the lesson', (tester) async {
       when(() => mockTranscriber.transcribe(any(), previousTutorLine: any(named: 'previousTutorLine')))
           .thenAnswer((_) async => 'Cože? To nevím.');

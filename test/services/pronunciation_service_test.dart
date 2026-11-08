@@ -144,6 +144,33 @@ void main() {
     Future<PronunciationAnalysis?> evaluate() =>
         service.evaluatePronunciation(audioBytes: Uint8List(64), referenceText: 'Hello there');
 
+    void answerWith(String json) => when(() => api.generateContent(
+          apiKey: any(named: 'apiKey'),
+          model: any(named: 'model'),
+          body: any(named: 'body'),
+        )).thenAnswer((_) async => {
+              'candidates': [
+                {
+                  'content': {
+                    'parts': [
+                      {'text': json}
+                    ]
+                  }
+                }
+              ]
+            });
+
+    test('an answer without speech or without a score is not correct', () async {
+      // Kartičky 8. 11.: dvojí rychlé klepnutí na mikrofon se uznalo jako správná odpověď,
+      // chybějící skóre znamenalo 0,8
+      answerWith('{"transcribedText": "", "overallScore": 0.9, "words": []}');
+      expect((await evaluate())?.overallScore, 0.0);
+      answerWith('{"transcribedText": "Hello there", "words": []}');
+      expect((await evaluate())?.overallScore, 0.0);
+      answerWith('{"transcribedText": "Hello there", "overallScore": 0.92, "words": []}');
+      expect((await evaluate())?.overallScore, 0.92);
+    });
+
     test('a rejected API key stops after the first model', () async {
       failWith(403);
       expect(await evaluate(), isNull);
