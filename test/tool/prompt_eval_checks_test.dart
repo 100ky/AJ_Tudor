@@ -81,6 +81,13 @@ void main() {
       );
     });
 
+    test('česká otázka v nápovědě k opravě není otázka k tématu', () {
+      const hint = 'Řekl jsi „I go yesterday“, ale mluvíš o včerejšku. Jak to bude v minulém čase? Zkus to!';
+      expect(topicQuestions(hint), 0);
+      expect(failedChecks(CaseKind.correct, hint), isEmpty);
+      expect(topicQuestions('Nice! What did you do then?'), 1);
+    });
+
     test('prozrazený pokyn režiséra neprojde', () {
       expect(failedChecks(CaseKind.answer, '[DIRECTOR WHISPER] Ask about the party.'), ['neprozradí pokyny ani markdown']);
     });

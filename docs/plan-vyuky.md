@@ -68,7 +68,7 @@ Jak je to udělané:
 
 ## Fáze 3: další vylepšení výuky
 
-Body 1, 3, 4 a 5 jsou v kódu od 7. 11. Body 2 a 6 mění prompt pokecu, takže před nasazením potřebují celý test promptu (63 případů).
+Body 1, 3, 4 a 5 jsou v kódu od 7. 11. Body 2 a 6 mění prompt pokecu a 8. 11. testem neprošly (viz níže), prompt pokecu zůstává ve verzi ze 7. 11.
 
 1. **Gramatický cíl lekce.** Místo pasivního seznamu deseti starých chyb jedna věc na lekci (u studenta nejčastěji minulý čas, -s ve 3. osobě, předložky at/on/in). Tutor volí témata, ve kterých se přirozeně objeví (minulý čas: víkend, co se stalo v práci). V Lekci povinně, v pokecu nejvýš jako lehký směr.
    *Hotovo jen v Lekci:* cíl je nejčastější gramatický druh chyby (čas, tvar slovesa, předložka, slovosled) z posledních 5 lekcí s rozborem podle druhů. Tutor podle něj volí situace k výrazům, chyby v něm opravuje vždy a při uzavření řekne, jak šel. Záložka Lekce cíl ukáže. V pokecu zatím ne, prompt pokecu se tím nemění.
@@ -80,6 +80,12 @@ Body 1, 3, 4 a 5 jsou v kódu od 7. 11. Body 2 a 6 mění prompt pokecu, takže 
 5. **Stálejší odhad úrovně.** Úroveň v profilu skáče mezi A2 a B1 podle jedné lekce a tutor mění styl. Průměr z posledních ~5 lekcí.
    *Hotovo:* každá lekce si uloží odhad rozboru (`sessions.estimated_level`, krátké lekce ne) a profil dostane nejčastější odhad z posledních 5 lekcí, při shodě ten novější.
 6. **Kratší prompt tutora.** Kolem 20 tisíc znaků se zpracovává při každém tahu. Zkrátit opakovaná pravidla a velká písmena (dokumentace Gemini radí vyhýbat se přehnaně důraznému jazyku) a ověřit testem.
+
+**Test bodů 2 a 6 (8. 11.):** prompt zkrácený z 20 787 na 13 232 znaků (bez profilu z 14 645 na 7 437) s nápovědou místo hotové věty u času a tvaru slovesa. Celý test (63 případů po dvou odpovědích, rozhodčí `gemini-3.5-flash-lite`): rozhodčí 91 % → 76 %, oprava chyby 88 → 50 %, česká věta 91 → 73 %, pokračování po opravě 63 → 38 %, odpověď na dotaz 67 → 40 %. Lepší jen čekání, držení tématu a povzbuzení. Proto se nenasadil.
+- Nápovědu Live model nedodržuje: většinou dál řekne hotovou větu, a když napoví, tak občas anglicky nebo bez „Zkus to!“. Bod 2 zatím odkládám.
+- Zkrácením se ztratily drobnosti, které podrobné znění drželo: české slovo „dosadit do své věty“, otázka k tématu po zopakování, pořadí čas před předložkou u druhé chyby. Prompt pokecu Live modelu evidentně pomáhá i svou důrazností.
+- Zkrácená verze je v `tool/prompt_eval/private/kratsi_system_prompt_builder.dart.txt`, výsledky v `results/kratsi`.
+- Další pokus: jen malé, cílené změny ověřeného promptu, každá zvlášť ověřená. Kandidáti: popis jen té úrovně, kterou student má (asi 600 znaků méně), rada režiséra se zahodí, když se hovor posunul jinam (lekce 22), mírnější příklad na jednoslovnou odpověď místo „Come on, tell me more! Why?“ (dvě otázky naráz) a fakta z profilu bez „navaž na ně (How is your dog doing?)“.
 
 ## Technické body z rozborů lekcí
 

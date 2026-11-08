@@ -114,9 +114,14 @@ bool isRepeatRequest(String sentence) => _repeatRequest.hasMatch(sentence);
 /// Zda je odpověď opravou nebo pomocí s výrazem (obsahuje výzvu k zopakování).
 bool isCorrectionTurn(String reply) => sentencesOf(reply).any(isRepeatRequest);
 
-/// Otázky k tématu: věty s otazníkem mimo citace, které nejsou výzvou k zopakování.
-int topicQuestions(String reply) =>
-    sentencesOf(reply).where((s) => s.endsWith('?') && !isRepeatRequest(s)).length;
+// Česká otázka je nápověda k opravě („Jak to bude v minulém čase?“) nebo doptání,
+// otázky k tématu klade tutor anglicky
+final RegExp _czechQuestion = RegExp(r'[ěščřžýáíéůúťďň]|^(jak|co|kdy|kde|proč|kter|myslíš)\b', caseSensitive: false);
+
+/// Otázky k tématu: anglické věty s otazníkem mimo citace, které nejsou výzvou k zopakování.
+int topicQuestions(String reply) => sentencesOf(reply)
+    .where((s) => s.endsWith('?') && !isRepeatRequest(s) && !_czechQuestion.hasMatch(s))
+    .length;
 
 /// Počet slov odpovědi.
 int wordCount(String reply) =>
