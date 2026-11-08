@@ -51,7 +51,7 @@ void main() {
     expect(LiveTutorPrompts.lessonOpening, contains('REŽIM LEKCE'));
     expect(
       LiveTutorPrompts.lessonProgress(done: ['take a sick day'], remaining: ['once a week', 'work on']),
-      'Lekce: student už sám řekl "take a sick day". Zbývá: "once a week", "work on".',
+      'Lekce: student už zvládl "take a sick day". Zbývá: "once a week", "work on".',
     );
     expect(LiveTutorPrompts.lessonProgress(done: ['work on'], remaining: []), contains('lekci uzavři'));
     expect(LiveTutorPrompts.lessonTimeUp, contains('čas vypršel'));

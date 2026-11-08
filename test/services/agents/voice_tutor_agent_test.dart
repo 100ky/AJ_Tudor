@@ -24,6 +24,7 @@ import 'package:aj_tudor/data/database/app_database.dart';
 import 'package:aj_tudor/data/models/chat_message.dart';
 import 'package:aj_tudor/services/agents/voice_director_agent.dart';
 import 'package:aj_tudor/services/flashcards/conversation_cards.dart';
+import 'package:aj_tudor/services/flashcards/lesson_card_judge.dart';
 
 class MockGeminiLiveClient extends Mock implements GeminiLiveClient {}
 class MockAudioSessionController extends Mock implements AudioSessionController {}
@@ -53,6 +54,24 @@ class _CapturingDirector extends VoiceDirectorAgent {
   }) async {
     whisperCallbacks.add(onWhisperReady);
     cardPools.add(cards);
+  }
+}
+
+/// Rozhodčí lekce, který kartičku [answer] uzná, a pamatuje si, na co se ho ptali.
+class _FakeLessonJudge extends LessonCardJudge {
+  _FakeLessonJudge(this.answer) : super(null);
+
+  final int? answer;
+  final List<String> asked = [];
+
+  @override
+  Future<ConversationCard?> judge({
+    required List<ConversationCard> remaining,
+    required List<String> recentTutorLines,
+    required String studentText,
+  }) async {
+    asked.add(studentText);
+    return remaining.where((c) => c.id == answer).firstOrNull;
   }
 }
 
@@ -1271,7 +1290,7 @@ void main() {
             await agent.startSession();
 
             expect(container.read(voiceTutorAgentProvider).lessonCards.map((c) => c.id), [7, 11]);
-            expect(sentPrompt(), contains('1. vzít si volno → take a sick day\n2. jednou týdně → once a week'));
+            expect(sentPrompt(), contains('1. [slovíčko] vzít si volno → take a sick day\n2. [slovíčko] jednou týdně → once a week'));
             await tester.pump(const Duration(seconds: 1));
             verify(() => mockClient.sendText(LiveTutorPrompts.lessonOpening)).called(1);
 
@@ -1285,7 +1304,7 @@ void main() {
             await agent.startSession();
 
             await exchange(tester, 'I would take a sick day.', 'Great! Now, how often do you go swimming?');
-            expect(whisperSent('Lekce: student už sám řekl "take a sick day". Zbývá: "once a week".'), isTrue);
+            expect(whisperSent('Lekce: student už zvládl "take a sick day". Zbývá: "once a week".'), isTrue);
             expect(container.read(voiceTutorAgentProvider).lessonCompleted, 1);
             for (var i = 0; i < 3; i++) {
               await exchange(tester, 'Hmm, every Monday.', 'Nice. Try another way to say it.');
@@ -1294,7 +1313,7 @@ void main() {
 
             await exchange(tester, 'Once a week, on Mondays.', 'Perfect! That was the last one.');
             expect(container.read(voiceTutorAgentProvider).lessonFinished, isTrue);
-            expect(whisperSent('všechny výrazy'), isTrue);
+            expect(whisperSent('všechny kartičky'), isTrue);
 
             // Po lekci hovor pokračuje pokecem a zase s režisérem
             await exchange(tester, 'Thanks, that was fun.', 'Glad you liked it!');
@@ -1325,6 +1344,33 @@ void main() {
             expect(prompt, contains('GRAMATICKÝ CÍL LEKCE'));
             expect(prompt, contains('předložky at/on/in'));
             await tester.pump(const Duration(seconds: 1));
+
+            await agent.stopSession('test');
+          });
+
+          testWidgets('the lesson judge accepts a card said in other words, only when the words do not match',
+              (tester) async {
+            final judge = _FakeLessonJudge(7);
+            container.dispose();
+            container = ProviderContainer(overrides: [
+              ...overrides,
+              voiceDirectorAgentProvider.overrideWith(() => director),
+              lessonCardJudgeProvider.overrideWithValue(judge),
+            ]);
+            final agent = container.read(voiceTutorAgentProvider.notifier)..selectLesson();
+            await agent.startSession();
+
+            // Doslovně „once a week“: rozhodčí se neptá
+            await exchange(tester, 'We meet once a week.', 'Spot on! Next one.');
+            expect(judge.asked, isEmpty);
+
+            // Jinými slovy: rozhodčí kartičku uzná
+            await exchange(tester, 'I would stay at home and call my boss that I am ill.', 'Great!');
+            await tester.pump();
+            expect(judge.asked, ['I would stay at home and call my boss that I am ill.']);
+            verify(() => mockFlashcardRepo.reviewFlashcard(flashcardId: 7, rating: 2)).called(1);
+            expect(container.read(voiceTutorAgentProvider).lessonCompleted, 2);
+            expect(container.read(voiceTutorAgentProvider).lessonFinished, isTrue);
 
             await agent.stopSession('test');
           });

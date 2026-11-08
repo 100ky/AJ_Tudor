@@ -43,6 +43,23 @@ void main() {
     });
   });
 
+  group('card kinds', () {
+    test('sentence fragments are grammar, words and set phrases are vocabulary', () {
+      CardKind kind(String czech, String english) => ConversationCards.kindOf(czech, english);
+      expect(kind('neodpočíval / neodpočinul si', "didn't relax"), CardKind.grammar);
+      expect(kind('nepřipravený', 'not prepared'), CardKind.grammar);
+      expect(kind('být vytvořen pro', 'be created for'), CardKind.grammar);
+      expect(kind('mít rušný týden', 'had a busy week'), CardKind.grammar);
+      expect(kind('přepsal (minulý čas)', 'transcribed'), CardKind.grammar);
+      // Typ chyby v databázi je u „winterized“ gramatika, ale je to slovíčko
+      expect(kind('zazimoval', 'winterized'), CardKind.vocabulary);
+      expect(kind('vzít si volno', 'take a sick day'), CardKind.vocabulary);
+      expect(kind('mít mentální blok', 'have a mental block'), CardKind.vocabulary);
+      expect(kind('osoba', 'person'), CardKind.vocabulary);
+      expect(kind('nudle (množné číslo)', 'noodles'), CardKind.vocabulary);
+    });
+  });
+
   group('completing cards', () {
     test('a card is completed once, and only when the tutor did not say the phrase', () {
       final cards = ConversationCards([_card(1, 'take a sick day'), _card(2, 'winterized')]);
@@ -54,6 +71,15 @@ void main() {
       expect(cards.completeBy('Yesterday I winterized the boat.').map((c) => c.id), [2]);
       expect(cards.completeBy('I winterized it again.'), isEmpty);
       expect(cards.completed.map((c) => c.id), [2]);
+    });
+
+    test('the lesson judge can complete a card the words did not match, but only once', () {
+      final sickDay = _card(1, 'take a sick day');
+      final cards = ConversationCards([sickDay, _card(2, 'winterized')]);
+      expect(cards.markCompleted(sickDay), isTrue);
+      expect(cards.markCompleted(sickDay), isFalse);
+      expect(cards.markCompleted(_card(9, 'not in this call')), isFalse);
+      expect(cards.completed.map((c) => c.id), [1]);
     });
 
     test('cards that cannot be checked are left out', () {

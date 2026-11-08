@@ -253,8 +253,11 @@ void main() {
               startedAt: now.subtract(const Duration(minutes: 10)),
               endedAt: Value(now),
               estimatedLevel: const Value('B1'),
+              levelDetail: const Value('B1-'),
+              levelReason: const Value('Mluví srozumitelně, ale chybuje v minulém čase.'),
               studentWords: const Value(120),
               tutorWords: const Value(200),
+              totalUserUtterances: const Value(15),
             ),
           );
       await db.into(db.errorLogs).insert(
@@ -275,6 +278,11 @@ void main() {
       expect(find.text('Co se zlepšuje'), findsOneWidget);
       expect(find.text('Mluvíš 38 %'), findsOneWidget);
       expect(find.text('Čas slovesa'), findsOneWidget);
+      // Profil dovedností z poslední lekce
+      expect(find.text('Úroveň v poslední lekci: B1-. Mluví srozumitelně, ale chybuje v minulém čase.'), findsOneWidget);
+      expect(find.text('Gramatika: chyb na 100 slov'), findsOneWidget);
+      expect(find.text('0,8'), findsOneWidget);
+      expect(find.text('Slov na repliku'), findsOneWidget);
 
       await drainTimers(tester);
     });

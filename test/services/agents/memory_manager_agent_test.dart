@@ -193,9 +193,10 @@ void main() {
       expect(sessions.first.fluencyScore, 0.85);
       expect(sessions.first.totalErrors, 1);
 
-      // 2. Profile target level updated to B2
+      // 2. Krátká lekce (pár vět) o úrovni nic neříká, profil ji nemění
       final profile = await profileRepo.getUserProfile();
-      expect(profile?.targetLevel, 'B2');
+      expect(profile?.targetLevel, isNot('B2'));
+      expect(sessions.first.estimatedLevel, isNull);
 
       // 3. Memory briefing updated with tutorFeedback appended
       expect(profile?.memoryBriefing?.contains('Student byl velmi komunikativní'), true);
@@ -362,21 +363,28 @@ void main() {
     });
 
     test('the analysis stores the error category, the level and the words of the lesson', () async {
-      // Dvě dřívější lekce s odhadem B1: jedna lekce s A2 úroveň v profilu nezmění
-      for (final level in ['B1', 'B1']) {
+      // Dvě dřívější lekce s odhadem B1: jedna lekce s A2 úroveň v profilu nezmění.
+      // Lekce s A1 a 40 slovy (skoro jen opakování) se nepočítá.
+      for (final (level, words) in [('B1', 300), ('B1', 250), ('A1', 40)]) {
         final old = (await repo.startNewSession()).getOrThrow();
         await repo.updateSessionAnalysis(
             sessionId: old, topicSummary: 'Dřív', fluencyScore: 0.6, totalErrors: 0, estimatedLevel: level);
+        await repo.updateSessionWordCounts(sessionId: old, studentWords: words, tutorWords: 200);
       }
       final s = (await repo.startNewSession()).getOrThrow();
       await repo.addTranscript(sessionId: s, speaker: 'tutor', content: 'What did you do yesterday at work?');
       await repo.addTranscript(sessionId: s, speaker: 'user', content: 'Yesterday I go to work.');
       await repo.addTranscript(sessionId: s, speaker: 'user', content: 'I fix bug.');
+      // Úroveň se odhaduje jen z lekce, kde student řekl aspoň 150 slov
+      await repo.addTranscript(
+          sessionId: s, speaker: 'user', content: List.filled(30, 'I worked on my app.').join(' '));
 
       final mockJson = jsonEncode({
         'topicSummary': 'Práce',
         'fluencyScore': 0.5,
         'estimatedLevel': 'A2',
+        'levelDetail': 'A2+',
+        'levelReason': 'Mluví srozumitelně, ale chybuje v minulém čase.',
         'totalErrors': 1,
         'briefing': '',
         'resolvedErrors': [],
@@ -409,11 +417,14 @@ void main() {
 
       final session = (await repo.watchAllSessions().first).firstWhere((x) => x.id == s);
       expect(session.estimatedLevel, 'A2');
-      expect(session.studentWords, 8);
+      expect(session.levelDetail, 'A2+');
+      expect(session.levelReason, 'Mluví srozumitelně, ale chybuje v minulém čase.');
+      expect(session.totalUserUtterances, 3);
+      expect(session.studentWords, 158);
       expect(session.tutorWords, 7);
       expect((await profileRepo.getUserProfile())?.targetLevel, 'B1');
       expect((await repo.getErrorLogs(s)).single.category, 'tense');
-      expect(prompt, contains('student řekl 53 % slov'));
+      expect(prompt, contains('student řekl 96 % slov'));
     });
 
     test('one lesson makes at most six cards and none from a whole sentence', () async {

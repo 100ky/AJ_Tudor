@@ -32,15 +32,15 @@ abstract final class LiveTutorPrompts {
   /// Úvod hovoru v režimu Lekce (pozdrav a rovnou první výraz).
   static const String lessonOpening =
       "Hello! Please greet me in one short sentence and start today's flashcard lesson according to your "
-      "REŽIM LEKCE instructions: say how many expressions we will practise and give me the situation for the first one.";
+      "REŽIM LEKCE instructions: say how many expressions we will practise and start with the first card.";
 
-  /// Průběh lekce pro tutora: které výrazy student už řekl sám a které zbývají.
+  /// Průběh lekce pro tutora: které kartičky student už zvládl a které zbývají.
   static String lessonProgress({required List<String> done, required List<String> remaining}) {
     final said = done.map((e) => '"$e"').join(', ');
     if (remaining.isEmpty) {
-      return 'Lekce: student už sám řekl všechny výrazy ($said). Až dokončíš aktuální krok, lekci uzavři.';
+      return 'Lekce: student už zvládl všechny kartičky ($said). Až dokončíš aktuální krok, lekci uzavři.';
     }
-    return 'Lekce: student už sám řekl ${said.isEmpty ? 'zatím žádný výraz' : said}. '
+    return 'Lekce: student už zvládl ${said.isEmpty ? 'zatím žádnou kartičku' : said}. '
         'Zbývá: ${remaining.map((e) => '"$e"').join(', ')}.';
   }
 

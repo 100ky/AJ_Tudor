@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 import '../database/app_database.dart';
+import '../models/card_text.dart';
 import '../models/flashcard_stats.dart';
 import '../models/srs_scheduler.dart';
 import '../../core/error/error_handling.dart';
@@ -46,6 +47,17 @@ class FlashcardRepository {
       if (existingByText != null) {
         L.i('Kartička s backText="$backText" již existuje (#${existingByText.id}), přeskakuji.');
         return Result.success(existingByText.id);
+      }
+
+      // Skoro stejná kartička jen s jiným tvarem slova (winterize vedle winterized)
+      final key = cardTextKey(backText);
+      if (key.isNotEmpty) {
+        for (final card in await _db.select(_db.flashcards).get()) {
+          if (cardTextKey(card.backText) == key) {
+            L.i('Kartička "$backText" je skoro stejná jako #${card.id} "${card.backText}", přeskakuji.');
+            return Result.success(card.id);
+          }
+        }
       }
       // ── Konec kontroly duplicit ────────────────────────────────────────
 

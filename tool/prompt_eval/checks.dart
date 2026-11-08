@@ -262,7 +262,8 @@ List<ReplyCheck> checkReply(
         checks.add(ReplyCheck('řekne výraz z kartičky', passed: lessonTarget.matches(ConversationCards.normalize(text))));
       }
     case CaseKind.lessonEnd:
-      checks.add(ReplyCheck('bez výzvy k zopakování', passed: !isCorrectionTurn(text)));
+      // „Zopakuj si ještě minulé časy“ v závěru lekce výzvou k zopakování věty není
+      break;
   }
   return checks;
 }

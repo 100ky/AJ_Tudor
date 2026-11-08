@@ -6,6 +6,7 @@ import '../../data/data_providers.dart';
 import '../../data/repositories/profile_repository.dart';
 import '../../data/models/flashcard_stats.dart';
 import '../../data/models/progress_trends.dart';
+import '../../data/models/skill_profile.dart';
 import '../../core/app_theme.dart';
 import '../skeleton/navigation_provider.dart';
 import 'widgets/error_distribution_card.dart';
@@ -43,6 +44,7 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen> {
     final stats =
         ref.watch(flashcardStatsProvider).value ?? const FlashcardStats.empty();
     final trends = ProgressTrends.from(sessions, errors);
+    final skills = SkillProfile.from(sessions, errors);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -116,9 +118,10 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen> {
                           ),
                           const SizedBox(height: 12),
                         ],
-                        if (!trends.isEmpty) ...[
+                        if (!trends.isEmpty || !skills.isEmpty) ...[
                           ProgressTrendCard(
                             trends: trends,
+                            skills: skills,
                             expanded: _isTrendsExpanded,
                             onToggle: () => setState(
                                 () => _isTrendsExpanded = !_isTrendsExpanded),

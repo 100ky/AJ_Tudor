@@ -14,6 +14,10 @@ class Sessions extends Table {
   /// ustálenou úroveň, aby tutor neměnil styl podle jedné lekce.
   TextColumn get estimatedLevel => text().nullable()();
 
+  /// Jemnější úroveň (např. „B1-“, „B1+“) a jednou větou proč, z rozboru lekce.
+  TextColumn get levelDetail => text().nullable()();
+  TextColumn get levelReason => text().nullable()();
+
   /// Kolik slov řekl student a kolik tutor (z uloženého přepisu, spočítá rozbor po lekci).
   IntColumn get studentWords => integer().nullable()();
   IntColumn get tutorWords => integer().nullable()();

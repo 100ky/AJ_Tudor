@@ -38,6 +38,10 @@ class MemoryManagerAgent {
   /// Počet slov v [text] (pro podíl řeči studenta a tutora).
   static int countWords(String text) => _word.allMatches(text).length;
 
+  /// Kolik slov musí student v lekci říct, aby se z ní odhadovala úroveň. Lekce 23 měla
+  /// 58 slov (hlavně zopakované věty) a úroveň v profilu spadla z ní na A2.
+  static const int minWordsForLevel = 150;
+
   /// Z kolika posledních lekcí se bere ustálená úroveň.
   static const int levelWindow = 5;
 
@@ -55,6 +59,12 @@ class MemoryManagerAgent {
       if (counts[level]! > counts[best]!) best = level;
     }
     return best;
+  }
+
+  /// Jemnější úroveň z rozboru; jen když sedí k hrubé úrovni (B1- k B1), jinak hrubá úroveň.
+  static String _levelDetail(Object? detail, String level) {
+    final value = detail?.toString().trim().toUpperCase().replaceAll('−', '-') ?? '';
+    return value.startsWith(level) && value.length <= 3 ? value : level;
   }
 
   /// Zda je cíl kartičky krátký výraz, ne celá věta (tu by student doslova nezopakoval).
@@ -112,7 +122,12 @@ class MemoryManagerAgent {
       // Podíl řeči: student má mluvit aspoň polovinu, rozbor to tutorovi připomene
       final studentWords = transcripts.where((t) => t.speaker == 'user').fold(0, (sum, t) => sum + countWords(t.content));
       final tutorWords = transcripts.where((t) => t.speaker != 'user').fold(0, (sum, t) => sum + countWords(t.content));
-      await sessionRepo.updateSessionWordCounts(sessionId: sessionId, studentWords: studentWords, tutorWords: tutorWords);
+      await sessionRepo.updateSessionWordCounts(
+        sessionId: sessionId,
+        studentWords: studentWords,
+        tutorWords: tutorWords,
+        studentReplies: transcripts.where((t) => t.speaker == 'user').length,
+      );
       final studentShare = studentWords + tutorWords == 0 ? null : studentWords / (studentWords + tutorWords);
       if (studentShare != null) {
         L.i('Podíl řeči: student ${(studentShare * 100).round()} % ($studentWords slov), tutor $tutorWords slov.');
@@ -196,14 +211,16 @@ class MemoryManagerAgent {
         L.blockList('ANALYSIS', 'Kartičky z chyb', errorItems);
       }
       final estimatedLevel = data['estimatedLevel']?.toString().toUpperCase();
-      final isKnownLevel = ['A1', 'A2', 'B1', 'B2'].contains(estimatedLevel);
+      // Krátká lekce nebo lekce, kde student skoro jen opakoval, o úrovni nic neříká
+      final isKnownLevel = ['A1', 'A2', 'B1', 'B2'].contains(estimatedLevel) && studentWords >= minWordsForLevel;
       await sessionRepo.updateSessionAnalysis(
         sessionId: sessionId,
         topicSummary: data['topicSummary']?.toString() ?? 'Bez popisu',
         fluencyScore: fluency,
         totalErrors: totalErr,
-        // Krátká lekce o úrovni nic neříká
         estimatedLevel: isKnownLevel && !isTooShort ? estimatedLevel : null,
+        levelDetail: isKnownLevel && !isTooShort ? _levelDetail(data['levelDetail'], estimatedLevel!) : null,
+        levelReason: isKnownLevel && !isTooShort ? data['levelReason']?.toString().trim() : null,
       );
 
       // --- ALGORITMUS ODNAUČOVÁNÍ (Memory Pruning) ---
@@ -245,7 +262,7 @@ class MemoryManagerAgent {
       
       // Úroveň v profilu: nejčastější odhad z posledních lekcí, ne jen z této
       if (isKnownLevel && !isTooShort) {
-        final recent = await sessionRepo.getRecentEstimatedLevels(limit: levelWindow);
+        final recent = await sessionRepo.getRecentEstimatedLevels(limit: levelWindow, minStudentWords: minWordsForLevel);
         final level = stableLevel(recent) ?? estimatedLevel!;
         L.i('Rozbor odhadl úroveň $estimatedLevel, z posledních lekcí (${recent.join(', ')}) platí $level.');
         await profileRepo.updateTargetLevel(level);

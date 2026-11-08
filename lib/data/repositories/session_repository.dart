@@ -131,6 +131,8 @@ class SessionRepository {
     required double fluencyScore,
     required int totalErrors,
     String? estimatedLevel,
+    String? levelDetail,
+    String? levelReason,
   }) async {
     await (_db.update(_db.sessions)..where((t) => t.id.equals(sessionId))).write(
       SessionsCompanion(
@@ -138,25 +140,32 @@ class SessionRepository {
         fluencyScore: Value(fluencyScore),
         totalErrors: Value(totalErrors),
         estimatedLevel: estimatedLevel == null ? const Value.absent() : Value(estimatedLevel),
+        levelDetail: levelDetail == null ? const Value.absent() : Value(levelDetail),
+        levelReason: levelReason == null ? const Value.absent() : Value(levelReason),
       ),
     );
   }
 
-  /// Uloží, kolik slov v lekci řekl student a kolik tutor.
+  /// Uloží, kolik slov v lekci řekl student a kolik tutor, a kolik měl student replik.
   Future<void> updateSessionWordCounts({
     required int sessionId,
     required int studentWords,
     required int tutorWords,
+    int? studentReplies,
   }) async {
     await (_db.update(_db.sessions)..where((t) => t.id.equals(sessionId))).write(
-      SessionsCompanion(studentWords: Value(studentWords), tutorWords: Value(tutorWords)),
+      SessionsCompanion(
+        studentWords: Value(studentWords),
+        tutorWords: Value(tutorWords),
+        totalUserUtterances: studentReplies == null ? const Value.absent() : Value(studentReplies),
+      ),
     );
   }
 
-  /// Chyby z posledních [lessons] lekcí, které rozbor už dělil podle druhů (mají odhad úrovně).
+  /// Chyby z posledních [lessons] lekcí, které rozbor už dělil podle druhů (uložil počty slov).
   Future<List<ErrorLog>> getRecentCategorizedErrors({int lessons = 5}) async {
     final recent = await (_db.select(_db.sessions)
-          ..where((t) => t.estimatedLevel.isNotNull())
+          ..where((t) => t.studentWords.isNotNull())
           ..orderBy([(t) => OrderingTerm.desc(t.startedAt), (t) => OrderingTerm.desc(t.id)])
           ..limit(lessons))
         .get();
@@ -164,10 +173,13 @@ class SessionRepository {
     return (_db.select(_db.errorLogs)..where((t) => t.sessionId.isIn([for (final s in recent) s.id]))).get();
   }
 
-  /// Úrovně odhadnuté rozborem posledních [limit] lekcí, od nejnovější.
-  Future<List<String>> getRecentEstimatedLevels({int limit = 5}) async {
+  /// Úrovně odhadnuté rozborem posledních [limit] lekcí, od nejnovější. Lekce, ve kterých
+  /// student řekl méně než [minStudentWords] slov, se nepočítají.
+  Future<List<String>> getRecentEstimatedLevels({int limit = 5, int minStudentWords = 0}) async {
     final rows = await (_db.select(_db.sessions)
-          ..where((t) => t.estimatedLevel.isNotNull())
+          ..where((t) =>
+              t.estimatedLevel.isNotNull() &
+              (minStudentWords == 0 ? const Constant(true) : t.studentWords.isBiggerOrEqualValue(minStudentWords)))
           ..orderBy([(t) => OrderingTerm.desc(t.startedAt), (t) => OrderingTerm.desc(t.id)])
           ..limit(limit))
         .get();

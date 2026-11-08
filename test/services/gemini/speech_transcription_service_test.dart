@@ -87,6 +87,32 @@ void main() {
     expect(body['systemInstruction']['parts'][0]['text'], contains('česky'));
   });
 
+  test('a two-word transcript of a long recording asks the next model', () async {
+    // Lekce 25: flash-lite přepsal 13 s řeči jako „Hm,“
+    final answers = [_answer('Hm,'), _answer('I work with AI. The AI explain me this hard loss.')];
+    when(() => api.generateContent(
+          apiKey: any(named: 'apiKey'),
+          model: any(named: 'model'),
+          body: any(named: 'body'),
+        )).thenAnswer((_) async => answers.removeAt(0));
+    final longAudio = List<int>.filled(13 * 32000, 0);
+
+    expect(await serviceWithKey('key').transcribe(longAudio), 'I work with AI. The AI explain me this hard loss.');
+    // Krátká nahrávka s krátkým přepisem je v pořádku
+    answerWith(() => _answer('Yes.'));
+    expect(await serviceWithKey('key').transcribe([1, 0, 2, 0]), 'Yes.');
+  });
+
+  test('a short transcript of a long recording stays when no model does better', () async {
+    answerWith(() => _answer('Hm,'));
+    expect(await serviceWithKey('key').transcribe(List<int>.filled(6 * 32000, 0)), 'Hm,');
+  });
+
+  test('a silence mark before speech is dropped', () async {
+    answerWith(() => _answer('(ticho) Nevím, jaký solution jiný.'));
+    expect(await serviceWithKey('key').transcribe([1, 0]), 'Nevím, jaký solution jiný.');
+  });
+
   test('a recording without speech gives an empty transcript', () async {
     answerWith(() => _answer('(ticho)'));
 

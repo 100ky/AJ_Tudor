@@ -49,11 +49,11 @@ class ProgressTrends {
 
   /// Spočítá trendy z lekcí [sessions] a chyb [errors].
   ///
-  /// Porovnávají se jen lekce, které už rozbor dělil podle druhů chyb (mají odhad úrovně),
-  /// jinak by starší lekce vypadaly jako bez chyb.
+  /// Porovnávají se jen lekce, které už rozbor dělil podle druhů chyb (nový rozbor u nich
+  /// uložil počty slov), jinak by starší lekce vypadaly jako bez chyb.
   static ProgressTrends from(List<Session> sessions, List<ErrorLog> errors) {
     final newestFirst = [...sessions]..sort((a, b) => b.startedAt.compareTo(a.startedAt));
-    final analysed = newestFirst.where((s) => s.estimatedLevel != null).toList();
+    final analysed = newestFirst.where(isCategorized).toList();
     final recent = analysed.take(window).toList();
     final previous = analysed.skip(window).take(window).toList();
 
@@ -84,6 +84,9 @@ class ProgressTrends {
     );
   }
 
+  /// Lekci rozebral rozbor, který dělí chyby podle druhů (ukládá počty slov).
+  static bool isCategorized(Session session) => session.studentWords != null;
+
   /// Podíl slov studenta v lekci [session] (0–1), když je známý.
   static double? studentShare(Session session) {
     final student = session.studentWords;
@@ -95,7 +98,7 @@ class ProgressTrends {
   /// Gramatický cíl z lekcí [sessions] a chyb [errors]: nejčastější gramatický druh chyby
   /// v posledních [lessons] lekcích s rozborem podle druhů.
   static ErrorCategory? recentGrammarGoal(List<Session> sessions, List<ErrorLog> errors, {int lessons = 5}) {
-    final analysed = [...sessions.where((s) => s.estimatedLevel != null)]
+    final analysed = [...sessions.where(isCategorized)]
       ..sort((a, b) => b.startedAt.compareTo(a.startedAt));
     final ids = {for (final s in analysed.take(lessons)) s.id};
     return grammarGoal(errors.where((e) => ids.contains(e.sessionId)));

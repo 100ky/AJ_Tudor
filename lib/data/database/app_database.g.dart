@@ -99,6 +99,28 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _levelDetailMeta = const VerificationMeta(
+    'levelDetail',
+  );
+  @override
+  late final GeneratedColumn<String> levelDetail = GeneratedColumn<String>(
+    'level_detail',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _levelReasonMeta = const VerificationMeta(
+    'levelReason',
+  );
+  @override
+  late final GeneratedColumn<String> levelReason = GeneratedColumn<String>(
+    'level_reason',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _studentWordsMeta = const VerificationMeta(
     'studentWords',
   );
@@ -131,6 +153,8 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
     totalErrors,
     topicSummary,
     estimatedLevel,
+    levelDetail,
+    levelReason,
     studentWords,
     tutorWords,
   ];
@@ -208,6 +232,24 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
         ),
       );
     }
+    if (data.containsKey('level_detail')) {
+      context.handle(
+        _levelDetailMeta,
+        levelDetail.isAcceptableOrUnknown(
+          data['level_detail']!,
+          _levelDetailMeta,
+        ),
+      );
+    }
+    if (data.containsKey('level_reason')) {
+      context.handle(
+        _levelReasonMeta,
+        levelReason.isAcceptableOrUnknown(
+          data['level_reason']!,
+          _levelReasonMeta,
+        ),
+      );
+    }
     if (data.containsKey('student_words')) {
       context.handle(
         _studentWordsMeta,
@@ -264,6 +306,14 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
         DriftSqlType.string,
         data['${effectivePrefix}estimated_level'],
       ),
+      levelDetail: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}level_detail'],
+      ),
+      levelReason: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}level_reason'],
+      ),
       studentWords: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}student_words'],
@@ -294,6 +344,10 @@ class Session extends DataClass implements Insertable<Session> {
   /// ustálenou úroveň, aby tutor neměnil styl podle jedné lekce.
   final String? estimatedLevel;
 
+  /// Jemnější úroveň (např. „B1-“, „B1+“) a jednou větou proč, z rozboru lekce.
+  final String? levelDetail;
+  final String? levelReason;
+
   /// Kolik slov řekl student a kolik tutor (z uloženého přepisu, spočítá rozbor po lekci).
   final int? studentWords;
   final int? tutorWords;
@@ -306,6 +360,8 @@ class Session extends DataClass implements Insertable<Session> {
     required this.totalErrors,
     this.topicSummary,
     this.estimatedLevel,
+    this.levelDetail,
+    this.levelReason,
     this.studentWords,
     this.tutorWords,
   });
@@ -327,6 +383,12 @@ class Session extends DataClass implements Insertable<Session> {
     }
     if (!nullToAbsent || estimatedLevel != null) {
       map['estimated_level'] = Variable<String>(estimatedLevel);
+    }
+    if (!nullToAbsent || levelDetail != null) {
+      map['level_detail'] = Variable<String>(levelDetail);
+    }
+    if (!nullToAbsent || levelReason != null) {
+      map['level_reason'] = Variable<String>(levelReason);
     }
     if (!nullToAbsent || studentWords != null) {
       map['student_words'] = Variable<int>(studentWords);
@@ -355,6 +417,12 @@ class Session extends DataClass implements Insertable<Session> {
       estimatedLevel: estimatedLevel == null && nullToAbsent
           ? const Value.absent()
           : Value(estimatedLevel),
+      levelDetail: levelDetail == null && nullToAbsent
+          ? const Value.absent()
+          : Value(levelDetail),
+      levelReason: levelReason == null && nullToAbsent
+          ? const Value.absent()
+          : Value(levelReason),
       studentWords: studentWords == null && nullToAbsent
           ? const Value.absent()
           : Value(studentWords),
@@ -380,6 +448,8 @@ class Session extends DataClass implements Insertable<Session> {
       totalErrors: serializer.fromJson<int>(json['totalErrors']),
       topicSummary: serializer.fromJson<String?>(json['topicSummary']),
       estimatedLevel: serializer.fromJson<String?>(json['estimatedLevel']),
+      levelDetail: serializer.fromJson<String?>(json['levelDetail']),
+      levelReason: serializer.fromJson<String?>(json['levelReason']),
       studentWords: serializer.fromJson<int?>(json['studentWords']),
       tutorWords: serializer.fromJson<int?>(json['tutorWords']),
     );
@@ -396,6 +466,8 @@ class Session extends DataClass implements Insertable<Session> {
       'totalErrors': serializer.toJson<int>(totalErrors),
       'topicSummary': serializer.toJson<String?>(topicSummary),
       'estimatedLevel': serializer.toJson<String?>(estimatedLevel),
+      'levelDetail': serializer.toJson<String?>(levelDetail),
+      'levelReason': serializer.toJson<String?>(levelReason),
       'studentWords': serializer.toJson<int?>(studentWords),
       'tutorWords': serializer.toJson<int?>(tutorWords),
     };
@@ -410,6 +482,8 @@ class Session extends DataClass implements Insertable<Session> {
     int? totalErrors,
     Value<String?> topicSummary = const Value.absent(),
     Value<String?> estimatedLevel = const Value.absent(),
+    Value<String?> levelDetail = const Value.absent(),
+    Value<String?> levelReason = const Value.absent(),
     Value<int?> studentWords = const Value.absent(),
     Value<int?> tutorWords = const Value.absent(),
   }) => Session(
@@ -423,6 +497,8 @@ class Session extends DataClass implements Insertable<Session> {
     estimatedLevel: estimatedLevel.present
         ? estimatedLevel.value
         : this.estimatedLevel,
+    levelDetail: levelDetail.present ? levelDetail.value : this.levelDetail,
+    levelReason: levelReason.present ? levelReason.value : this.levelReason,
     studentWords: studentWords.present ? studentWords.value : this.studentWords,
     tutorWords: tutorWords.present ? tutorWords.value : this.tutorWords,
   );
@@ -446,6 +522,12 @@ class Session extends DataClass implements Insertable<Session> {
       estimatedLevel: data.estimatedLevel.present
           ? data.estimatedLevel.value
           : this.estimatedLevel,
+      levelDetail: data.levelDetail.present
+          ? data.levelDetail.value
+          : this.levelDetail,
+      levelReason: data.levelReason.present
+          ? data.levelReason.value
+          : this.levelReason,
       studentWords: data.studentWords.present
           ? data.studentWords.value
           : this.studentWords,
@@ -466,6 +548,8 @@ class Session extends DataClass implements Insertable<Session> {
           ..write('totalErrors: $totalErrors, ')
           ..write('topicSummary: $topicSummary, ')
           ..write('estimatedLevel: $estimatedLevel, ')
+          ..write('levelDetail: $levelDetail, ')
+          ..write('levelReason: $levelReason, ')
           ..write('studentWords: $studentWords, ')
           ..write('tutorWords: $tutorWords')
           ..write(')'))
@@ -482,6 +566,8 @@ class Session extends DataClass implements Insertable<Session> {
     totalErrors,
     topicSummary,
     estimatedLevel,
+    levelDetail,
+    levelReason,
     studentWords,
     tutorWords,
   );
@@ -497,6 +583,8 @@ class Session extends DataClass implements Insertable<Session> {
           other.totalErrors == this.totalErrors &&
           other.topicSummary == this.topicSummary &&
           other.estimatedLevel == this.estimatedLevel &&
+          other.levelDetail == this.levelDetail &&
+          other.levelReason == this.levelReason &&
           other.studentWords == this.studentWords &&
           other.tutorWords == this.tutorWords);
 }
@@ -510,6 +598,8 @@ class SessionsCompanion extends UpdateCompanion<Session> {
   final Value<int> totalErrors;
   final Value<String?> topicSummary;
   final Value<String?> estimatedLevel;
+  final Value<String?> levelDetail;
+  final Value<String?> levelReason;
   final Value<int?> studentWords;
   final Value<int?> tutorWords;
   const SessionsCompanion({
@@ -521,6 +611,8 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     this.totalErrors = const Value.absent(),
     this.topicSummary = const Value.absent(),
     this.estimatedLevel = const Value.absent(),
+    this.levelDetail = const Value.absent(),
+    this.levelReason = const Value.absent(),
     this.studentWords = const Value.absent(),
     this.tutorWords = const Value.absent(),
   });
@@ -533,6 +625,8 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     this.totalErrors = const Value.absent(),
     this.topicSummary = const Value.absent(),
     this.estimatedLevel = const Value.absent(),
+    this.levelDetail = const Value.absent(),
+    this.levelReason = const Value.absent(),
     this.studentWords = const Value.absent(),
     this.tutorWords = const Value.absent(),
   }) : startedAt = Value(startedAt);
@@ -545,6 +639,8 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     Expression<int>? totalErrors,
     Expression<String>? topicSummary,
     Expression<String>? estimatedLevel,
+    Expression<String>? levelDetail,
+    Expression<String>? levelReason,
     Expression<int>? studentWords,
     Expression<int>? tutorWords,
   }) {
@@ -558,6 +654,8 @@ class SessionsCompanion extends UpdateCompanion<Session> {
       if (totalErrors != null) 'total_errors': totalErrors,
       if (topicSummary != null) 'topic_summary': topicSummary,
       if (estimatedLevel != null) 'estimated_level': estimatedLevel,
+      if (levelDetail != null) 'level_detail': levelDetail,
+      if (levelReason != null) 'level_reason': levelReason,
       if (studentWords != null) 'student_words': studentWords,
       if (tutorWords != null) 'tutor_words': tutorWords,
     });
@@ -572,6 +670,8 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     Value<int>? totalErrors,
     Value<String?>? topicSummary,
     Value<String?>? estimatedLevel,
+    Value<String?>? levelDetail,
+    Value<String?>? levelReason,
     Value<int?>? studentWords,
     Value<int?>? tutorWords,
   }) {
@@ -584,6 +684,8 @@ class SessionsCompanion extends UpdateCompanion<Session> {
       totalErrors: totalErrors ?? this.totalErrors,
       topicSummary: topicSummary ?? this.topicSummary,
       estimatedLevel: estimatedLevel ?? this.estimatedLevel,
+      levelDetail: levelDetail ?? this.levelDetail,
+      levelReason: levelReason ?? this.levelReason,
       studentWords: studentWords ?? this.studentWords,
       tutorWords: tutorWords ?? this.tutorWords,
     );
@@ -616,6 +718,12 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     if (estimatedLevel.present) {
       map['estimated_level'] = Variable<String>(estimatedLevel.value);
     }
+    if (levelDetail.present) {
+      map['level_detail'] = Variable<String>(levelDetail.value);
+    }
+    if (levelReason.present) {
+      map['level_reason'] = Variable<String>(levelReason.value);
+    }
     if (studentWords.present) {
       map['student_words'] = Variable<int>(studentWords.value);
     }
@@ -636,6 +744,8 @@ class SessionsCompanion extends UpdateCompanion<Session> {
           ..write('totalErrors: $totalErrors, ')
           ..write('topicSummary: $topicSummary, ')
           ..write('estimatedLevel: $estimatedLevel, ')
+          ..write('levelDetail: $levelDetail, ')
+          ..write('levelReason: $levelReason, ')
           ..write('studentWords: $studentWords, ')
           ..write('tutorWords: $tutorWords')
           ..write(')'))
@@ -4140,6 +4250,8 @@ typedef $$SessionsTableCreateCompanionBuilder =
       Value<int> totalErrors,
       Value<String?> topicSummary,
       Value<String?> estimatedLevel,
+      Value<String?> levelDetail,
+      Value<String?> levelReason,
       Value<int?> studentWords,
       Value<int?> tutorWords,
     });
@@ -4153,6 +4265,8 @@ typedef $$SessionsTableUpdateCompanionBuilder =
       Value<int> totalErrors,
       Value<String?> topicSummary,
       Value<String?> estimatedLevel,
+      Value<String?> levelDetail,
+      Value<String?> levelReason,
       Value<int?> studentWords,
       Value<int?> tutorWords,
     });
@@ -4262,6 +4376,16 @@ class $$SessionsTableFilterComposer
 
   ColumnFilters<String> get estimatedLevel => $composableBuilder(
     column: $table.estimatedLevel,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get levelDetail => $composableBuilder(
+    column: $table.levelDetail,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get levelReason => $composableBuilder(
+    column: $table.levelReason,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4400,6 +4524,16 @@ class $$SessionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get levelDetail => $composableBuilder(
+    column: $table.levelDetail,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get levelReason => $composableBuilder(
+    column: $table.levelReason,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get studentWords => $composableBuilder(
     column: $table.studentWords,
     builder: (column) => ColumnOrderings(column),
@@ -4451,6 +4585,16 @@ class $$SessionsTableAnnotationComposer
 
   GeneratedColumn<String> get estimatedLevel => $composableBuilder(
     column: $table.estimatedLevel,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get levelDetail => $composableBuilder(
+    column: $table.levelDetail,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get levelReason => $composableBuilder(
+    column: $table.levelReason,
     builder: (column) => column,
   );
 
@@ -4580,6 +4724,8 @@ class $$SessionsTableTableManager
                 Value<int> totalErrors = const Value.absent(),
                 Value<String?> topicSummary = const Value.absent(),
                 Value<String?> estimatedLevel = const Value.absent(),
+                Value<String?> levelDetail = const Value.absent(),
+                Value<String?> levelReason = const Value.absent(),
                 Value<int?> studentWords = const Value.absent(),
                 Value<int?> tutorWords = const Value.absent(),
               }) => SessionsCompanion(
@@ -4591,6 +4737,8 @@ class $$SessionsTableTableManager
                 totalErrors: totalErrors,
                 topicSummary: topicSummary,
                 estimatedLevel: estimatedLevel,
+                levelDetail: levelDetail,
+                levelReason: levelReason,
                 studentWords: studentWords,
                 tutorWords: tutorWords,
               ),
@@ -4604,6 +4752,8 @@ class $$SessionsTableTableManager
                 Value<int> totalErrors = const Value.absent(),
                 Value<String?> topicSummary = const Value.absent(),
                 Value<String?> estimatedLevel = const Value.absent(),
+                Value<String?> levelDetail = const Value.absent(),
+                Value<String?> levelReason = const Value.absent(),
                 Value<int?> studentWords = const Value.absent(),
                 Value<int?> tutorWords = const Value.absent(),
               }) => SessionsCompanion.insert(
@@ -4615,6 +4765,8 @@ class $$SessionsTableTableManager
                 totalErrors: totalErrors,
                 topicSummary: topicSummary,
                 estimatedLevel: estimatedLevel,
+                levelDetail: levelDetail,
+                levelReason: levelReason,
                 studentWords: studentWords,
                 tutorWords: tutorWords,
               ),

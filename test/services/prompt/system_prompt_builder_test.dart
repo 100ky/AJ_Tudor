@@ -337,11 +337,18 @@ void main() {
       ];
       final lesson = SystemPromptBuilder.buildTutorPrompt(lessonCards: cards);
       expect(lesson, contains('REŽIM LEKCE'));
-      expect(lesson, contains('1. vzít si volno → take a sick day\n2. jednou týdně → once a week'));
+      expect(lesson, contains('1. [slovíčko] vzít si volno → take a sick day\n2. [slovíčko] jednou týdně → once a week'));
       expect(lesson, contains('procvičíte 2 výrazy z kartiček'));
       expect(SystemPromptBuilder.expressionCount(1), '1 výraz');
       expect(SystemPromptBuilder.expressionCount(10), '10 výrazů');
-      expect(lesson, contains('Anglický výraz neříkej první'));
+      // Slovíčko se ptá česky jako kartička, gramatiku splní i vlastní věta (lekce 23)
+      expect(lesson, contains('[slovíčko]: zeptej se česky na výraz z kartičky'));
+      expect(lesson, contains('uznej jakoukoli správnou větu jeho vlastními slovy'));
+      expect(lesson, contains("nikdy „How would you say…“"));
+      final grammar = SystemPromptBuilder.buildTutorPrompt(
+        lessonCards: [ConversationCard(id: 36, czech: 'neodpočíval', english: "didn't relax")],
+      );
+      expect(grammar, contains("1. [gramatika] neodpočíval → didn't relax"));
       expect(lesson, contains('lekci uzavři'));
 
       // Pokec se bez kartiček nemění, jeho prompt prošel testem promptu
@@ -370,6 +377,19 @@ void main() {
       expect(SystemPromptBuilder.buildTutorPrompt(lessonCards: cards), isNot(contains('GRAMATICKÝ CÍL')));
       // V pokecu se cíl nepoužívá
       expect(SystemPromptBuilder.buildTutorPrompt(grammarGoal: ErrorCategory.tense), isNot(contains('GRAMATICKÝ CÍL')));
+    });
+
+    test('the lesson judge sees the remaining cards, the tutor and the student', () {
+      final request = SystemPromptBuilder.buildLessonJudgeRequest(
+        cards: [ConversationCard(id: 36, czech: 'neodpočíval', english: "didn't relax")],
+        recentTutorLines: ['Did you get any rest last weekend?'],
+        studentText: 'No, I had no time to rest.',
+      );
+      expect(request, contains("#36 [gramatika] neodpočíval → didn't relax"));
+      expect(request, contains('- Did you get any rest last weekend?'));
+      expect(request, contains('<student>No, I had no time to rest.</student>'));
+      expect(SystemPromptBuilder.lessonJudgeSystem, contains('Jiný výraz s podobným významem kartičku nesplní'));
+      expect(SystemPromptBuilder.getLessonJudgeSchema()['required'], ['cardId', 'reason']);
     });
 
     test('the lesson analysis turns asked phrases into cards and orders errors', () {

@@ -132,6 +132,17 @@ class SessionDetailHeader extends StatelessWidget {
                 color: AppTheme.outlineLightColor(context),
               ),
               const SizedBox(height: 8),
+              if (session.levelDetail ?? session.estimatedLevel case final level?) ...[
+                Text(
+                  'Úroveň: $level${session.levelReason == null ? '' : '. ${session.levelReason}'}',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: AppTheme.mutedTextColor(context),
+                  ),
+                ),
+                const SizedBox(height: 4),
+              ],
               if (ProgressTrends.studentShare(session) case final share?) ...[
                 Text(
                   'Tvoje řeč: ${(share * 100).round()} % slov '

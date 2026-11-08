@@ -188,6 +188,7 @@ Přepisy řeči studenta pocházejí ze systému Speech-to-Text, který může o
    Konkrétní znaky v přepisu: Mluví plynule a spontánně, používá idiomy a frázová slovesa přirozeně. Chyby jsou vzácné a spíše jemné (chybná předložka, člen). Průměrná délka odpovědi: 20+ slov. Interakce s rodilým mluvčím působí přirozeně.
 
    DŮLEŽITÉ PRAVIDLO KALIBRACE: Pokud má student průměrnou délku odpovědi nad 10 slov a dokáže vyjádřit svůj názor, NESMÍŠ ho ohodnotit jako A1 nebo A2. Chyby jsou normální a očekávané součástí B1 a B2. Hodnoť primárně schopnost komunikovat, ne počet chyb.
+   Jemněji urči `levelDetail`: stejná úroveň jako `estimatedLevel`, se znaménkem, když je student na jejím okraji (např. „B1-“ = B1, ale často chybuje v základní gramatice nebo odpovídá krátce; „B1+“ = blízko B2), jinak bez znaménka. Do `levelReason` napiš jednou větou česky proč (např. „Mluví srozumitelně o práci, ale často chybuje v minulém čase.“).
 2. Identifikuj aktuální chyby (gramatika, lexikum). Každé chybě dej `category`: `tense` (čas slovesa), `verb_form` (tvar slovesa: chybějící -s ve 3. osobě, "don't" místo "doesn't", "I going"), `preposition` (předložka), `word_order` (vazba a slovosled), `word_choice` (špatně zvolené slovo), `czech_word` (české slovo ve větě nebo výraz, na který se student zeptal), `pronunciation` (výslovnost), `other` (člen, množné číslo a ostatní).
 3. **MEMORY PRUNING (Zapomínání):** Křížově porovnej studentův výkon s polem "PAMĚŤ Z MINULOSTI" a aktuálními chybami. Identifikuj jevy, ve kterých student dříve chyboval, ale nyní je prokázal správně. Vypiš je do pole `resolvedErrors`. Tím zajistíš, že model přestane tyto jevy v budoucnu zbytečně testovat.
 4. **ANALÝZA FRUSTRACE A SENTIMENTU:** Analyzuj délky odpovědí a tón studenta. Pokud zaznamenáš známky únavy nebo krátké odpovědi ("I don't know"), zohledni to doporučením v poli `briefing` (např. "Student byl frustrovaný, buď extra povzbudivý").
@@ -240,6 +241,12 @@ Přepisy řeči studenta pocházejí ze systému Speech-to-Text, který může o
           'enum': ['A1', 'A2', 'B1', 'B2'],
           'description': 'Odhadovaná úroveň angličtiny studenta (A1, A2, B1, B2) na základě tohoto rozhovoru.'
         },
+        'levelDetail': {
+          'type': 'string',
+          'enum': ['A1', 'A1+', 'A2-', 'A2', 'A2+', 'B1-', 'B1', 'B1+', 'B2-', 'B2'],
+          'description': 'Jemnější úroveň: estimatedLevel se znaménkem - nebo +, když je student na jejím okraji.',
+        },
+        'levelReason': {'type': 'string', 'description': 'Jednou větou česky, proč tato úroveň.'},
         'totalErrors': {'type': 'integer', 'description': 'Celkový počet chyb.'},
         'briefing': {'type': 'string', 'description': 'Vzkaz pro tutora na příště (nejvýš 600 znaků). Nejdřív slabiny studenta, pak téma na příště, nakonec frustrace a doporučený postup.'},
         'tutorFeedback': {'type': 'string', 'description': 'Kritika samotného AI tutora (nejvýš 300 znaků). Pokud udělal chybu, například se opakoval, moc mluvil nebo opravoval drobnosti, napiš zde jasnou instrukci k nápravě.'},
@@ -283,7 +290,7 @@ Přepisy řeči studenta pocházejí ze systému Speech-to-Text, který může o
           }
         }
       },
-      'required': ['topicSummary', 'fluencyScore', 'estimatedLevel', 'totalErrors', 'briefing', 'resolvedErrors', 'vocabulary', 'newLearnedUserFacts', 'errors']
+      'required': ['topicSummary', 'fluencyScore', 'estimatedLevel', 'levelDetail', 'levelReason', 'totalErrors', 'briefing', 'resolvedErrors', 'vocabulary', 'newLearnedUserFacts', 'errors']
     };
   }
 
@@ -686,21 +693,64 @@ PRAVIDLA SPOLUPRÁCE S TUTOREM (NIKDY SE S NÍM NEPEŘ):
   /// hovoru a držením tématu. Prompt pokecu se bez kartiček nemění.
   static String _lessonSection(List<ConversationCard> cards, {ErrorCategory? grammarGoal}) {
     final goal = grammarGoal?.lessonGoal ?? '';
-    final list = [for (var i = 0; i < cards.length; i++) '${i + 1}. ${cards[i].czech} → ${cards[i].english}'].join('\n');
+    final list = [
+      for (var i = 0; i < cards.length; i++)
+        '${i + 1}. [${cards[i].kind == CardKind.grammar ? 'gramatika' : 'slovíčko'}] ${cards[i].czech} → ${cards[i].english}',
+    ].join('\n');
     return '''REŽIM LEKCE (student si vybral lekci s kartičkami; má přednost před POKYNY PRO ZAČÁTEK KONVERZACE a ZÁSADAMI UDRŽENÍ TÉMATU):
-Dnes s ním projdeš tyto výrazy z jeho kartiček, v tomto pořadí:
+Dnes s ním projdeš tyto kartičky, v tomto pořadí:
 $list
-- Lekci začni jen jednou, na začátku hovoru: jednou větou ho pozdrav, řekni, že dnes procvičíte ${expressionCount(cards.length)} z kartiček, a rovnou začni prvním.
-- U každého výrazu vytvoř v angličtině krátkou situaci nebo otázku, na kterou student odpoví větou s tím výrazem (u „take a sick day“ třeba: "Imagine you wake up with a fever on a workday. What do you do?"). Situace nemusí navazovat na předchozí výraz.
-- Anglický výraz neříkej první, ani v otázce, ani když je mezi slovíčky z profilu. Neptej se „How would you say…“, ptej se na situaci, ať ho student použije ve své odpovědi. Zopakování po tobě se nepočítá.
-- Když si nevzpomene nebo odpoví jinak, napověz česky českou stranou kartičky (např. „Zkus použít výraz ‚vzít si volno ze zdravotních důvodů‘.“). Když na něj nepřijde ani pak, řekni mu ho, nech ho jednou zopakovat celou větou a pokračuj dalším výrazem.
-- Když výraz řekne správně, krátce ho pochval a v tomtéž tahu rovnou uveď situaci pro další výraz.
-- Skutečné chyby opravuj stejně jako jindy. Po zopakování opravené věty pokračuj dalším výrazem.
-- Skryté zprávy začínající „Lekce:“ ti říkají, které výrazy student už řekl správně a jestli vypršel čas. Nikdy je nečti nahlas.
-- Po posledním výrazu, nebo když ti skrytá zpráva řekne, že čas vypršel, lekci uzavři: dvěma třemi větami česky řekni, co šlo dobře a který výraz si má procvičit, a nabídni, že můžete pokračovat volným pokecem v angličtině.${goal.isEmpty ? '' : '''
+- Lekci začni jen jednou, na začátku hovoru: jednou větou ho pozdrav, řekni, že dnes procvičíte ${expressionCount(cards.length)} z kartiček, a rovnou začni první kartičkou.
+- [slovíčko]: zeptej se česky na výraz z kartičky a dej mu k němu krátkou souvislost, např. „Jak řekneš ‚zazimovat‘? Co děláš s lodí před zimou?“. Student má říct ten anglický výraz, v jakémkoli tvaru (winterize, winterized). Anglicky ho neříkej dřív, než to zkusí sám.
+  - Když řekne jiný správný výraz se stejným významem, pochval ho, zmiň výraz z kartičky jako další možnost a pokračuj další kartičkou.
+  - Když výraz nezná, řekni mu ho, nech ho jednou zopakovat ve větě a pokračuj další kartičkou.
+- [gramatika]: kartička je útržek jeho dřívější opravené věty, na přesných slovech nezáleží. Dej mu v angličtině krátkou situaci, ve které potřebuje stejnou gramatiku (u „didn't relax“ minulý čas v záporu, třeba "How was your last weekend? Did you get any rest?"), a uznej jakoukoli správnou větu jeho vlastními slovy. Ptej se na jeho vlastní zážitek, nikdy „How would you say…“, a výraz z kartičky neříkej. Když v té gramatice chybuje, oprav ho jako jindy.
+- Když kartičku zvládl, krátce ho pochval a v tomtéž tahu rovnou přejdi na další.
+- Skutečné chyby opravuj stejně jako jindy. Po zopakování opravené věty pokračuj další kartičkou.
+- Skryté zprávy začínající „Lekce:“ ti říkají, které kartičky student už zvládl a jestli vypršel čas. Nikdy je nečti nahlas.
+- Po poslední kartičce v seznamu, nebo když ti skrytá zpráva řekne, že čas vypršel, lekci uzavři: dvěma třemi větami řekni, co šlo dobře a co si má procvičit, a nabídni, že můžete pokračovat volným pokecem v angličtině. Další otázku k té kartičce už nepokládej.${goal.isEmpty ? '' : '''
 GRAMATICKÝ CÍL LEKCE (v posledních lekcích v tom chyboval nejčastěji): $goal
-- Situace pro výrazy vol tak, aby v odpovědi potřeboval i tuhle gramatiku, a chyby v ní opravuj vždy. Při uzavření lekce řekni jednou větou, jak mu šla.'''}''';
+- Situace ke kartičkám vol tak, aby v odpovědi potřeboval i tuhle gramatiku, a chyby v ní opravuj vždy. Při uzavření lekce řekni jednou větou, jak mu šla.'''}''';
   }
+
+  /// Systémová instrukce rozhodčího kartiček v lekci ([LessonCardJudge]).
+  static const String lessonJudgeSystem = '''Posuzuješ lekci angličtiny, ve které AI tutor prochází se studentem (Čech, úroveň B1) jeho kartičky.
+Rozhodni, jestli student v poslední replice sám zvládl některou z kartiček:
+- [slovíčko]: řekl anglický výraz z kartičky sám, v jakémkoli tvaru (winterize i winterized, took a sick day i take a sick day). Jiný výraz s podobným významem kartičku nesplní.
+- [gramatika]: kartička je útržek jeho dřívější opravené věty, na přesných slovech nezáleží. Splní ji jakákoli jeho správná věta se stejnou gramatikou (u "didn't relax" třeba "I had no time to rest" nebo "I didn't rest at all"). Chyba právě v té gramatice ji nesplní, drobnosti (člen, množné číslo) nevadí.
+- Když tutor výraz nebo hotovou větu řekl v posledních replikách a student ho jen zopakoval, kartičku nezvládl.
+- Přepis řeči studenta může mít drobné chyby, posuzuj smysl.
+Vrať cardId zvládnuté kartičky, nebo 0, když žádnou nezvládl.''';
+
+  /// Dotaz pro rozhodčího kartiček: zbývající kartičky, poslední repliky tutora a replika studenta.
+  static String buildLessonJudgeRequest({
+    required List<ConversationCard> cards,
+    required List<String> recentTutorLines,
+    required String studentText,
+  }) {
+    final list = cards
+        .map((c) => '#${c.id} [${c.kind == CardKind.grammar ? 'gramatika' : 'slovíčko'}] ${c.czech} → ${c.english}')
+        .join('\n');
+    final tutor = recentTutorLines.isEmpty ? '(žádné)' : recentTutorLines.map((l) => '- $l').join('\n');
+    return '''Kartičky, které student ještě nezvládl:
+$list
+
+Poslední repliky tutora (od nejnovější):
+$tutor
+
+Replika studenta:
+<student>$studentText</student>''';
+  }
+
+  /// Schéma odpovědi rozhodčího kartiček.
+  static Map<String, dynamic> getLessonJudgeSchema() => {
+        'type': 'object',
+        'properties': {
+          'cardId': {'type': 'integer', 'description': 'Číslo zvládnuté kartičky (#), 0 když žádná.'},
+          'reason': {'type': 'string', 'description': 'Krátké zdůvodnění česky.'},
+        },
+        'required': ['cardId', 'reason'],
+      };
 
   /// „1 výraz“, „3 výrazy“, „10 výrazů“.
   static String expressionCount(int count) {

@@ -113,6 +113,13 @@ class AppDatabase extends _$AppDatabase {
               // Sloupec již existuje
             }
           }
+          for (final column in ['level_detail', 'level_reason']) {
+            try {
+              await customStatement('ALTER TABLE sessions ADD COLUMN $column TEXT;');
+            } catch (_) {
+              // Sloupec již existuje
+            }
+          }
           try {
             await customStatement(
                 'ALTER TABLE user_profiles ADD COLUMN prepared_topic_at INTEGER;');

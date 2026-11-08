@@ -64,6 +64,20 @@ void main() {
       expect(allCards.length, 1);
     });
 
+    test('addFlashcard skips a card that differs only in the word form', () async {
+      // Lekce 23: rozbor vyrobil „zazimovat → winterize“ vedle „zazimoval → winterized“
+      final first = (await repo.addFlashcard(frontText: 'zazimoval', backText: 'winterized', explanation: '')).getOrThrow();
+      final again = (await repo.addFlashcard(frontText: 'zazimovat', backText: 'winterize', explanation: '')).getOrThrow();
+      final lawn = (await repo.addFlashcard(frontText: 'sekat trávník', backText: 'mow the lawn', explanation: '')).getOrThrow();
+      final other = (await repo.addFlashcard(frontText: 'mít rušný víkend', backText: 'have a busy weekend', explanation: '')).getOrThrow();
+
+      expect(again, first);
+      expect(lawn, isNot(first));
+      expect((await repo.addFlashcard(frontText: 'sečení trávníku', backText: 'mowing the lawn', explanation: '')).getOrThrow(), lawn);
+      expect(other, isNot(first));
+      expect(await repo.getAllFlashcards(), hasLength(3));
+    });
+
     test('addFlashcard marks sourceSentence matching transcripts and error logs as inFlashcard', () async {
       final s = (await sessionRepo.startNewSession()).getOrThrow();
       await sessionRepo.addTranscript(

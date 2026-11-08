@@ -22,6 +22,7 @@ import '../prompt/system_prompt_builder.dart';
 import '../audio/audio_session_controller.dart';
 import '../flashcards/conversation_cards.dart';
 import '../flashcards/due_conversation_cards.dart';
+import '../flashcards/lesson_card_judge.dart';
 import '../system/wakelock_service.dart';
 import '../gemini/gemini_live_client.dart';
 import '../gemini/speech_transcription_service.dart';
@@ -609,10 +610,40 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
 
   /// Zkontroluje, jestli student v replice sám řekl výraz z některé dnešní kartičky.
   /// Splněná kartička dostane hodnocení „Dobré“ a dnes už v kartičkách nebude.
+  ///
+  /// V lekci, když doslovné porovnání nic nenašlo, posoudí repliku rozhodčí lekce:
+  /// gramatiku student splní i vlastními slovy a slovíčko i v jiném tvaru.
   void _checkConversationCards(StudentUtterance utterance, String text) {
     final cards = _conversationCards;
     if (cards == null || utterance.sessionId != _conversationCardsSessionId) return;
     final done = cards.completeBy(text, recentTutorLines: utterance.recentTutorLines);
+    _recordCompletedCards(done);
+    final lessonIds = {for (final card in state.lessonCards) card.id};
+    if (_lessonRunning && !done.any((card) => lessonIds.contains(card.id))) {
+      _judgeLessonReply(utterance, text);
+    }
+  }
+
+  /// Rozhodčí lekce posoudí repliku [text] proti kartičkám lekce, které ještě nejsou splněné.
+  Future<void> _judgeLessonReply(StudentUtterance utterance, String text) async {
+    final remaining = [
+      for (final card in state.lessonCards)
+        if (!state.completedCards.any((done) => done.id == card.id)) card,
+    ];
+    if (remaining.isEmpty) return;
+    final card = await ref.read(lessonCardJudgeProvider).judge(
+          remaining: remaining,
+          recentTutorLines: utterance.recentTutorLines,
+          studentText: text,
+        );
+    if (card == null || !ref.mounted || !_lessonRunning) return;
+    if (utterance.sessionId != _conversationCardsSessionId) return;
+    if (!(_conversationCards?.markCompleted(card) ?? false)) return;
+    _recordCompletedCards([card]);
+  }
+
+  /// Zapíše splněné kartičky: hodnocení „Dobré“, stav pro obrazovku a průběh lekce.
+  void _recordCompletedCards(List<ConversationCard> done) {
     if (done.isEmpty) return;
     for (final card in done) {
       L.i('🃏 Kartička #${card.id} splněna v hovoru: "${card.czech}" → "${card.english}"');

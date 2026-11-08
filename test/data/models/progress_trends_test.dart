@@ -3,14 +3,15 @@ import 'package:aj_tudor/data/models/error_category.dart';
 import 'package:aj_tudor/data/models/progress_trends.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+/// Lekce; s [level] jako po novém rozboru (ten ukládá i počty slov).
 Session _session(int id, {String? level, int? student, int? tutor}) => Session(
       id: id,
       startedAt: DateTime(2026, 11, id),
       totalUserUtterances: 0,
       totalErrors: 0,
       estimatedLevel: level,
-      studentWords: student,
-      tutorWords: tutor,
+      studentWords: student ?? (level != null ? 200 : null),
+      tutorWords: tutor ?? (level != null ? 200 : null),
     );
 
 ErrorLog _error(int sessionId, ErrorCategory? category) => ErrorLog(

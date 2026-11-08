@@ -38,11 +38,24 @@ class GeminiBatchClient {
   /// Dočasný cooldown pro modely přetížené chybami 503/429/timeout.
   static final ModelCooldownTracker _cooldowns = ModelCooldownTracker();
 
+  /// Jak dlouho čekat na odpověď jednoho modelu u rozboru celé lekce (dlouhý vstup i výstup).
+  static const Duration longTaskTimeout = Duration(seconds: 45);
+
+  /// Jak dlouho čekat na jeden model u krátkých úloh (téma, dril, chat, kartičky). Zaseknutý
+  /// model se tak přeskočí dřív: příprava tématu 8. 11. čekala na 3.8 Flash 45 s, než
+  /// 3.6 Flash téma připravil za 7 s.
+  static const Duration shortTaskTimeout = Duration(seconds: 20);
+
   /// Inicializuje klienta s potřebnými konfiguračními údaji.
-  GeminiBatchClient(this.apiKey, this.primaryModelName, {this.systemPrompt, this.fallbackModels})
-      : _api = GeminiRestCore(
+  GeminiBatchClient(
+    this.apiKey,
+    this.primaryModelName, {
+    this.systemPrompt,
+    this.fallbackModels,
+    Duration receiveTimeout = longTaskTimeout,
+  }) : _api = GeminiRestCore(
           connectTimeout: const Duration(seconds: 15),
-          receiveTimeout: const Duration(seconds: 45),
+          receiveTimeout: receiveTimeout,
         );
 
   /// Pokusí se odeslat zprávu a vrátí odpověď modelu jako [String].

@@ -26,15 +26,15 @@ final geminiLiveClientProvider = Provider<GeminiLiveClient?>((ref) {
   return client;
 });
 
-/// Poskytuje instanci [GeminiBatchClient] pro standardní textový chat (Request-Response).
-/// 
-/// Používá se v [ConversationScreen] pro běžné dotazy uživatele.
+/// Poskytuje instanci [GeminiBatchClient] pro krátké úlohy (Request-Response): příprava tématu,
+/// scénáře, dril, chat nad lekcí a kartičky. Na jeden model čeká nejvýš
+/// [GeminiBatchClient.shortTaskTimeout], rozbor lekce má vlastní klient.
 final geminiBatchClientProvider = Provider<GeminiBatchClient?>((ref) {
   final apiKey = ref.watch(apiKeyProvider);
   final modelName = ref.watch(modelProvider);
-  
+
   if (apiKey == null || apiKey.isEmpty) return null;
-  return GeminiBatchClient(apiKey, modelName);
+  return GeminiBatchClient(apiKey, modelName, receiveTimeout: GeminiBatchClient.shortTaskTimeout);
 });
 
 /// Specializovaný provider pro analýzu dokončených lekcí.
@@ -50,6 +50,19 @@ final geminiAnalysisClientProvider = Provider<GeminiBatchClient?>((ref) {
     apiKey, 
     modelName, 
     systemPrompt: SystemPromptBuilder.buildAnalysisPrompt(),
+  );
+});
+
+/// Rozhodčí kartiček v lekci: po replice studenta posoudí, jestli zvládl některou kartičku.
+/// Volá se často (každá replika v lekci), proto flash-lite s krátkým čekáním.
+final geminiLessonJudgeClientProvider = Provider<GeminiBatchClient?>((ref) {
+  final apiKey = ref.watch(apiKeyProvider);
+  if (apiKey == null || apiKey.isEmpty) return null;
+  return GeminiBatchClient(
+    apiKey,
+    GeminiModels.flashLite3_5,
+    fallbackModels: const [GeminiModels.flashLite3_1],
+    receiveTimeout: GeminiBatchClient.shortTaskTimeout,
   );
 });
 

@@ -33,6 +33,20 @@ class SpeechTranscriptionService {
 
   static final RegExp _silence = RegExp(r'^\(ticho\)\.?$', caseSensitive: false);
 
+  // Model občas napíše značku ticha a pak i řeč („(ticho) Nevím…“, lekce 25)
+  static final RegExp _silencePrefix = RegExp(r'^\(ticho\)\.?\s+(?=\S)', caseSensitive: false);
+
+  /// Kolik sekund zvuku je „dlouhá“ nahrávka, ze které přepis na dvě slova nestačí.
+  static const int longAudioSeconds = 4;
+
+  /// Přepis na nejvýš dvě slova z nahrávky delší než [longAudioSeconds] je podezřelý:
+  /// flash-lite v lekci 25 přepsal 13 s řeči („I work with AI. The AI explain me…“) jako „Hm,“.
+  /// Pak se zkusí další model a krátký přepis platí, jen když ho nikdo nepřekoná.
+  static bool isSuspiciouslyShort(String transcript, int pcmBytes) {
+    final words = transcript.split(RegExp(r'\s+')).where((w) => RegExp(r'\w', unicode: true).hasMatch(w)).length;
+    return words <= 2 && pcmBytes >= longAudioSeconds * 32000;
+  }
+
   /// Jak dlouho čekat na odpověď jednoho modelu. Přepis repliky běžně trvá 1–5 s a celý
   /// opravný přepis má 20 s, takže se při zaseknutém modelu stihne zkusit další
   /// (lekce 22: flash-lite neodpovídal 20 s a uložil se jen neúplný živý přepis).
@@ -80,18 +94,25 @@ class SpeechTranscriptionService {
       ],
     };
 
+    String? shortResult;
     for (final model in _cooldowns.order(models, preferLastWorking: true)) {
       try {
         final data = await _api.generateContent(apiKey: apiKey, model: model, body: body);
         final text = GeminiRestCore.extractText(data);
         if (text == null) continue;
         _cooldowns.markSuccess(model, remember: true);
-        final clean = stripModelFormatting(text);
+        final clean = stripModelFormatting(text).replaceFirst(_silencePrefix, '');
         if (TaskPrompts.isTranscriptionPromptEcho(clean)) {
           L.w('Opravný přepis: model $model vrátil místo přepisu své zadání, výsledek zahazuji.');
           return null;
         }
-        return _silence.hasMatch(clean) ? '' : clean;
+        final result = _silence.hasMatch(clean) ? '' : clean;
+        if (result.isNotEmpty && isSuspiciouslyShort(result, pcm16.length)) {
+          L.w('Opravný přepis: model $model vrátil z ${pcm16.length ~/ 32000} s zvuku jen „$result“, zkouším další.');
+          shortResult ??= result;
+          continue;
+        }
+        return result;
       } on DioException catch (e) {
         final kind = classifyGeminiError(e);
         if (kind == GeminiErrorKind.auth) {
@@ -116,7 +137,7 @@ class SpeechTranscriptionService {
         L.w('Opravný přepis: model $model selhal ($e), zkouším další...');
       }
     }
-    return null;
+    return shortResult;
   }
 }
 

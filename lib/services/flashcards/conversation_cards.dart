@@ -1,4 +1,13 @@
 /// Kartička, kterou může splnit živý hovor: český výraz a jeho anglický cíl.
+/// Druh kartičky pro lekci.
+enum CardKind {
+  /// Slovíčko nebo ustálený výraz: na konkrétním slově záleží (winterize, take a sick day).
+  vocabulary,
+
+  /// Útržek dřívější opravené věty: jde o gramatiku, ne o přesná slova (didn't relax).
+  grammar,
+}
+
 class ConversationCard {
   /// ID kartičky v databázi.
   final int id;
@@ -12,9 +21,13 @@ class ConversationCard {
   /// Výrazy, které kartičku v replice splní (z rubu bez závorek, jednotlivé varianty).
   final List<RegExp> patterns;
 
-  /// Vytvoří kartičku pro hovor; vzory se odvodí z [english].
+  /// Slovíčko, nebo gramatika (viz [ConversationCards.kindOf]).
+  final CardKind kind;
+
+  /// Vytvoří kartičku pro hovor; vzory a druh se odvodí z [english] a [czech].
   ConversationCard({required this.id, required this.czech, required this.english})
-      : patterns = ConversationCards.targetPatterns(english);
+      : patterns = ConversationCards.targetPatterns(english),
+        kind = ConversationCards.kindOf(czech, english);
 
   /// Zda [normalizedText] (viz [ConversationCards.normalize]) obsahuje cílový výraz.
   bool matches(String normalizedText) => patterns.any((p) => p.hasMatch(normalizedText));
@@ -82,6 +95,14 @@ class ConversationCards {
     return null;
   }
 
+  /// Označí [card] jako splněnou jinak než doslovně (posudek rozhodčího lekce).
+  /// Vrátí false, když už splněná je nebo do hovoru nepatří.
+  bool markCompleted(ConversationCard card) {
+    if (!_cards.any((c) => c.id == card.id) || _completed.any((d) => d.id == card.id)) return false;
+    _completed.add(card);
+    return true;
+  }
+
   /// Režisér kartičku vpletl do rady tutorovi; znovu ji v tomto hovoru nedostane.
   void markWoven(ConversationCard card) {
     _woven.add(card.id);
@@ -105,6 +126,23 @@ class ConversationCards {
       done.add(card);
     }
     return done;
+  }
+
+  // Pomocná slovesa, zápor a zájmena: kartička je útržek věty, ne slovíčko. Samotné „have“
+  // tu není, „have a mental block“ je ustálený výraz.
+  static final RegExp _grammarWords = RegExp(
+    r'(^| )(not|do|does|did|am|is|are|was|were|be|been|being|has|had|will|would|i|he|she|it|we|they|you)( |$)',
+  );
+
+  // Gramatická poznámka na české straně („přepsal (minulý čas)“, „má (3. osoba j.č.)“)
+  static final RegExp _grammarNote = RegExp(r'čas|\d\.\s*osob|tvar|sloves', caseSensitive: false);
+
+  /// Druh kartičky: gramatika, když je cíl útržek věty (pomocné sloveso, zápor, zájmeno)
+  /// nebo má česká strana gramatickou poznámku, jinak slovíčko. Typ chyby v databázi se na
+  /// to nehodí („winterized“ je tam gramatika).
+  static CardKind kindOf(String czech, String english) {
+    if (_grammarNote.hasMatch(czech) || _grammarWords.hasMatch(normalize(english))) return CardKind.grammar;
+    return CardKind.vocabulary;
   }
 
   /// Text pro porovnání: malá písmena, rozepsané zkratky (don't → do not, I'm → I am),
