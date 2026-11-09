@@ -184,6 +184,19 @@ Automatické testy nepokryjí mikrofon, přehrávání zvuku ani skutečné vol�
 
 ---
 
+## 🛠️ Úpravy po ručním testu (9. 11. 2026)
+
+Úpravy vzešly z lekce 26 (pokec s častými pauzami) a z jejího rozboru.
+
+- **Kontext po pauze:** během dvouminutové pauzy server zavřel spojení pro nečinnost (1008) a klient ho navázal znovu bez kontextu hovoru. Teď nové spojení kontext dostane a pauza zůstane.
+- **Podezřele krátký přepis až od 7 s:** zopakované „their parents“ mívá i s tichem na konci 4 s, takže se zbytečně ptal další model.
+- **Hlas v pozadí:** mikrofon zachytil 240 ms hlasu ženy, která vedle telefonovala. Ověření krátké repliky z toho podle otázky tutora vymyslelo větu „Eh, so, they were changing at the same time?“ a Tudor na ni odpověděl. Krátká replika se teď ověřuje bez repliky tutora a přepis delší, než se do zachyceného hlasu vejde (tři slova a další na každých 150 ms), je ruch.
+- **Okno s překladem roluje:** dlouhá věta s překladem a slovíčky k výběru se na displej nevešla.
+- **Rozbor lekce bez sítě:** displej zhasl hned po hovoru a systém aplikaci na pozadí odpojil od sítě. Během rozboru teď displej nezhasne, rozbor, kterému chyběla síť, se zopakuje po návratu do aplikace a modely bez odpovědi kvůli výpadku nedostanou cooldown.
+- **Jeden rozbor lekce najednou:** ruční „Analyzovat“ se sešlo s automatickým opakováním a dva rozbory uložily 12 chyb a 10 kartiček. Druhý rozbor teď počká na výsledek prvního a rozbor, který selže, už nehlásí „Analýza dokončena!“.
+- **Znovu analyzovat:** rozebranou lekci jde rozebrat znovu. Nový rozbor nahradí chyby a neprocvičené kartičky předchozího, procvičené kartičky zůstanou.
+- **Krátké úlohy opravdu čekají nejvýš 20 s:** úprava z 8. 11. se neuplatnila, protože každý dotaz si nastavil 45 s.
+
 ## 🛠️ Úpravy po ručním testu (8. 11. 2026)
 
 Úpravy vzešly z lekcí 23 (Lekce s kartičkami) a 25 (pokec).
