@@ -37,15 +37,25 @@ class SpeechTranscriptionService {
   static final RegExp _silencePrefix = RegExp(r'^\(ticho\)\.?\s+(?=\S)', caseSensitive: false);
 
   /// Kolik sekund zvuku je „dlouhá“ nahrávka, ze které přepis na dvě slova nestačí.
-  static const int longAudioSeconds = 4;
+  /// Nahrávka obsahuje i 2 s ticha na konci a úvod před řečí, takže zopakované „their
+  /// parents“ mívá 4 s (9. 11.: zbytečně se kvůli tomu ptal další model).
+  static const int longAudioSeconds = 7;
 
   /// Přepis na nejvýš dvě slova z nahrávky delší než [longAudioSeconds] je podezřelý:
   /// flash-lite v lekci 25 přepsal 13 s řeči („I work with AI. The AI explain me…“) jako „Hm,“.
   /// Pak se zkusí další model a krátký přepis platí, jen když ho nikdo nepřekoná.
   static bool isSuspiciouslyShort(String transcript, int pcmBytes) {
-    final words = transcript.split(RegExp(r'\s+')).where((w) => RegExp(r'\w', unicode: true).hasMatch(w)).length;
-    return words <= 2 && pcmBytes >= longAudioSeconds * 32000;
+    return wordCount(transcript) <= 2 && pcmBytes >= longAudioSeconds * 32000;
   }
+
+  /// Počet slov přepisu (bez samotné interpunkce).
+  static int wordCount(String transcript) =>
+      transcript.split(RegExp(r'\s+')).where((w) => RegExp(r'\w', unicode: true).hasMatch(w)).length;
+
+  /// Zda se přepis krátké repliky vejde do [voicedMs] hlasu: tři slova a další slovo
+  /// na každých 150 ms. 9. 11. mikrofon zachytil 240 ms hlasu ženy, která vedle telefonovala,
+  /// a model z toho podle otázky tutora vymyslel větu o devíti slovech.
+  static bool fitsVoicedTime(String transcript, int voicedMs) => wordCount(transcript) <= 3 + voicedMs ~/ 150;
 
   /// Jak dlouho čekat na odpověď jednoho modelu. Přepis repliky běžně trvá 1–5 s a celý
   /// opravný přepis má 20 s, takže se při zaseknutém modelu stihne zkusit další

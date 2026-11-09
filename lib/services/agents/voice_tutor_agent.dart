@@ -302,6 +302,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     // Pokud se aplikace vrátí z pozadí (resumed) a probíhá hovor, zkontrolujeme stav WebSocketu.
     // Pokud je socket odpojen, přepneme stav na reconnecting a vynutíme reconnect.
     if (state == AppLifecycleState.resumed) {
+      if (this.state.status == TutorState.idle) unawaited(_retryAnalysesWithoutNetwork());
       final client = ref.read(geminiLiveClientProvider);
       if (client != null && this.state.status != TutorState.idle && this.state.status != TutorState.error && this.state.status != TutorState.paused) {
         if (!client.isConnected) {
@@ -317,6 +318,28 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
           _handleIncomingAudioChunk(data, client);
         });
       }
+    }
+  }
+
+  bool _retryingAnalyses = false;
+
+  /// Zopakuje rozbor lekcí, kterým po konci hovoru chyběla síť. Jen mimo hovor,
+  /// výsledek se připíše do logu lekce.
+  Future<void> _retryAnalysesWithoutNetwork() async {
+    if (_retryingAnalyses) return;
+    _retryingAnalyses = true;
+    try {
+      for (final sessionId in _memory.analysesAwaitingNetwork) {
+        if (!ref.mounted || state.status != TutorState.idle) break;
+        L.i('Aplikace je zpět v popředí, opakuji rozbor lekce $sessionId (předtím chyběla síť).');
+        await L.startSessionLog(sessionId);
+        await _memory.analyzeSession(sessionId);
+        await L.endSessionLog(sessionId);
+      }
+    } catch (e, stack) {
+      L.e('Chyba při opakování rozboru lekce', e, stack);
+    } finally {
+      _retryingAnalyses = false;
     }
   }
 
@@ -955,17 +978,34 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   }
 
   /// Opravný přepis zvuku repliky; null, když se nepodaří (pak platí živý přepis).
-  Future<String?> _correctedTranscript(StudentUtterance utterance) async {
+  ///
+  /// Bez [withContext] se nepošle předchozí replika tutora.
+  Future<String?> _correctedTranscript(StudentUtterance utterance, {bool withContext = true}) async {
     final audio = utterance.audioBytes();
     if (audio.isEmpty) return null;
     try {
       return await _transcriber
-          .transcribe(audio, previousTutorLine: utterance.previousTutorLine)
+          .transcribe(audio, previousTutorLine: withContext ? utterance.previousTutorLine : null)
           .timeout(const Duration(seconds: 20));
     } catch (e) {
       L.w('Opravný přepis repliky selhal: $e');
       return null;
     }
+  }
+
+  /// Ověří, že je v krátké replice řeč studenta: prázdný text znamená ruch.
+  ///
+  /// Přepisuje se bez otázky tutora a delší přepis, než se do krátké repliky vejde,
+  /// je výmysl. 9. 11. z 240 ms hlasu ženy telefonující vedle vznikla podle otázky
+  /// tutora věta „Eh, so, they were changing at the same time?“ a Tudor na ni odpověděl.
+  Future<String?> _verifyShortUtterance(StudentUtterance utterance) async {
+    final text = await _correctedTranscript(utterance, withContext: false);
+    if (text == null || text.isEmpty) return text;
+    if (!SpeechTranscriptionService.fitsVoicedTime(text, utterance.voicedMs)) {
+      L.w('Ověření krátké repliky: „$text“ se do ${utterance.voicedMs} ms hlasu nevejde, beru to jako ruch.');
+      return '';
+    }
+    return text;
   }
 
   /// Ukáže v bublině repliky nejlepší známý přepis. Když bublina ještě není
@@ -1325,6 +1365,12 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         L.w('Spojení ztraceno během hovoru, přepínám na reconnecting... (reconnect #${_metrics.reconnects})');
         _reconnectPending = true;
         state = state.copyWith(status: TutorState.reconnecting);
+      } else if (state.status == TutorState.paused) {
+        // Během dlouhé pauzy server spojení zavře pro nečinnost (1008) a klient ho sám
+        // naváže znovu. Nové spojení musí dostat kontext, jinak tutor po obnovení zapomene
+        // celý hovor (9. 11.). Pauza přitom zůstává.
+        L.w('Spojení se během pauzy zavřelo, po připojení se obnoví kontext hovoru.');
+        _reconnectPending = true;
       } else if (state.status == TutorState.connecting) {
         // Výpadek při inicializaci (např. 1007 od preview API) → zůstáváme v connecting
         L.w('Spojení uzavřeno při inicializaci. Auto-reconnect probíhá, zůstávám v connecting...');
@@ -1336,11 +1382,16 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       // Nové spojení rozpracovanou řeč nezná
       _dropActivityAfterDisconnect();
       // Na poslední repliku studenta staré spojení neodpovědělo, odpoví na ni tutor v novém
-      final answerStudent = _awaitingResponse && (state.messages.lastOrNull?.isUser ?? false);
+      final paused = state.status == TutorState.paused;
+      final answerStudent = !paused && _awaitingResponse && (state.messages.lastOrNull?.isUser ?? false);
       _stopAwaitingResponse();
-      L.i('Spojení obnoveno, vracím se do stavu listening.');
-      state = state.copyWith(status: TutorState.listening);
-      _resetWatchdog();
+      if (paused) {
+        L.i('Spojení obnoveno během pauzy, kontext hovoru pošlu a pauza zůstává.');
+      } else {
+        L.i('Spojení obnoveno, vracím se do stavu listening.');
+        state = state.copyWith(status: TutorState.listening);
+        _resetWatchdog();
+      }
 
       // Pokud došlo k reconnectu během běžícího hovoru, obnovíme kontext do nové WebSocket relace
       if (wasReconnecting && state.messages.isNotEmpty) {
@@ -1962,7 +2013,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     // Krátká replika se ověřuje už během ticha, ať je výsledek hotový, než ticho doběhne
     final pending = _utterance;
     if (pending != null && !_activityOpen) {
-      pending.startVerification(_correctedTranscript(pending));
+      pending.startVerification(_verifyShortUtterance(pending));
     }
     _timers.start(TutorTimer.vadSilence, Duration(milliseconds: vadWaitMs), () {
       if ((state.status == TutorState.listening || state.status == TutorState.thinking) && _userSpokeInCurrentTurn) {
@@ -1971,7 +2022,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         final unsent = _utterance;
         if (unsent != null && !_activityOpen) {
           final verification = unsent.verification ??
-              (unsent..startVerification(_correctedTranscript(unsent))).verification!;
+              (unsent..startVerification(_verifyShortUtterance(unsent))).verification!;
           final round = unsent.verificationRound;
           L.vad('Konec krátké řeči (${unsent.voicedMs} ms hlasu). Čekám na ověření, že jde o řeč...');
           verification.then((text) => _finishShortUtterance(unsent, round, text, client));

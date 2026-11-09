@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/widgets.dart' show AppLifecycleState;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
@@ -137,6 +138,7 @@ void main() {
       timestamp: any(named: 'timestamp'),
     )).thenAnswer((_) async => Result.success(null));
     when(() => mockMemory.analyzeSession(any())).thenAnswer((_) async {});
+    when(() => mockMemory.analysesAwaitingNetwork).thenReturn(const []);
     when(() => mockRepo.getRecentCategorizedErrors()).thenAnswer((_) async => []);
     mockFlashcardRepo = MockFlashcardRepository();
     when(() => mockFlashcardRepo.getDueFlashcards()).thenAnswer((_) async => []);
@@ -651,6 +653,17 @@ void main() {
     ));
   });
 
+  test('an analysis that failed without network runs again when the app is back', () async {
+    when(() => mockMemory.analysesAwaitingNetwork).thenReturn(const [7]);
+    final agent = container.read(voiceTutorAgentProvider.notifier);
+
+    agent.didChangeAppLifecycleState(AppLifecycleState.resumed);
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+
+    verify(() => mockMemory.analyzeSession(7)).called(1);
+  });
+
   test('connection error closes the session and starts the analysis, error stays visible', () async {
     Function(String)? errorCallback;
 
@@ -825,6 +838,28 @@ void main() {
       await agent.stopSession('test');
     });
 
+    testWidgets('a short sound transcribed as a whole sentence is noise, checked without the tutor line',
+        (tester) async {
+      // 9. 11.: z 240 ms hlasu ženy telefonující vedle vznikla věta podle otázky tutora
+      when(() => mockTranscriber.transcribe(any(), previousTutorLine: any(named: 'previousTutorLine')))
+          .thenAnswer((_) async => 'Eh, so, they were changing at the same time?');
+      final agent = container.read(voiceTutorAgentProvider.notifier);
+      await agent.startSession();
+      await tester.pump(const Duration(seconds: 1)); // úvodní replika tutora
+      clearInteractions(mockClient);
+
+      speak(2);
+      mic(quiet);
+      await tester.pump(const Duration(milliseconds: 2100));
+      await tester.pump();
+
+      verifyNever(() => mockClient.sendActivityStart());
+      verify(() => mockTranscriber.transcribe(any(), previousTutorLine: null)).called(1);
+      expect(container.read(voiceTutorAgentProvider).messages.where((m) => m.isUser), isEmpty);
+
+      await agent.stopSession('test');
+    });
+
     testWidgets('a short sound without speech never reaches Tudor', (tester) async {
       when(() => mockTranscriber.transcribe(any(), previousTutorLine: any(named: 'previousTutorLine')))
           .thenAnswer((_) async => '');
@@ -956,6 +991,30 @@ void main() {
       // Po obnovení pokračovala tatáž řeč
       verifyNever(() => mockClient.sendActivityStart());
 
+      await agent.stopSession('test');
+    });
+
+    testWidgets('a connection closed during a long pause gets the conversation context back', (tester) async {
+      final agent = container.read(voiceTutorAgentProvider.notifier);
+      await agent.startSession();
+      await speakAndPause(tester);
+      userTranscript!('I saw the new Avatar movie.');
+      tutorText!('Nice! What did you like about it?');
+      turnComplete!();
+      await tester.pump();
+      await agent.pauseSession();
+
+      // 9. 11.: po dvou minutách pauzy server spojení zavřel (1008) a klient ho navázal znovu
+      connectionStatus!(false);
+      connectionStatus!(true);
+      verify(() => mockClient.sendClientContent(
+            role: 'user',
+            text: any(named: 'text', that: contains('What did you like about it?')),
+            turnComplete: false,
+          )).called(1);
+      expect(container.read(voiceTutorAgentProvider).status, TutorState.paused);
+
+      await tester.pump(const Duration(seconds: 1));
       await agent.stopSession('test');
     });
 

@@ -295,6 +295,30 @@ void main() {
       await expectLater(agent.analyzeSession(s), completes);
     });
 
+    test('an analysis without network waits for a retry, a finished one does not', () async {
+      final s = (await repo.startNewSession()).getOrThrow();
+      await repo.addTranscript(sessionId: s, speaker: 'user', content: 'User message 1');
+      await repo.addTranscript(sessionId: s, speaker: 'user', content: 'User message 2');
+      final agent = container.read(memoryManagerAgentProvider);
+
+      // 9. 11.: displej zhasl hned po hovoru a systém aplikaci odpojil od sítě
+      when(() => mockGemini.sendMessage(
+        any(),
+        responseSchema: any(named: 'responseSchema'),
+        systemPrompt: any(named: 'systemPrompt'),
+      )).thenThrow(const GeminiNetworkException());
+      await agent.analyzeSession(s);
+      expect(agent.analysesAwaitingNetwork, [s]);
+
+      when(() => mockGemini.sendMessage(
+        any(),
+        responseSchema: any(named: 'responseSchema'),
+        systemPrompt: any(named: 'systemPrompt'),
+      )).thenThrow(Exception('API Timeout'));
+      await agent.analyzeSession(s);
+      expect(agent.analysesAwaitingNetwork, isEmpty);
+    });
+
     test('analyzeSession creates atomic flashcard and filters out leaked tutor messages', () async {
       final s = (await repo.startNewSession()).getOrThrow();
       await repo.addTranscript(sessionId: s, speaker: 'tutor', content: 'What do you like doing in your free time?');

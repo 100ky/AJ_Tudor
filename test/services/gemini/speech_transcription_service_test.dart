@@ -98,14 +98,16 @@ void main() {
     final longAudio = List<int>.filled(13 * 32000, 0);
 
     expect(await serviceWithKey('key').transcribe(longAudio), 'I work with AI. The AI explain me this hard loss.');
-    // Krátká nahrávka s krátkým přepisem je v pořádku
+    // Krátká nahrávka s krátkým přepisem je v pořádku, i zopakovaná dvě slova ze 4 s
     answerWith(() => _answer('Yes.'));
     expect(await serviceWithKey('key').transcribe([1, 0, 2, 0]), 'Yes.');
+    answerWith(() => _answer('their parents'));
+    expect(await serviceWithKey('key').transcribe(List<int>.filled(4 * 32000, 0)), 'their parents');
   });
 
   test('a short transcript of a long recording stays when no model does better', () async {
     answerWith(() => _answer('Hm,'));
-    expect(await serviceWithKey('key').transcribe(List<int>.filled(6 * 32000, 0)), 'Hm,');
+    expect(await serviceWithKey('key').transcribe(List<int>.filled(8 * 32000, 0)), 'Hm,');
   });
 
   test('a silence mark before speech is dropped', () async {
@@ -131,6 +133,14 @@ void main() {
   test('flash-lite goes first, 3.6 Flash with only 20 requests a day is the last resort', () {
     expect(SpeechTranscriptionService.models.first, GeminiModels.flashLite3_5);
     expect(SpeechTranscriptionService.models.last, GeminiModels.flash3_6);
+  });
+
+  test('a short reply fits only a few words, a made-up sentence does not', () {
+    // 9. 11.: 240 ms hlasu ženy telefonující vedle a věta podle otázky tutora
+    expect(SpeechTranscriptionService.fitsVoicedTime('Eh, so, they were changing at the same time?', 240), isFalse);
+    expect(SpeechTranscriptionService.fitsVoicedTime('Yes, I do.', 240), isTrue);
+    expect(SpeechTranscriptionService.fitsVoicedTime('I think so, yes.', 300), isTrue);
+    expect(SpeechTranscriptionService.fitsVoicedTime('No, I have never been there.', 650), isTrue);
   });
 
   test('overloaded models fall back to the next one, a rejected key stops at once', () async {

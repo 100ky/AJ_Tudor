@@ -355,7 +355,9 @@ class _WordTranslationSheetState extends ConsumerState<WordTranslationSheet> {
             color: isDark ? AppTheme.glassBorderDark : AppTheme.glassBorder,
             width: 1.2,
           ),
-          child: Column(
+          // Dlouhá věta s překladem a slovíčky k výběru se na výšku nevejde (9. 11.)
+          child: SingleChildScrollView(
+            child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -745,6 +747,7 @@ class _WordTranslationSheetState extends ConsumerState<WordTranslationSheet> {
                 ),
               ),
             ],
+            ),
           ),
         ),
       ),

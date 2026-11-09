@@ -6,6 +6,15 @@ import '../../core/utils/logger.dart';
 import '../prompt/system_prompt_builder.dart';
 import 'gemini_rest_core.dart';
 
+/// Požadavek se na server nedostal: telefon je bez sítě, nebo systém aplikaci
+/// na pozadí odpojil (9. 11.: displej zhasl hned po hovoru a rozbor lekce selhal).
+class GeminiNetworkException implements Exception {
+  const GeminiNetworkException();
+
+  @override
+  String toString() => 'Exception: Chyba sítě (bez internetu). Zkontrolujte připojení.';
+}
+
 /// Klientská třída pro komunikaci s Gemini API v dávkovém/jednorázovém režimu (non-streaming).
 ///
 /// Používá přímé REST volání na Gemini API (bez deprecated google_generative_ai SDK).
@@ -110,7 +119,7 @@ class GeminiBatchClient {
             final isNetworkError = e.error is SocketException || e.type == DioExceptionType.connectionError;
             if (isNetworkError) {
               L.e('Chyba sítě (bez internetu), přerušuji zkoušení dalších modelů.');
-              throw Exception('Chyba sítě (bez internetu). Zkontrolujte připojení.');
+              throw const GeminiNetworkException();
             }
             final cooldown = _cooldowns.markFailure(modelName, e, otherwise: const Duration(minutes: 3));
             L.w(isDailyQuotaError(e)

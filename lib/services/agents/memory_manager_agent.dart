@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/data_providers.dart';
+import '../gemini/gemini_batch_client.dart';
 import '../gemini/gemini_providers.dart';
 import '../../data/repositories/flashcard_repository.dart';
 import '../../core/utils/logger.dart';
@@ -22,6 +23,13 @@ class MemoryManagerAgent {
 
   /// Inicializuje agenta paměti.
   MemoryManagerAgent(this._ref);
+
+  // Lekce, jejichž rozbor selhal kvůli chybějící síti
+  final Set<int> _awaitingNetwork = {};
+
+  /// Lekce, jejichž rozbor selhal kvůli chybějící síti. Zopakuje se po návratu do aplikace
+  /// (9. 11.: displej zhasl pět vteřin po hovoru a systém aplikaci na pozadí odpojil).
+  List<int> get analysesAwaitingNetwork => List.unmodifiable(_awaitingNetwork);
 
   /// Nejvyšší délka briefingu pro příští lekci (bez kritiky tutora).
   static const int maxBriefingChars = 600;
@@ -97,6 +105,7 @@ class MemoryManagerAgent {
   /// 5. Spustí plánovač scénářů [ScenarioPlannerAgent] pro přípravu témat na příští lekce.
   Future<void> analyzeSession(int sessionId) async {
     L.i('Zahajuji analýzu session $sessionId pomocí Structured Outputs...');
+    _awaitingNetwork.remove(sessionId);
     
     // Načtení repozitáře pro přístup k databázi a batch klienta Gemini určeného pro analýzy.
     final sessionRepo = _ref.read(sessionRepositoryProvider);
@@ -394,6 +403,9 @@ class MemoryManagerAgent {
       // 7. Příprava nového konverzačního tématu pro příště z čerstvé historie
       _ref.read(topicPreparationAgentProvider.notifier).prepareTopic(force: true, resetCounter: true);
 
+    } on GeminiNetworkException {
+      _awaitingNetwork.add(sessionId);
+      L.w('Rozbor lekce $sessionId selhal bez sítě, zopakuje se po návratu do aplikace.');
     } catch (e, stack) {
       L.e('Chyba při strukturované analýze session', e, stack);
     }
