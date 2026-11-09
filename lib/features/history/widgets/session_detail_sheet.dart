@@ -147,14 +147,20 @@ class _SessionDetailSheetState extends ConsumerState<SessionDetailSheet> {
   }
 
   void _analyzeSession() async {
+    if (SessionDetailHeader.isAnalyzed(widget.session) && !await _confirmReanalysis()) return;
+    if (!mounted) return;
     setState(() => _isAnalyzing = true);
     try {
-      await _controller.analyze(widget.session.id);
+      final done = await _controller.analyze(widget.session.id);
       if (mounted) {
+        // Rozbor chyby nehlásí výjimkou, dřív se tu ukázalo „dokončena“ i po selhání (9. 11.)
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Analýza dokončena!'),
-              backgroundColor: Color(0xFF10B981)),
+          done
+              ? const SnackBar(
+                  content: Text('Analýza dokončena!'),
+                  backgroundColor: Color(0xFF10B981))
+              : const SnackBar(
+                  content: Text('Rozbor se nepodařil (Gemini je přetížené nebo chybí připojení). Zkus to za chvíli znovu.')),
         );
       }
     } catch (e) {
@@ -168,6 +174,24 @@ class _SessionDetailSheetState extends ConsumerState<SessionDetailSheet> {
         setState(() => _isAnalyzing = false);
       }
     }
+  }
+
+  /// Opakovaný rozbor nahradí chyby a neprocvičené kartičky z předchozího.
+  Future<bool> _confirmReanalysis() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Znovu analyzovat lekci?'),
+        content: const Text(
+            'Nový rozbor nahradí chyby a kartičky z minulého rozboru této lekce. '
+            'Kartičky, které už jsi procvičoval, zůstanou.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Zrušit')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Analyzovat')),
+        ],
+      ),
+    );
+    return confirmed == true;
   }
 
   Future<void> _addToFlashcards(Transcript transcript, ErrorLog error) async {

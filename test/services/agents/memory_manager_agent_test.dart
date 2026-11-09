@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,6 +14,7 @@ import 'package:aj_tudor/services/agents/memory_manager_agent.dart';
 import 'package:aj_tudor/services/agents/scenario_planner_agent.dart';
 import 'package:aj_tudor/services/agents/topic_preparation_agent.dart';
 import 'package:aj_tudor/services/gemini/gemini_batch_client.dart';
+import 'package:aj_tudor/services/system/wakelock_service.dart';
 
 class MockGeminiBatchClient extends Mock implements GeminiBatchClient {}
 class MockScenarioPlannerAgent extends Mock implements ScenarioPlannerAgent {}
@@ -37,6 +39,21 @@ class FakeTopicPreparationAgent extends TopicPreparationAgent {
   }
 }
 
+/// Zaznamená, kdo drží displej rozsvícený.
+class _FakeWakelock implements WakelockService {
+  final List<Object> holders = [];
+  final List<Object> enabled = [];
+
+  @override
+  void enable([Object holder = 'hovor']) {
+    holders.add(holder);
+    enabled.add(holder);
+  }
+
+  @override
+  void disable([Object holder = 'hovor']) => holders.remove(holder);
+}
+
 void main() {
   late AppDatabase db;
   late SessionRepository repo;
@@ -47,7 +64,10 @@ void main() {
   late FakeTopicPreparationAgent fakeTopicAgent;
   late ProviderContainer container;
 
+  late _FakeWakelock wakelock;
+
   setUp(() {
+    wakelock = _FakeWakelock();
     db = AppDatabase.forTesting(NativeDatabase.memory());
     repo = SessionRepository(db);
     profileRepo = ProfileRepository(db);
@@ -65,6 +85,7 @@ void main() {
         geminiAnalysisClientProvider.overrideWithValue(mockGemini),
         scenarioPlannerAgentProvider.overrideWithValue(mockScenarioPlanner),
         topicPreparationAgentProvider.overrideWith(() => fakeTopicAgent),
+        wakelockServiceProvider.overrideWithValue(wakelock),
       ],
     );
   });
@@ -81,6 +102,7 @@ void main() {
           sessionRepositoryProvider.overrideWithValue(repo),
           databaseProvider.overrideWithValue(db),
           geminiAnalysisClientProvider.overrideWithValue(null),
+          wakelockServiceProvider.overrideWithValue(wakelock),
         ],
       );
       addTearDown(containerNoKey.dispose);
@@ -293,6 +315,77 @@ void main() {
       final agent = container.read(memoryManagerAgentProvider);
       // Should not throw
       await expectLater(agent.analyzeSession(s), completes);
+    });
+
+    test('a repeated analysis replaces the errors and unpractised cards of the previous one', () async {
+      final s = (await repo.startNewSession()).getOrThrow();
+      await repo.addTranscript(sessionId: s, speaker: 'user', content: 'I goed to the shop.');
+      await repo.addTranscript(sessionId: s, speaker: 'user', content: 'Yesterday I see a film.');
+      final oldError = (await repo.addErrorLog(
+        sessionId: s, errorType: 'grammar', userSaid: 'I goed', correctForm: 'I went', explanation: 'x',
+      )).getOrThrow();
+      final practisedError = (await repo.addErrorLog(
+        sessionId: s, errorType: 'grammar', userSaid: 'I see', correctForm: 'I saw', explanation: 'x',
+      )).getOrThrow();
+      final unpractised = (await flashcardRepo.addFlashcard(
+        errorLogId: oldError, frontText: 'jít', backText: 'go', explanation: 'x',
+      )).getOrThrow();
+      final practised = (await flashcardRepo.addFlashcard(
+        errorLogId: practisedError, frontText: 'vidět', backText: 'see', explanation: 'x',
+      )).getOrThrow();
+      await flashcardRepo.reviewFlashcard(flashcardId: practised, rating: 3);
+
+      // 9. 11.: druhý rozbor lekce uložil chyby i kartičky podruhé
+      final removed = await repo.clearSessionAnalysis(s);
+
+      expect(removed, (errors: 2, cards: 1));
+      expect(await repo.getErrorLogs(s), isEmpty);
+      final cards = await db.select(db.flashcards).get();
+      expect(cards.map((c) => c.id), [practised]);
+      expect(cards.single.errorLogId, isNull);
+      expect(cards.map((c) => c.id), isNot(contains(unpractised)));
+    });
+
+    test('a second analysis of a lesson that is being analyzed waits for the first one', () async {
+      final s = (await repo.startNewSession()).getOrThrow();
+      await repo.addTranscript(sessionId: s, speaker: 'user', content: 'User message 1');
+      await repo.addTranscript(sessionId: s, speaker: 'user', content: 'User message 2');
+      final reply = Completer<String>();
+      when(() => mockGemini.sendMessage(
+        any(),
+        responseSchema: any(named: 'responseSchema'),
+        systemPrompt: any(named: 'systemPrompt'),
+      )).thenAnswer((_) => reply.future);
+      final agent = container.read(memoryManagerAgentProvider);
+
+      // 9. 11.: automatické opakování a ruční „Analyzovat“ ve stejnou chvíli
+      final first = agent.analyzeSession(s);
+      final second = agent.analyzeSession(s);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      reply.completeError(Exception('API Timeout'));
+
+      expect(await first, isFalse);
+      expect(await second, isFalse);
+      verify(() => mockGemini.sendMessage(
+        any(),
+        responseSchema: any(named: 'responseSchema'),
+        systemPrompt: any(named: 'systemPrompt'),
+      )).called(1);
+    });
+
+    test('the screen stays on during the analysis, also when it fails', () async {
+      final s = (await repo.startNewSession()).getOrThrow();
+      await repo.addTranscript(sessionId: s, speaker: 'user', content: 'User message 1');
+      await repo.addTranscript(sessionId: s, speaker: 'user', content: 'User message 2');
+      when(() => mockGemini.sendMessage(
+        any(),
+        responseSchema: any(named: 'responseSchema'),
+        systemPrompt: any(named: 'systemPrompt'),
+      )).thenThrow(const GeminiNetworkException());
+
+      await container.read(memoryManagerAgentProvider).analyzeSession(s);
+      expect(wakelock.enabled, ['rozbor lekce $s']);
+      expect(wakelock.holders, isEmpty);
     });
 
     test('an analysis without network waits for a retry, a finished one does not', () async {

@@ -137,7 +137,7 @@ void main() {
       content: any(named: 'content'),
       timestamp: any(named: 'timestamp'),
     )).thenAnswer((_) async => Result.success(null));
-    when(() => mockMemory.analyzeSession(any())).thenAnswer((_) async {});
+    when(() => mockMemory.analyzeSession(any())).thenAnswer((_) async => true);
     when(() => mockMemory.analysesAwaitingNetwork).thenReturn(const []);
     when(() => mockRepo.getRecentCategorizedErrors()).thenAnswer((_) async => []);
     mockFlashcardRepo = MockFlashcardRepository();

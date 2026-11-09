@@ -32,6 +32,9 @@ class GeminiBatchClient {
 
   final GeminiRestCore _api;
 
+  /// Jak dlouho čekat na odpověď jednoho modelu ([longTaskTimeout] nebo [shortTaskTimeout]).
+  final Duration receiveTimeout;
+
   /// Záložní modely po [primaryModelName]; null = výchozí řetězec ([defaultFallbackModels]).
   final List<String>? fallbackModels;
 
@@ -61,7 +64,7 @@ class GeminiBatchClient {
     this.primaryModelName, {
     this.systemPrompt,
     this.fallbackModels,
-    Duration receiveTimeout = longTaskTimeout,
+    this.receiveTimeout = longTaskTimeout,
   }) : _api = GeminiRestCore(
           connectTimeout: const Duration(seconds: 15),
           receiveTimeout: receiveTimeout,
@@ -88,6 +91,8 @@ class GeminiBatchClient {
     final allCandidates = {primaryModelName, ...(fallbackModels ?? defaultFallbackModels)};
 
     String lastError = '';
+    // Modely bez odpovědi serveru (spojení spadlo) v tomto volání
+    final unanswered = <String>[];
 
     for (final modelName in _cooldowns.order(allCandidates)) {
       try {
@@ -119,8 +124,14 @@ class GeminiBatchClient {
             final isNetworkError = e.error is SocketException || e.type == DioExceptionType.connectionError;
             if (isNetworkError) {
               L.e('Chyba sítě (bez internetu), přerušuji zkoušení dalších modelů.');
+              // Předchozí modely bez odpovědi nejspíš přerušil stejný výpadek sítě, ne server.
+              // S cooldownem by se opakovaný rozbor lekce dostal jen na flash-lite (9. 11.).
+              for (final model in unanswered) {
+                _cooldowns.markSuccess(model);
+              }
               throw const GeminiNetworkException();
             }
+            if (e.response == null) unanswered.add(modelName);
             final cooldown = _cooldowns.markFailure(modelName, e, otherwise: const Duration(minutes: 3));
             L.w(isDailyQuotaError(e)
                 ? 'Model $modelName vyčerpal denní limit, vynechám ho ${cooldown.inHours} h. Zkouším další...'
@@ -180,9 +191,10 @@ class GeminiBatchClient {
           model: modelName,
           body: body,
           sendTimeout: const Duration(seconds: 15),
-          receiveTimeout: const Duration(seconds: 45),
+          // Pevných 45 s tu dřív přebilo i kratší čekání krátkých úloh
+          receiveTimeout: receiveTimeout,
         )
-        .timeout(const Duration(seconds: 55));
+        .timeout(receiveTimeout + const Duration(seconds: 10));
 
     return GeminiRestCore.requireText(data);
   }

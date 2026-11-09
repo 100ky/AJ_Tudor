@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/data_providers.dart';
 import '../gemini/gemini_batch_client.dart';
+import '../system/wakelock_service.dart';
 import '../gemini/gemini_providers.dart';
 import '../../data/repositories/flashcard_repository.dart';
 import '../../core/utils/logger.dart';
@@ -103,7 +104,37 @@ class MemoryManagerAgent {
   /// 3. Aktualizuje uživatelský profil v databázi (skóre plynulosti, odhadnutou úroveň, paměťový briefing).
   /// 4. Uloží nově naučená slovíčka a podrobný log chyb.
   /// 5. Spustí plánovač scénářů [ScenarioPlannerAgent] pro přípravu témat na příští lekce.
-  Future<void> analyzeSession(int sessionId) async {
+  ///
+  /// Během rozboru displej nezhasne, jinak systém aplikaci odpojí od sítě. Probíhající
+  /// rozbor téže lekce se nespouští znovu, volající počká na jeho výsledek. Vrátí, zda se
+  /// rozbor uložil.
+  Future<bool> analyzeSession(int sessionId) {
+    final running = _running[sessionId];
+    if (running != null) {
+      L.i('Rozbor lekce $sessionId už běží, počkám na jeho výsledek.');
+      return running;
+    }
+    final analysis = _analyzeWithScreenOn(sessionId);
+    _running[sessionId] = analysis;
+    return analysis.whenComplete(() => _running.remove(sessionId));
+  }
+
+  // Probíhající rozbory podle lekce. 9. 11. se ruční „Analyzovat“ sešlo s automatickým
+  // opakováním: dva rozbory jedné lekce uložily 12 chyb a 10 kartiček.
+  final Map<int, Future<bool>> _running = {};
+
+  Future<bool> _analyzeWithScreenOn(int sessionId) async {
+    final wakelock = _ref.read(wakelockServiceProvider);
+    final holder = 'rozbor lekce $sessionId';
+    wakelock.enable(holder);
+    try {
+      return await _analyzeSession(sessionId);
+    } finally {
+      wakelock.disable(holder);
+    }
+  }
+
+  Future<bool> _analyzeSession(int sessionId) async {
     L.i('Zahajuji analýzu session $sessionId pomocí Structured Outputs...');
     _awaitingNetwork.remove(sessionId);
     
@@ -115,7 +146,7 @@ class MemoryManagerAgent {
     
     if (gemini == null) {
       L.e('Gemini Analysis Client není k dispozici (chybí API klíč). Analýza zrušena.');
-      return;
+      return false;
     }
 
     try {
@@ -125,7 +156,7 @@ class MemoryManagerAgent {
       
       if (transcripts.isEmpty) {
         L.w('Transkript je prázdný, analýza session $sessionId nebude provedena.');
-        return;
+        return false;
       }
 
       // Podíl řeči: student má mluvit aspoň polovinu, rozbor to tutorovi připomene
@@ -173,6 +204,13 @@ class MemoryManagerAgent {
       
       // Dekódování strukturovaného JSON výsledku
       final data = jsonDecode(analysisResult);
+
+      // Nový rozbor nahradí předchozí. Jinak opakovaný rozbor zdvojil chyby i kartičky (9. 11.)
+      final previous = await sessionRepo.clearSessionAnalysis(sessionId);
+      if (previous.errors > 0) {
+        L.i('Nahrazuji předchozí rozbor lekce $sessionId: smazáno ${previous.errors} chyb '
+            'a ${previous.cards} neprocvičených kartiček.');
+      }
 
       // --- BEZPEČNÉ PARSOVÁNÍ ČÍSEL ---
       double fluency = 0.0;
@@ -402,12 +440,14 @@ class MemoryManagerAgent {
 
       // 7. Příprava nového konverzačního tématu pro příště z čerstvé historie
       _ref.read(topicPreparationAgentProvider.notifier).prepareTopic(force: true, resetCounter: true);
-
+      return true;
     } on GeminiNetworkException {
       _awaitingNetwork.add(sessionId);
       L.w('Rozbor lekce $sessionId selhal bez sítě, zopakuje se po návratu do aplikace.');
+      return false;
     } catch (e, stack) {
       L.e('Chyba při strukturované analýze session', e, stack);
+      return false;
     }
   }
 }

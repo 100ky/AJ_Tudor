@@ -214,6 +214,23 @@ class SessionRepository {
     }
   }
 
+  /// Smaže výsledek předchozího rozboru lekce: její chyby a kartičky z nich, které student
+  /// ještě neprocvičil. Procvičené kartičky zůstanou, jen se odpojí od smazané chyby.
+  Future<({int errors, int cards})> clearSessionAnalysis(int sessionId) {
+    return _db.transaction(() async {
+      final errors = await (_db.select(_db.errorLogs)..where((t) => t.sessionId.equals(sessionId))).get();
+      if (errors.isEmpty) return (errors: 0, cards: 0);
+      final errorIds = [for (final e in errors) e.id];
+      final cards = await (_db.delete(_db.flashcards)
+            ..where((t) => t.errorLogId.isIn(errorIds) & t.repetitionCount.equals(0) & t.masteryScore.equals(0.0)))
+          .go();
+      await (_db.update(_db.flashcards)..where((t) => t.errorLogId.isIn(errorIds)))
+          .write(const FlashcardsCompanion(errorLogId: Value(null)));
+      await (_db.delete(_db.errorLogs)..where((t) => t.sessionId.equals(sessionId))).go();
+      return (errors: errors.length, cards: cards);
+    });
+  }
+
   /// Načte všechny chyby zaznamenané v konkrétní lekci.
   Future<List<ErrorLog>> getErrorLogs(int sessionId) async {
     return await (_db.select(_db.errorLogs)..where((t) => t.sessionId.equals(sessionId))).get();

@@ -1594,8 +1594,9 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
 
         // Spuštění asynchronní Structured Outputs analýzy na pozadí přes MemoryManagerAgent.
         // Log lekce se zavře až po ní, aby obsahoval i výsledek nebo chybu analýzy.
-        _memory.analyzeSession(sessionId).catchError((e, stack) {
+        _memory.analyzeSession(sessionId).catchError((Object e, StackTrace stack) {
           L.e('Chyba při spouštění analýzy na pozadí', e, stack);
+          return false;
         }).whenComplete(() => L.endSessionLog(sessionId));
       }
     } catch (globalError, stack) {

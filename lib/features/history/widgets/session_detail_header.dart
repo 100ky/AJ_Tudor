@@ -163,24 +163,22 @@ class SessionDetailHeader extends StatelessWidget {
                   spacing: 6,
                   runSpacing: 6,
                   children: [
-                    if (session.topicSummary == null ||
-                        session.fluencyScore == null)
-                      isAnalyzing
-                          ? const Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 8),
-                              child: SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                      strokeWidth: 2)),
-                            )
-                          : TextButton.icon(
-                              icon: Icon(Icons.analytics_outlined,
-                                  size: 15, color: AppTheme.primary),
-                              label: const Text('Analyzovat'),
-                              style: _actionStyle(),
-                              onPressed: onAnalyze,
-                            ),
+                    isAnalyzing
+                        ? const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 8),
+                            child: SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2)),
+                          )
+                        : TextButton.icon(
+                            icon: Icon(Icons.analytics_outlined,
+                                size: 15, color: AppTheme.primary),
+                            label: Text(isAnalyzed(session) ? 'Znovu analyzovat' : 'Analyzovat'),
+                            style: _actionStyle(),
+                            onPressed: onAnalyze,
+                          ),
                     TextButton.icon(
                       icon: isGeneratingCards
                           ? const SizedBox(
@@ -211,6 +209,9 @@ class SessionDetailHeader extends StatelessWidget {
       ),
     );
   }
+
+  /// Lekce už má rozbor (shrnutí i plynulost).
+  static bool isAnalyzed(Session session) => session.topicSummary != null && session.fluencyScore != null;
 
   ButtonStyle _actionStyle() {
     return TextButton.styleFrom(

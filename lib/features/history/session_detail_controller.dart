@@ -74,8 +74,8 @@ class SessionDetailController {
         .generateFlashcardsFromErrors(sessionId: sessionId, limit: 15);
   }
 
-  /// Spustí (opakovanou) analýzu lekce agentem paměti.
-  Future<void> analyze(int sessionId) {
+  /// Spustí (opakovanou) analýzu lekce agentem paměti. Vrátí, zda se rozbor uložil.
+  Future<bool> analyze(int sessionId) {
     return _ref.read(memoryManagerAgentProvider).analyzeSession(sessionId);
   }
 
