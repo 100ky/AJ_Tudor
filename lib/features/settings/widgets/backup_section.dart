@@ -19,10 +19,10 @@ class BackupSection extends ConsumerWidget {
             contentPadding: EdgeInsets.zero,
             leading: SettingsIcon(Icons.backup_outlined, AppTheme.primary),
             title: Text('Vytvořit zálohu pokroku',
-                style: GoogleFonts.plusJakartaSans(
+                style: GoogleFonts.hankenGrotesk(
                     color: AppTheme.textColor(context))),
             subtitle: Text('Exportuje váš pokrok do souboru.',
-                style: GoogleFonts.plusJakartaSans(
+                style: GoogleFonts.hankenGrotesk(
                     fontSize: 12, color: AppTheme.mutedTextColor(context))),
             onTap: () async {
               final success = await ref.read(backupServiceProvider).exportBackup();
@@ -41,10 +41,10 @@ class BackupSection extends ConsumerWidget {
             contentPadding: EdgeInsets.zero,
             leading: SettingsIcon(Icons.settings_backup_restore_outlined, AppTheme.warning),
             title: Text('Obnovit pokrok ze zálohy',
-                style: GoogleFonts.plusJakartaSans(
+                style: GoogleFonts.hankenGrotesk(
                     color: AppTheme.textColor(context))),
             subtitle: Text('Načte data ze záložního souboru.',
-                style: GoogleFonts.plusJakartaSans(
+                style: GoogleFonts.hankenGrotesk(
                     fontSize: 12, color: AppTheme.mutedTextColor(context))),
             onTap: () => _restore(context, ref),
           ),
@@ -58,21 +58,21 @@ class BackupSection extends ConsumerWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: Text('Obnovit data?',
-            style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600)),
+            style: GoogleFonts.hankenGrotesk(fontWeight: FontWeight.w600)),
         content: Text(
             'Tato akce nahradí všechna stávající data vybranou zálohou. Nelze vrátit zpět.',
-            style: GoogleFonts.plusJakartaSans()),
+            style: GoogleFonts.hankenGrotesk()),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
             child: Text('Zrušit',
-                style: GoogleFonts.plusJakartaSans(
+                style: GoogleFonts.hankenGrotesk(
                     color: AppTheme.mutedTextColor(context))),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             child: Text('Obnovit',
-                style: GoogleFonts.plusJakartaSans(color: AppTheme.error)),
+                style: GoogleFonts.hankenGrotesk(color: AppTheme.error)),
           ),
         ],
       ),
@@ -92,7 +92,7 @@ class BackupSection extends ConsumerWidget {
                 CircularProgressIndicator(color: AppTheme.primary),
                 const SizedBox(height: 16),
                 Text('Probíhá obnova dat...',
-                    style: GoogleFonts.plusJakartaSans(
+                    style: GoogleFonts.hankenGrotesk(
                         color: AppTheme.textColor(context))),
               ],
             ),

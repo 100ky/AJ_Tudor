@@ -38,13 +38,13 @@ class DrillInputBar extends StatelessWidget {
           Expanded(
             child: TextField(
               controller: controller,
-              style: GoogleFonts.plusJakartaSans(
+              style: GoogleFonts.hankenGrotesk(
                 color: AppTheme.textColor(context),
                 fontSize: 15,
               ),
               decoration: InputDecoration(
                 hintText: 'Napiš překlad nebo se zeptej na gramatiku...',
-                hintStyle: GoogleFonts.plusJakartaSans(
+                hintStyle: GoogleFonts.hankenGrotesk(
                   color: AppTheme.mutedTextColor(context),
                   fontSize: 14,
                 ),
@@ -61,27 +61,11 @@ class DrillInputBar extends StatelessWidget {
               height: 44,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                gradient: isLoading
-                    ? null
-                    : const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [AppTheme.primaryLight, AppTheme.primaryDark],
-                      ),
-                color: isLoading ? AppTheme.outline : null,
-                boxShadow: isLoading
-                    ? null
-                    : [
-                        BoxShadow(
-                          color: AppTheme.primary.withValues(alpha: 0.35),
-                          blurRadius: 12,
-                          spreadRadius: 0,
-                        ),
-                      ],
+                color: isLoading ? AppTheme.surfaceRaised : AppTheme.textPrimary,
               ),
               child: const Icon(
                 Icons.arrow_upward_rounded,
-                color: Colors.white,
+                color: AppTheme.background,
                 size: 20,
               ),
             ),
@@ -127,7 +111,7 @@ class DrillThinkingBubble extends StatelessWidget {
               Flexible(
                 child: Text(
                   'Tutor vyhodnocuje a připravuje cvičení...',
-                  style: GoogleFonts.plusJakartaSans(
+                  style: GoogleFonts.hankenGrotesk(
                     fontSize: 13,
                     color: AppTheme.mutedTextColor(context),
                   ),

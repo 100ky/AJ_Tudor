@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -120,7 +119,7 @@ class _SessionDetailSheetState extends ConsumerState<SessionDetailSheet> {
                 count > 0
                     ? 'Vytvořeno $count kartiček z chyb této lekce! 🎯'
                     : 'Všechny chyby z této lekce už máš v kartičkách! 👍',
-                style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600),
+                style: GoogleFonts.hankenGrotesk(fontWeight: FontWeight.w600),
               ),
               backgroundColor: count > 0 ? AppTheme.success : AppTheme.primary,
               behavior: SnackBarBehavior.floating,
@@ -224,7 +223,6 @@ class _SessionDetailSheetState extends ConsumerState<SessionDetailSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = AppTheme.isDark(context);
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     final transcripts =
@@ -243,23 +241,14 @@ class _SessionDetailSheetState extends ConsumerState<SessionDetailSheet> {
       builder: (_, controller) => Padding(
         padding: EdgeInsets.only(bottom: bottomInset),
         child: ClipRRect(
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          child: ColoredBox(
+            color: Colors.transparent,
             child: Container(
-              decoration: BoxDecoration(
-                color: isDark ? const Color(0xF2100C22) : const Color(0xF5F6F4FC),
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(28)),
-                border: Border(
-                  top: BorderSide(
-                    color: isDark
-                        ? Colors.white.withValues(alpha: 0.20)
-                        : Colors.white.withValues(alpha: 0.85),
-                    width: 1.0,
-                  ),
-                ),
-                boxShadow: AppTheme.glassShadows(context),
+              decoration: const BoxDecoration(
+                color: AppTheme.background,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                border: Border(top: BorderSide(color: AppTheme.hairline)),
               ),
               child: Column(
                 children: [
@@ -307,7 +296,7 @@ class _SessionDetailSheetState extends ConsumerState<SessionDetailSheet> {
                                   Expanded(
                                     child: Text(
                                       issue.note,
-                                      style: GoogleFonts.plusJakartaSans(
+                                      style: GoogleFonts.hankenGrotesk(
                                         fontSize: 12,
                                         fontWeight: FontWeight.w600,
                                         color: AppTheme.warning,

@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../../core/app_theme.dart';
 
-/// Nadpis sekce nastavení (verzálkami nad kartou).
+/// Nadpis sekce nastavení (malým šedým písmem nad skupinou).
 class SectionLabel extends StatelessWidget {
   final String text;
 
@@ -12,20 +11,14 @@ class SectionLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(left: 4, bottom: 8),
-      child: Text(
-        text.toUpperCase(),
-        style: GoogleFonts.plusJakartaSans(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: AppTheme.mutedTextColor(context),
-          letterSpacing: 1.0,
-        ),
-      ),
+      child: Text(text, style: AppTheme.font(fontSize: 13.5, fontWeight: FontWeight.w500, color: AppTheme.textSecondary)),
     );
   }
 }
 
-/// Ikona položky nastavení v jemně podbarveném čtverečku.
+/// Ikona položky nastavení: obrysová, šedá, bez podbarvení.
+///
+/// [color] a [backgroundAlpha] zůstaly kvůli starším voláním, barva se už nepoužívá.
 class SettingsIcon extends StatelessWidget {
   final IconData icon;
   final Color color;
@@ -35,13 +28,10 @@ class SettingsIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: backgroundAlpha),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Icon(icon, color: color, size: 20),
+    return SizedBox(
+      width: 36,
+      height: 36,
+      child: Icon(icon, color: AppTheme.textSecondary, size: 22),
     );
   }
 }

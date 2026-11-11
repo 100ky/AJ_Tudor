@@ -53,7 +53,7 @@ class _SmartChatBubbleState extends ConsumerState<SmartChatBubble> {
             const SizedBox(width: 8),
             Text(
               'Zpráva zkopírována do schránky',
-              style: GoogleFonts.plusJakartaSans(fontSize: 13),
+              style: GoogleFonts.hankenGrotesk(fontSize: 13),
             ),
           ],
         ),
@@ -108,7 +108,7 @@ class _SmartChatBubbleState extends ConsumerState<SmartChatBubble> {
                 Expanded(
                   child: Text(
                     'Uloženo do Smart Flashcards! 🃏',
-                    style: GoogleFonts.plusJakartaSans(
+                    style: GoogleFonts.hankenGrotesk(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
                     ),
@@ -140,8 +140,7 @@ class _SmartChatBubbleState extends ConsumerState<SmartChatBubble> {
     final maxBubbleWidth = screenWidth * widget.maxWidthFraction;
 
     final tutorBgColor = AppTheme.glassColor(context);
-    final tutorBorderColor = AppTheme.glassBorderColor(context);
-    final tutorTextColor = AppTheme.textColor(context);
+        final tutorTextColor = AppTheme.textColor(context);
     final tutorStrongColor =
         isDark ? AppTheme.primaryLight : AppTheme.primaryDark;
 
@@ -155,76 +154,19 @@ class _SmartChatBubbleState extends ConsumerState<SmartChatBubble> {
           mainAxisAlignment:
               isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
           children: [
-            // Avatar tutora pro zprávy od AI
-            if (!isUser) ...[
-              Container(
-                margin: const EdgeInsets.only(right: 8, bottom: 4),
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [AppTheme.primaryLight, AppTheme.primaryDark],
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppTheme.primary.withValues(alpha: 0.3),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: const Center(
-                  child: Icon(
-                    Icons.smart_toy_rounded,
-                    size: 15,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ],
 
             // Samotné tělo chytré bubliny
             Flexible(
               child: Container(
                 constraints: BoxConstraints(maxWidth: maxBubbleWidth),
                 decoration: BoxDecoration(
-                  gradient: isUser
-                      ? const LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            AppTheme.primary,
-                            AppTheme.primaryDark,
-                          ],
-                        )
-                      : null,
-                  color: isUser ? null : tutorBgColor,
+                  color: isUser ? AppTheme.surfaceHigh : tutorBgColor,
                   borderRadius: BorderRadius.only(
-                    topLeft: const Radius.circular(20),
-                    topRight: const Radius.circular(20),
-                    bottomLeft: Radius.circular(isUser ? 20 : 6),
-                    bottomRight: Radius.circular(isUser ? 6 : 20),
+                    topLeft: Radius.circular(isUser ? 18 : 6),
+                    topRight: Radius.circular(isUser ? 6 : 18),
+                    bottomLeft: const Radius.circular(18),
+                    bottomRight: const Radius.circular(18),
                   ),
-                  border: Border.all(
-                    color: isUser
-                        ? AppTheme.primaryLight.withValues(alpha: 0.4)
-                        : tutorBorderColor,
-                    width: 1.0,
-                  ),
-                  boxShadow: isUser
-                      ? [
-                          BoxShadow(
-                            color: AppTheme.primary.withValues(alpha: 0.25),
-                            blurRadius: 12,
-                            offset: const Offset(0, 4),
-                          ),
-                        ]
-                      : (isDark
-                          ? AppTheme.glassShadowDark
-                          : AppTheme.glassShadowLight),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -241,7 +183,7 @@ class _SmartChatBubbleState extends ConsumerState<SmartChatBubble> {
                         child: isUser
                             ? Text(
                                 msg.text,
-                                style: GoogleFonts.plusJakartaSans(
+                                style: GoogleFonts.hankenGrotesk(
                                   fontSize: 15,
                                   color: Colors.white,
                                   height: 1.45,
@@ -250,17 +192,17 @@ class _SmartChatBubbleState extends ConsumerState<SmartChatBubble> {
                               )
                             : InteractiveTutorText(
                                 text: msg.text,
-                                style: GoogleFonts.plusJakartaSans(
+                                style: GoogleFonts.hankenGrotesk(
                                   fontSize: 15,
                                   color: tutorTextColor,
                                   height: 1.45,
                                 ),
-                                strongStyle: GoogleFonts.plusJakartaSans(
+                                strongStyle: GoogleFonts.hankenGrotesk(
                                   fontSize: 15,
                                   fontWeight: FontWeight.w700,
                                   color: tutorStrongColor,
                                 ),
-                                emStyle: GoogleFonts.plusJakartaSans(
+                                emStyle: GoogleFonts.hankenGrotesk(
                                   fontSize: 15,
                                   fontStyle: FontStyle.italic,
                                   color: tutorTextColor,
@@ -298,7 +240,7 @@ class _SmartChatBubbleState extends ConsumerState<SmartChatBubble> {
                                     ),
                                     child: Text(
                                       correction.userSaid,
-                                      style: GoogleFonts.plusJakartaSans(
+                                      style: GoogleFonts.hankenGrotesk(
                                         fontSize: 12,
                                         fontWeight: FontWeight.w700,
                                         color: const Color(0xFFFFB4AB),
@@ -320,7 +262,7 @@ class _SmartChatBubbleState extends ConsumerState<SmartChatBubble> {
                                       ),
                                       child: Text(
                                         correction.correctForm,
-                                        style: GoogleFonts.plusJakartaSans(
+                                        style: GoogleFonts.hankenGrotesk(
                                           fontSize: 12,
                                           fontWeight: FontWeight.w700,
                                           color: const Color(0xFFB4F5BE),
@@ -353,7 +295,7 @@ class _SmartChatBubbleState extends ConsumerState<SmartChatBubble> {
                                           _isExpanded
                                               ? correction.explanation
                                               : 'Proč? Zobrazit pravidlo...',
-                                          style: GoogleFonts.plusJakartaSans(
+                                          style: GoogleFonts.hankenGrotesk(
                                             fontSize: 12,
                                             color: Colors.white.withValues(alpha: 0.9),
                                             height: 1.35,
@@ -408,7 +350,7 @@ class _SmartChatBubbleState extends ConsumerState<SmartChatBubble> {
                                           const SizedBox(width: 4),
                                           Text(
                                             'Výslovnost',
-                                            style: GoogleFonts.plusJakartaSans(
+                                            style: GoogleFonts.hankenGrotesk(
                                               fontSize: 11,
                                               fontWeight: FontWeight.w600,
                                               color: Colors.white,
@@ -451,7 +393,7 @@ class _SmartChatBubbleState extends ConsumerState<SmartChatBubble> {
                                             _isSavedToFlashcards
                                                 ? 'V kartičkách'
                                                 : 'Do kartiček',
-                                            style: GoogleFonts.plusJakartaSans(
+                                            style: GoogleFonts.hankenGrotesk(
                                               fontSize: 11,
                                               fontWeight: FontWeight.w600,
                                               color: Colors.white,

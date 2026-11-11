@@ -5,8 +5,16 @@ import '../../../services/gemini/pronunciation_service.dart';
 
 /// Barva skóre odpovědi v procentech (zelená / oranžová / červená).
 Color answerScoreColor(int percent) => percent >= 85
-    ? const Color(0xFF10B981)
-    : (percent >= 65 ? const Color(0xFFF59E0B) : const Color(0xFFEF4444));
+    ? AppTheme.success
+    : (percent >= 65 ? AppTheme.warning : AppTheme.error);
+
+/// Slovní hodnocení odpovědi podle shody se správným řešením.
+String answerScoreLabel(int percent) {
+  if (percent >= 95) return 'Přesně';
+  if (percent >= 65) return 'Skoro správně';
+  if (percent >= 40) return 'Částečně správně';
+  return 'Jinak, než mělo být';
+}
 
 /// Celkové skóre výslovnosti (zelená / oranžová / červená).
 class PronunciationBadge extends StatelessWidget {
@@ -36,7 +44,7 @@ class PronunciationBadge extends StatelessWidget {
               'Výslovnost: $score %',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.plusJakartaSans(
+              style: GoogleFonts.hankenGrotesk(
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
                 color: scoreColor,
@@ -60,7 +68,7 @@ class WordAssessmentPills extends StatelessWidget {
     if (analysis.words.isEmpty) {
       return Text(
         analysis.transcribedText,
-        style: GoogleFonts.plusJakartaSans(
+        style: GoogleFonts.hankenGrotesk(
           fontSize: 15,
           fontWeight: FontWeight.w600,
           color: AppTheme.textColor(context),
@@ -107,7 +115,7 @@ class WordAssessmentPills extends StatelessWidget {
                     w.recognizedWord.isNotEmpty ? w.recognizedWord : w.expectedWord,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.plusJakartaSans(
+                    style: GoogleFonts.hankenGrotesk(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
                       color: wordColor,

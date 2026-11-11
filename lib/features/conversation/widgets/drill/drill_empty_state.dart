@@ -50,7 +50,7 @@ class DrillEmptyState extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               'Gramatická cvičebna',
-              style: GoogleFonts.plusJakartaSans(
+              style: GoogleFonts.hankenGrotesk(
                 fontSize: 17,
                 fontWeight: FontWeight.w700,
                 color: AppTheme.textColor(context),
@@ -60,7 +60,7 @@ class DrillEmptyState extends StatelessWidget {
             Text(
               'Tutor ti zadá 3 krátké české věty k překladu zaměřené na tvé chyby, ihned je zkontroluje a vysvětlí gramatická pravidla.',
               textAlign: TextAlign.center,
-              style: GoogleFonts.plusJakartaSans(
+              style: GoogleFonts.hankenGrotesk(
                 fontSize: 13,
                 color: AppTheme.mutedTextColor(context),
                 height: 1.4,
@@ -81,16 +81,7 @@ class DrillEmptyState extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(16),
-                  gradient: const LinearGradient(
-                    colors: [AppTheme.primaryLight, AppTheme.primaryDark],
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppTheme.primary.withValues(alpha: 0.3),
-                      blurRadius: 16,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
+                  color: AppTheme.textPrimary,
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -101,27 +92,27 @@ class DrillEmptyState extends StatelessWidget {
                         height: 18,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: Colors.white,
+                          color: AppTheme.background,
                         ),
                       ),
                       const SizedBox(width: 10),
                       Text(
                         'Připravuji dril...',
-                        style: GoogleFonts.plusJakartaSans(
+                        style: GoogleFonts.hankenGrotesk(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
-                          color: Colors.white,
+                          color: AppTheme.background,
                         ),
                       ),
                     ] else ...[
-                      const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 20),
+                      const Icon(Icons.play_arrow_rounded, color: AppTheme.background, size: 20),
                       const SizedBox(width: 8),
                       Text(
                         'Spustit gramatický dril',
-                        style: GoogleFonts.plusJakartaSans(
+                        style: GoogleFonts.hankenGrotesk(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
-                          color: Colors.white,
+                          color: AppTheme.background,
                         ),
                       ),
                     ],
@@ -148,7 +139,7 @@ class DrillEmptyState extends StatelessWidget {
                     avatar: Icon(Icons.bolt_rounded, size: 14, color: AppTheme.primary),
                     label: Text(
                       topic,
-                      style: GoogleFonts.plusJakartaSans(
+                      style: GoogleFonts.hankenGrotesk(
                         fontSize: 11.5,
                         fontWeight: FontWeight.w600,
                       ),
@@ -183,15 +174,12 @@ class _FocusCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(Icons.track_changes_rounded, size: 16, color: AppTheme.primary),
-              const SizedBox(width: 8),
               Text(
-                'ZAMĚŘENÍ PRO ÚROVEŇ $level',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.8,
-                  color: AppTheme.primary,
+                'Zaměření pro úroveň $level',
+                style: GoogleFonts.hankenGrotesk(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w500,
+                  color: AppTheme.textSecondary,
                 ),
               ),
             ],
@@ -200,7 +188,7 @@ class _FocusCard extends StatelessWidget {
           if (errors.isNotEmpty) ...[
             Text(
               'Tvé zaznamenané opakující se chyby:',
-              style: GoogleFonts.plusJakartaSans(
+              style: GoogleFonts.hankenGrotesk(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
                 color: AppTheme.mutedTextColor(context),
@@ -223,7 +211,7 @@ class _FocusCard extends StatelessWidget {
                   ),
                   child: Text(
                     clean,
-                    style: GoogleFonts.plusJakartaSans(
+                    style: GoogleFonts.hankenGrotesk(
                       fontSize: 11,
                       color: AppTheme.textColor(context),
                       fontWeight: FontWeight.w500,
@@ -235,7 +223,7 @@ class _FocusCard extends StatelessWidget {
           ] else ...[
             Text(
               'Zatím nemáš nasbírané chyby z hlasových lekcí. Tutor pro tebe vybere typické gramatické jevy pro úroveň $level.',
-              style: GoogleFonts.plusJakartaSans(
+              style: GoogleFonts.hankenGrotesk(
                 fontSize: 12.5,
                 color: AppTheme.surfaceTextColor(context),
                 height: 1.35,

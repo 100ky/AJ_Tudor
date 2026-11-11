@@ -66,8 +66,7 @@ void main() {
         userProfileProvider.overrideWith((ref) => Stream.value(null)),
       ],
       child: MaterialApp(
-        theme: AppTheme.lightTheme,
-        darkTheme: AppTheme.darkTheme,
+        theme: AppTheme.darkTheme,
         home: const HistoryScreen(),
       ),
     );
@@ -96,7 +95,7 @@ void main() {
               endedAt: Value(now),
               topicSummary: const Value('Cestování letadlem'),
               totalErrors: const Value(2),
-              fluencyScore: const Value(85),
+              fluencyScore: const Value(0.85),
             ),
           );
 
@@ -108,9 +107,9 @@ void main() {
       // Session card should be visible
       expect(find.byType(SessionCard), findsOneWidget);
       expect(find.text('Cestování letadlem'), findsOneWidget);
-      expect(find.text('5 min'), findsOneWidget);
-      expect(find.text('2 chyb'), findsOneWidget);
-      expect(find.text('Zobrazit přepis'), findsOneWidget);
+      // Den, čas a pod tématem délka, chyby a plynulost v jednom řádku
+      expect(find.text('Dnes'), findsOneWidget);
+      expect(find.text('5 min · 2 chyby · plynulost 85 %'), findsOneWidget);
 
       await drainTimers(tester);
     });
@@ -162,11 +161,8 @@ void main() {
       await tester.pumpWidget(buildTestWidget());
       await tester.pumpAndSettle();
 
-      // Tap delete button directly on session card
-      final deleteIcon = find.byTooltip('Smazat lekci');
-      expect(deleteIcon, findsOneWidget);
-
-      await tester.tap(deleteIcon);
+      // Podržení řádku lekce nabídne smazání
+      await tester.longPress(find.byType(SessionCard));
       await tester.pumpAndSettle();
 
       // Confirmation dialog is shown

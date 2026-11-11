@@ -13,7 +13,7 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        theme: AppTheme.lightTheme,
+        theme: AppTheme.darkTheme,
         home: Scaffold(
           body: ListView(
             padding: const EdgeInsets.symmetric(horizontal: 16),

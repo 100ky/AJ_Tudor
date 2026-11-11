@@ -39,7 +39,7 @@ class TopicAgentCard extends ConsumerWidget {
                   children: [
                     Text(
                       'Startup Topic Agent',
-                      style: GoogleFonts.plusJakartaSans(
+                      style: GoogleFonts.hankenGrotesk(
                         fontWeight: FontWeight.w700,
                         fontSize: 16,
                         color: AppTheme.textColor(context),
@@ -47,7 +47,7 @@ class TopicAgentCard extends ConsumerWidget {
                     ),
                     Text(
                       'Příprava témat z historie & paměti „O mně"',
-                      style: GoogleFonts.plusJakartaSans(
+                      style: GoogleFonts.hankenGrotesk(
                         fontSize: 12,
                         color: AppTheme.mutedTextColor(context),
                       ),
@@ -67,7 +67,7 @@ class TopicAgentCard extends ConsumerWidget {
             'Tento agent se probouzí po startu aplikace a po ukončení každého rozhovoru. '
             'Analyzuje transkripty z minulých lekcí a informace, které o vás Tudor ví, '
             'aby navrhl neotřelé konverzační téma a zabránil opakování dotazů (např. na mazlíčky a záliby).',
-            style: GoogleFonts.plusJakartaSans(
+            style: GoogleFonts.hankenGrotesk(
               fontSize: 13,
               color: AppTheme.surfaceTextColor(context),
               height: 1.4,
@@ -102,12 +102,12 @@ class TopicAgentCard extends ConsumerWidget {
                       const SizedBox(width: 6),
                       Text(
                         topic.isRandomTopic
-                            ? 'DIVOKÁ KARTA (NÁHODNÉ TÉMA):'
-                            : 'AKTUÁLNĚ PŘIPRAVENÉ TÉMA:',
-                        style: GoogleFonts.plusJakartaSans(
+                            ? 'Náhodné téma'
+                            : 'Připravené téma',
+                        style: GoogleFonts.hankenGrotesk(
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
-                          letterSpacing: 0.8,
+                          letterSpacing: 0,
                           color: AppTheme.accent,
                         ),
                       ),
@@ -116,7 +116,7 @@ class TopicAgentCard extends ConsumerWidget {
                   const SizedBox(height: 6),
                   Text(
                     topic.title,
-                    style: GoogleFonts.plusJakartaSans(
+                    style: GoogleFonts.hankenGrotesk(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
                       color: AppTheme.textColor(context),
@@ -125,7 +125,7 @@ class TopicAgentCard extends ConsumerWidget {
                   const SizedBox(height: 4),
                   Text(
                     '„${topic.openerEn}“',
-                    style: GoogleFonts.plusJakartaSans(
+                    style: GoogleFonts.hankenGrotesk(
                       fontSize: 12.5,
                       fontStyle: FontStyle.italic,
                       color: AppTheme.mutedTextColor(context),

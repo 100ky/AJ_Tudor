@@ -71,8 +71,7 @@ void main() {
         voiceTutorAgentProvider.overrideWith(() => testVoiceAgent),
       ],
       child: MaterialApp(
-        theme: AppTheme.lightTheme,
-        darkTheme: AppTheme.darkTheme,
+        theme: AppTheme.darkTheme,
         themeMode: themeMode,
         home: Scaffold(
           body: child,

@@ -77,8 +77,7 @@ void main() {
         geminiBatchClientProvider.overrideWithValue(mockBatchClient),
       ],
       child: MaterialApp(
-        theme: AppTheme.lightTheme,
-        darkTheme: AppTheme.darkTheme,
+        theme: AppTheme.darkTheme,
         home: const FlashcardsScreen(),
       ),
     );
@@ -121,7 +120,7 @@ void main() {
       expect(find.text('Včera jsem šel do kina na nový film.'), findsOneWidget);
 
       // Bez pokusu o odpověď není tlačítko pro otočení, jen odpověď nebo „Nevím“
-      expect(find.text('Otočit kartičku (Zobrazit řešení)'), findsNothing);
+      expect(find.text('Zobrazit řešení'), findsNothing);
       expect(find.byType(TextField), findsOneWidget);
       expect(find.text('Nevím – ukázat řešení'), findsOneWidget);
 
@@ -149,12 +148,12 @@ void main() {
       await typeAnswer(tester, 'I am very hungry');
 
       // Back card content
-      expect(find.text('SPRÁVNÉ ŘEŠENÍ'), findsOneWidget);
+      expect(find.text('Správné řešení'), findsOneWidget);
       expect(find.text('I am really very hungry.'), findsOneWidget);
       expect(find.text('I am very hungry'), findsOneWidget);
-      expect(find.text('TVOJE ODPOVĚĎ · SHODA 70 %'), findsOneWidget);
+      expect(find.text('Skoro správně · shoda 70 %'), findsOneWidget);
       // 70 % shody doporučí „Dobré“
-      expect(find.text('DOPORUČENO'), findsOneWidget);
+      expect(find.text('Zvýrazněná volba odpovídá tvé odpovědi.'), findsOneWidget);
 
       // SRS rating buttons
       expect(find.text('Znovu'), findsOneWidget);
@@ -186,7 +185,7 @@ void main() {
       await tester.pumpAndSettle();
       await giveUp(tester);
 
-      expect(find.text('VYSVĚTLENÍ:'), findsOneWidget);
+      expect(find.text('Proč'), findsOneWidget);
       expect(find.text('NÁPOVĚDA A VYSVĚTLENÍ:'), findsNothing);
       expect(find.text('Věnovat pozornost; pojí se s předložkou to.'), findsOneWidget);
 
@@ -195,8 +194,8 @@ void main() {
       expect(stored.explanation, 'Věnovat pozornost; pojí se s předložkou to.');
 
       final sentence = tester.widget<RichText>(find.byWidgetPredicate((w) =>
-          w is RichText && w.text.toPlainText().startsWith('Původně v konverzaci:')));
-      expect(sentence.text.toPlainText(), 'Původně v konverzaci: "You should pay attention to details."');
+          w is RichText && w.text.toPlainText().startsWith('Z hovoru:')));
+      expect(sentence.text.toPlainText(), 'Z hovoru: „You should pay attention to details.“');
       final underlined = <String>[];
       sentence.text.visitChildren((span) {
         if (span is TextSpan && span.style?.decoration == TextDecoration.underline) {
@@ -386,13 +385,13 @@ void main() {
       await tester.tap(find.text('Mám hlad.'));
       await tester.pumpAndSettle();
 
-      expect(find.text('SPRÁVNÉ ŘEŠENÍ'), findsNothing);
+      expect(find.text('Správné řešení'), findsNothing);
       expect(find.text('Znovu'), findsNothing);
 
       // Prázdnou odpověď nejde odeslat
       await tester.tap(find.byTooltip('Odeslat odpověď'));
       await tester.pumpAndSettle();
-      expect(find.text('SPRÁVNÉ ŘEŠENÍ'), findsNothing);
+      expect(find.text('Správné řešení'), findsNothing);
 
       await drainTimers(tester);
     });
@@ -415,12 +414,12 @@ void main() {
       await tester.pumpAndSettle();
 
       await giveUp(tester);
-      expect(find.text('SPRÁVNÉ ŘEŠENÍ'), findsOneWidget);
+      expect(find.text('Správné řešení'), findsOneWidget);
 
       // „Snadné“ je zakázané, kartička zůstane neohodnocená
       await tester.tap(find.text('Snadné'));
       await tester.pumpAndSettle();
-      expect(find.text('SPRÁVNÉ ŘEŠENÍ'), findsOneWidget);
+      expect(find.text('Správné řešení'), findsOneWidget);
       final unchanged = await (db.select(db.flashcards)..where((c) => c.id.equals(cardId))).getSingle();
       expect(unchanged.repetitionCount, 0);
 

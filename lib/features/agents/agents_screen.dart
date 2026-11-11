@@ -106,7 +106,7 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
         backgroundColor: Colors.transparent,
         title: Text(
           'Moji AI Agenti',
-          style: GoogleFonts.plusJakartaSans(
+          style: GoogleFonts.hankenGrotesk(
             fontSize: 18,
             fontWeight: FontWeight.w600,
             color: AppTheme.textColor(context),

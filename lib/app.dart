@@ -3,12 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/app_theme.dart';
 import 'features/skeleton/skeleton_screen.dart';
 import 'services/notifications/notification_provider.dart';
-import 'core/config/config_providers.dart';
 
 /// Kořenový widget aplikace AJ Tudor.
 ///
-/// Nastavuje globální téma dle centrálního [AppTheme] design systému
-/// a základní navigaci.
+/// Aplikace má jen tmavý vzhled z [AppTheme].
 class AjTudorApp extends ConsumerWidget {
   const AjTudorApp({super.key});
 
@@ -16,14 +14,12 @@ class AjTudorApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // Sledování provideru pro synchronizaci notifikací (běží na pozadí aplikace)
     ref.watch(notificationSyncProvider);
-    final themeMode = ref.watch(themeModeProvider);
 
     return MaterialApp(
       title: 'AJ Tudor',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
-      themeMode: themeMode,
+      theme: AppTheme.darkTheme,
+      themeMode: ThemeMode.dark,
       // Výchozí obrazovka aplikace s navigací
       home: const SkeletonScreen(),
     );

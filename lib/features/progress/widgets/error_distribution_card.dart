@@ -37,10 +37,8 @@ class ErrorDistributionCard extends StatelessWidget {
     final total = errors.length;
 
     return CollapsibleCard(
-      icon: Icons.pie_chart_outline_rounded,
-      color: AppTheme.error,
       title: 'Rozložení chyb',
-      trailing: [CardBadge('Celkem $total chyb', color: AppTheme.error)],
+      trailing: [CardBadge('celkem $total')],
       expanded: expanded,
       onToggle: onToggle,
       children: [
@@ -69,7 +67,7 @@ class ErrorDistributionCard extends StatelessWidget {
                   children: [
                     Text(
                       '$total',
-                      style: GoogleFonts.plusJakartaSans(
+                      style: GoogleFonts.hankenGrotesk(
                         fontSize: 26,
                         fontWeight: FontWeight.w700,
                         color: AppTheme.textColor(context),
@@ -77,7 +75,7 @@ class ErrorDistributionCard extends StatelessWidget {
                     ),
                     Text(
                       'Chyb',
-                      style: GoogleFonts.plusJakartaSans(
+                      style: GoogleFonts.hankenGrotesk(
                         fontSize: 11,
                         color: AppTheme.mutedTextColor(context),
                       ),
@@ -109,7 +107,7 @@ class ErrorDistributionCard extends StatelessWidget {
       value: count.toDouble(),
       title: '${((count / total) * 100).toInt()}%',
       radius: 28,
-      titleStyle: GoogleFonts.plusJakartaSans(
+      titleStyle: GoogleFonts.hankenGrotesk(
         fontSize: 11,
         fontWeight: FontWeight.w700,
         color: Colors.white,
@@ -136,7 +134,7 @@ class _LegendItem extends StatelessWidget {
         const SizedBox(width: 6),
         Text(
           title,
-          style: GoogleFonts.plusJakartaSans(
+          style: GoogleFonts.hankenGrotesk(
               fontSize: 12,
               color: AppTheme.surfaceTextColor(context),
               fontWeight: FontWeight.w500),

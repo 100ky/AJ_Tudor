@@ -38,14 +38,14 @@ class AnalyzerAgentCard extends StatelessWidget {
             title: '2. Analytik skóre',
             subtitle: 'Agent pro sémantickou analýzu pokroku',
             badge: AgentStatusBadge(
-              isAnalyzing ? 'ČEKÁ NA KONEC RELACE' : 'AKTIVNÍ',
+              isAnalyzing ? 'Čeká na konec relace' : 'Aktivní',
               isAnalyzing ? AppTheme.warning : AppTheme.success,
             ),
           ),
           Divider(color: AppTheme.outlineLightColor(context), height: 24),
           Text(
             'Poslední sémantická analýza:',
-            style: GoogleFonts.plusJakartaSans(
+            style: GoogleFonts.hankenGrotesk(
                 fontWeight: FontWeight.w600,
                 fontSize: 13,
                 color: AppTheme.textColor(context)),
@@ -79,7 +79,7 @@ class AnalyzerAgentCard extends StatelessWidget {
             const SizedBox(height: 16),
             Text(
               'Pedagogický zápis v paměti:',
-              style: GoogleFonts.plusJakartaSans(
+              style: GoogleFonts.hankenGrotesk(
                   fontWeight: FontWeight.w600,
                   fontSize: 12,
                   color: AppTheme.mutedTextColor(context)),
@@ -95,7 +95,7 @@ class AnalyzerAgentCard extends StatelessWidget {
               ),
               child: Text(
                 profile.memoryBriefing!,
-                style: GoogleFonts.plusJakartaSans(
+                style: GoogleFonts.hankenGrotesk(
                   fontSize: 12,
                   fontStyle: FontStyle.italic,
                   height: 1.5,
@@ -130,13 +130,13 @@ class _MetricItem extends StatelessWidget {
         children: [
           Text(
             label,
-            style: GoogleFonts.plusJakartaSans(
+            style: GoogleFonts.hankenGrotesk(
                 fontSize: 10, color: AppTheme.mutedTextColor(context)),
           ),
           const SizedBox(height: 4),
           Text(
             value,
-            style: GoogleFonts.plusJakartaSans(
+            style: GoogleFonts.hankenGrotesk(
                 fontSize: 18, fontWeight: FontWeight.w700, color: color),
           ),
         ],

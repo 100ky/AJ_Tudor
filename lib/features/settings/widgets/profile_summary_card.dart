@@ -22,12 +22,12 @@ class ProfileSummaryCard extends ConsumerWidget {
             contentPadding: EdgeInsets.zero,
             leading: SettingsIcon(Icons.psychology, AppTheme.primary),
             title: Text('Co si Tudor pamatuje',
-                style: GoogleFonts.plusJakartaSans(
+                style: GoogleFonts.hankenGrotesk(
                     fontWeight: FontWeight.w500,
                     color: AppTheme.textColor(context))),
             subtitle: Text(
               profile.memoryBriefing ?? 'Žádný briefing zatím není k dispozici.',
-              style: GoogleFonts.plusJakartaSans(
+              style: GoogleFonts.hankenGrotesk(
                 fontStyle: FontStyle.italic,
                 fontSize: 13,
                 color: AppTheme.mutedTextColor(context),
@@ -39,14 +39,14 @@ class ProfileSummaryCard extends ConsumerWidget {
             contentPadding: EdgeInsets.zero,
             leading: SettingsIcon(Icons.school, AppTheme.success),
             title: Text('Úroveň angličtiny',
-                style: GoogleFonts.plusJakartaSans(
+                style: GoogleFonts.hankenGrotesk(
                     color: AppTheme.textColor(context))),
             trailing: DropdownButton<String>(
               value: ['A1', 'A2', 'B1', 'B2'].contains(profile.targetLevel)
                   ? profile.targetLevel
                   : 'B1',
               underline: const SizedBox(),
-              style: GoogleFonts.plusJakartaSans(
+              style: GoogleFonts.hankenGrotesk(
                   fontWeight: FontWeight.w600,
                   color: AppTheme.primary,
                   fontSize: 16),
@@ -74,11 +74,11 @@ class ProfileSummaryCard extends ConsumerWidget {
             contentPadding: EdgeInsets.zero,
             leading: SettingsIcon(Icons.history, AppTheme.accent),
             title: Text('Počet absolvovaných lekcí',
-                style: GoogleFonts.plusJakartaSans(
+                style: GoogleFonts.hankenGrotesk(
                     color: AppTheme.textColor(context))),
             trailing: Text(
               profile.totalSessions.toString(),
-              style: GoogleFonts.plusJakartaSans(
+              style: GoogleFonts.hankenGrotesk(
                   fontWeight: FontWeight.w700,
                   fontSize: 16,
                   color: AppTheme.primary),
@@ -89,7 +89,7 @@ class ProfileSummaryCard extends ConsumerWidget {
             onPressed: () => _showResetDialog(context, ref),
             icon: Icon(Icons.delete_forever, color: AppTheme.error, size: 18),
             label: Text('Resetovat paměť a pokrok',
-                style: GoogleFonts.plusJakartaSans(
+                style: GoogleFonts.hankenGrotesk(
                     color: AppTheme.error, fontSize: 13)),
           ),
           const SizedBox(height: 4),
@@ -103,20 +103,20 @@ class ProfileSummaryCard extends ConsumerWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: Text('Resetovat paměť?',
-            style: GoogleFonts.plusJakartaSans(
+            style: GoogleFonts.hankenGrotesk(
               fontWeight: FontWeight.w600,
               color: AppTheme.textColor(context),
             )),
         content: Text(
             'Tato akce vymaže vše, co si AI pamatuje o vašem pokroku. Nelze vrátit zpět.',
-            style: GoogleFonts.plusJakartaSans(
+            style: GoogleFonts.hankenGrotesk(
               color: AppTheme.surfaceTextColor(context),
             )),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: Text('Zrušit',
-                style: GoogleFonts.plusJakartaSans(
+                style: GoogleFonts.hankenGrotesk(
                     color: AppTheme.mutedTextColor(context))),
           ),
           TextButton(
@@ -130,7 +130,7 @@ class ProfileSummaryCard extends ConsumerWidget {
               }
             },
             child: Text('Resetovat',
-                style: GoogleFonts.plusJakartaSans(color: AppTheme.error)),
+                style: GoogleFonts.hankenGrotesk(color: AppTheme.error)),
           ),
         ],
       ),

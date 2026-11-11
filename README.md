@@ -26,9 +26,9 @@ lib/
 │   ├── config/            # Nastavení aplikace a API klíč (Riverpod providery nad SharedPreferences)
 │   ├── constants/         # Názvy modelů Gemini
 │   ├── error/             # Typy chyb (Failure)
-│   ├── utils/             # Logger, Result
-│   ├── widgets/           # Obecné UI prvky design systému (GlassContainer)
-│   └── app_theme.dart     # Barvy a témata
+│   ├── utils/             # Logger, Result, české tvary podle počtu (czechPlural)
+│   ├── widgets/           # Prvky vzhledu: povrch karty (GlassContainer), skupina řádků a nadpisy (GroupedSection), přepínač (PillTabs), malý graf (Sparkline)
+│   └── app_theme.dart     # Tmavý vzhled: barvy, písmo (AppTheme.font) a ThemeData
 ├── data/                  # Datová vrstva (Drift ORM, SQLite)
 │   ├── database/          # Schéma Drift (AppDatabase, tabulky)
 │   ├── models/            # Datové modely a SRS plánovač opakování kartiček
@@ -41,7 +41,7 @@ lib/
 │   ├── history/           # Historie lekcí a detail lekce (SessionDetailController)
 │   ├── progress/          # Statistiky, grafy, přehled chyb a slovíček
 │   ├── settings/          # Nastavení (API klíč, hlas, modely, záloha) a ProfileSettingsController
-│   └── skeleton/          # Navigační shell a provider aktivní záložky
+│   └── skeleton/          # Navigační shell (spodní lišta s Hovorem uprostřed) a provider aktivní záložky
 └── services/              # Aplikační logika – každá služba má svůj provider ve stejném souboru/složce
     ├── agents/            # VoiceTutor, VoiceDirector, MemoryManager, ScenarioPlanner, TopicPreparation
     │   └── voice_tutor/   # Části hlasového tutora: detekce řeči (VAD), časovače, metriky, analýza přepisu
@@ -55,6 +55,7 @@ lib/
 
 ### Pravidla struktury
 - Závislosti vedou jedním směrem: `features → services → data → core`. Nižší vrstva nikdy neimportuje vyšší.
+- Aplikace má jen tmavý vzhled („Noční studio“). Barvy a písmo berte z `AppTheme` (`AppTheme.font`, `textPrimary`, `surface`…), sdílené prvky z `core/widgets/`. Obsah patří do skupin řádků (`GroupedSection`), ne do samostatných barevných karet. Barva jen pro význam: stav hlasové vlny a lepší/horší u čísel. Ikona ovládacího prvku má vždy popisek nebo `tooltip`.
 - Widgety nevolají AI ani nezapisují do databáze přímo. Jde to přes controller ve složce obrazovky, přes službu nebo přes agenta. Data z databáze čtou přes `StreamProvider`y v `data/data_providers.dart`.
 - Soubor obrazovky jen skládá layout. Větší části patří do `widgets/`, akce do `*_controller.dart`.
 - Provider služby leží ve stejném souboru nebo složce jako služba. Providery databáze, repozitářů a datových streamů jsou v `data/data_providers.dart`.
@@ -68,7 +69,7 @@ lib/
 - **Database & Storage**: `drift`, `sqlite3`, `flutter_secure_storage`, `shared_preferences`
 - **Audio Pipeline**: `record` (PCM 16-bit 16kHz mono), `flutter_pcm_sound` (PCM 16-bit 24kHz mono)
 - **Networking & AI**: `web_socket_channel` (Gemini Live WebSocket), `dio` (REST API pro analýzy)
-- **UI & Grafy**: `fl_chart`, `google_fonts` (Plus Jakarta Sans), `wakelock_plus`
+- **UI & Grafy**: `fl_chart`, `google_fonts` (Hanken Grotesk), `wakelock_plus`
 
 ---
 
@@ -98,7 +99,7 @@ flutter run
 ```
 
 ### 5. Nastavení API klíče v aplikaci
-Po prvním spuštění přejděte na záložku **Settings** (Nastavení) a vložte svůj **Gemini API klíč**. Následně můžete okamžitě zahájit hlasovou konverzaci.
+Po prvním spuštění přejděte na záložku **Profil** (Nastavení) a vložte svůj **Gemini API klíč**. Následně můžete okamžitě zahájit hlasovou konverzaci.
 
 ---
 
@@ -174,8 +175,9 @@ Automatické testy nepokryjí mikrofon, přehrávání zvuku ani skutečné vol�
 - [ ] Scroll přes text tutora v drilu i v hlasové lekci, česká slova nejdou označit
 - [ ] Tlačítko „Do kartiček“ u opravy v chatové bublině
 - [ ] Opakování kartiček: odpověď hlasem, napsáním i „Nevím“ (pak jde jen „Znovu“), přehrání nahlas
-- [ ] Pokrok: karta „Co se zlepšuje“ (chyby podle druhu a podíl tvé řeči) se ukáže po první lekci s novým rozborem, detail lekce ukáže „Tvoje řeč: N % slov“
-- [ ] Lekce: záložka „Lekce“ ukáže výrazy, tutor je projde jeden po druhém (situace, česká nápověda, výraz a zopakování), na obrazovce „Lekce: N/10 výrazů“, po posledním výrazu nebo po 15 minutách lekci uzavře a nabídne pokec
+- [ ] Pokrok: „Co se zlepšuje“ (ukazatele s grafem posledních lekcí, u všech je víc líp) a „Na čem pracovat“ (chyby podle druhu, předtím → teď) se ukážou po první lekci s novým rozborem, detail lekce ukáže „Tvoje řeč: N % slov“
+- [ ] Vzhled: spodní lišta s Hovorem uprostřed se během hovoru schová, výběr druhu hovoru rozbalí vybraný řádek, během hovoru je nahoře velká vlna a klepnutím na ni se mluvící Tudor ztiší
+- [ ] Lekce: řádek „Lekce s kartičkami“ ukáže výrazy, tutor je projde jeden po druhém (situace, česká nápověda, výraz a zopakování), na obrazovce „Lekce: N/10 výrazů“, po posledním výrazu nebo po 15 minutách lekci uzavře a nabídne pokec
 - [ ] Kartičky v hovoru: výraz z dnešní kartičky řečený sám od sebe ukáže „Kartička splněna v hovoru“, po konci hovoru přijde souhrn a kartička zmizí z dnešního opakování; zopakování po tutorovi kartičku nesplní
 - [ ] Chat nad lekcí (detail lekce v záložce Pokrok) a gramatický dril
 - [ ] Nastavení: přepínače, úroveň angličtiny, přidání a smazání faktu „O mně“
@@ -286,10 +288,9 @@ Refaktoring proběhl ve větvi `refactor/structure` ve čtyřech fázích. Sché
 1. **Ruční test na zařízení** (oddíl *Kontrola změn*) projít před sloučením do `main`.
 2. **`voice_tutor_agent.dart` má po opravách z 9.–10. 10. už 1562 řádků.** Dalším krokem je vyčlenit do `services/agents/voice_tutor/` spuštění a ukončení lekce (`startSession` má asi 200 řádků, `stopSession` asi 120) a zpracování zvuku z mikrofonu (`_handleIncomingAudioChunk`, `_processAudioChunkForVAD` a časovače, asi 190 řádků). Dělat to až po úspěšném ručním testu. Jde o řízení živého hovoru a reálný zvuk automatické testy nepokryjí.
 3. **Další soubory nad 600 řádků.** Rozdělit je, až se na nich bude pracovat:
-   - `core/app_theme.dart` (781): oddělit barvy od `ThemeData` a `TextTheme`.
    - `features/conversation/widgets/word_translation_sheet.dart` (753): překlad, uložení do kartiček a vrácení zpět přesunout ze stavu widgetu do controlleru. Metodu `build` (přes 400 řádků) rozdělit na menší widgety.
    - `services/gemini/gemini_live_client.dart` (634): zpracování zpráv ze serveru (`_handleIncomingMessage`, asi 190 řádků) přesunout do samostatného parseru. Klientovi zůstane připojení, reconnect a odesílání.
-4. **`features/history/history_screen.dart` se v aplikaci nepoužívá**, a to už před refaktoringem. Odkazují na ni jen testy, historie lekcí je v záložce Pokrok. Je potřeba rozhodnout, jestli ji smazat i s testem, nebo vrátit do navigace.
+4. **`features/history/history_screen.dart` se v aplikaci nepoužívá**, a to už před refaktoringem. Odkazují na ni jen testy, historie lekcí je v záložce Pokrok (oba seznamy kreslí stejný `SessionList`). Je potřeba rozhodnout, jestli ji smazat i s testem, nebo vrátit do navigace.
 5. **Migrace databáze (zatím odloženo).** Opravy schématu a deduplikace kartiček v `beforeOpen` (`data/database/app_database.dart`) běží při každém startu aplikace. `schemaVersion` je od přidání tabulky `session_issues` 4. Doporučený postup: zvýšit ji na 5, opravy přesunout do `onUpgrade` a přidat test migrace na starší databázi. Změna se týká dat uložených v zařízení, proto zatím počkala.
 6. **Kartičky smazané chybnou deduplikací se samy nevrátí.** Jejich chyby mají dál příznak `in_flashcard`, takže z nich nové kartičky nevzniknou a detail lekce u nich ukazuje, že už v kartičkách jsou. Příznaky by šlo vynulovat u chyb, ke kterým žádná kartička neexistuje. Tím by se ale vrátily i chyby záměrně vyřazené z generování a chyby, jejichž kartičky byly smazané ručně, proto to zatím neproběhlo.
 7. **Zaseknutí modelu na serveru (příčina neznámá, aplikace se vzpamatuje).** Model po replice studenta přestane přepisovat i odpovídat, server jen dál potvrzuje začátek a konec řeči. V lekcích 17 a 18 to log zachytil celé. Aplikace serveru v tu chvíli neposílala nic neobvyklého, příčina je tedy nejspíš v Gemini Live. V lekci 17 se to stalo po třech minutách pauzy, v lekci 18 chvíli po přehrání výslovnosti (to jde přes REST, mimo Live spojení). Aplikace teď spojení obnoví a tutor odpoví (viz *Úpravy po ručním testu (1. 11. 2026)*). Kdyby se zaseknutí opakovalo často, stojí za to zkusit jiný Live model.

@@ -13,8 +13,7 @@ void main() {
     ThemeMode themeMode = ThemeMode.light,
   }) {
     return MaterialApp(
-      theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
+      theme: AppTheme.darkTheme,
       themeMode: themeMode,
       home: Scaffold(
         body: child,
@@ -48,7 +47,7 @@ void main() {
       expect(find.byType(InteractiveTutorText), findsNothing);
     });
 
-    testWidgets('renders tutor message on left with robot avatar and InteractiveTutorText',
+    testWidgets('renders tutor message on left without avatar and with InteractiveTutorText',
         (WidgetTester tester) async {
       await tester.pumpWidget(
         buildTestWidget(
@@ -59,8 +58,8 @@ void main() {
         ),
       );
 
-      // Verify robot avatar is present
-      expect(find.byIcon(Icons.smart_toy_rounded), findsOneWidget);
+      // Bublina tutora je bez avataru robota
+      expect(find.byIcon(Icons.smart_toy_rounded), findsNothing);
 
       // Verify InteractiveTutorText is used for tutor messages
       expect(find.byType(InteractiveTutorText), findsOneWidget);

@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/app_theme.dart';
-import '../../../../core/widgets/glass_container.dart';
 import '../../../../services/agents/topic_preparation_agent.dart';
 
-/// Záložka „Historie“: téma připravené agentem z minulých rozhovorů.
+/// Podrobnosti „Téma z historie“: téma připravené agentem z minulých rozhovorů.
 class HistoryTopicTab extends ConsumerWidget {
   const HistoryTopicTab({super.key});
 
@@ -17,192 +15,74 @@ class HistoryTopicTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Přechod z načítání na kartu tématu se plynule prolne
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 280),
-      child: _content(context, ref),
-    );
-  }
-
-  Widget _content(BuildContext context, WidgetRef ref) {
     final topicState = ref.watch(topicPreparationAgentProvider);
-    final preparedTopic = topicState.topic;
+    final topic = topicState.topic;
+    final muted = AppTheme.font(fontSize: 14, color: AppTheme.textSecondary, height: 1.45);
 
     // Dosavadní téma zůstane vidět i během přípravy nového: hovor ho použije, dokud
     // nové nedorazí (při přetížených modelech příprava trvala skoro minutu)
-    if (topicState.isLoading && preparedTopic == null) {
-      return GlassContainer(
-        padding: const EdgeInsets.all(16),
-        borderRadius: BorderRadius.circular(16),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              'Příprava tématu z historie...',
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 12.5,
-                color: AppTheme.mutedTextColor(context),
-              ),
-            ),
-          ],
-        ),
+    if (topicState.isLoading && topic == null) {
+      return Row(
+        key: const ValueKey('topic_loading'),
+        children: [
+          const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
+          const SizedBox(width: 10),
+          Text('Příprava tématu z historie...', style: muted),
+        ],
       );
     }
 
-    if (preparedTopic == null) {
-      return GlassContainer(
-        padding: const EdgeInsets.all(16),
-        borderRadius: BorderRadius.circular(16),
-        child: Column(
-          children: [
-            Text(
-              'Zatím nemáš připravené téma.',
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 13,
-                color: AppTheme.mutedTextColor(context),
-              ),
-            ),
-            const SizedBox(height: 10),
-            OutlinedButton.icon(
-              onPressed: () => _prepareNewTopic(ref),
-              icon: const Icon(Icons.auto_awesome_rounded, size: 15),
-              label: const Text('Připravit téma z historie'),
-            ),
-          ],
-        ),
-      );
-    }
-
-    final isRandom = preparedTopic.isRandomTopic;
-
-    return GlassContainer(
-      key: const ValueKey('history_topic_card'),
-      padding: const EdgeInsets.all(16),
-      borderRadius: BorderRadius.circular(18),
-      color: isRandom
-          ? AppTheme.accent.withValues(alpha: 0.08)
-          : AppTheme.primary.withValues(alpha: 0.06),
-      border: Border.all(
-        color: isRandom
-            ? AppTheme.accent.withValues(alpha: 0.35)
-            : AppTheme.primary.withValues(alpha: 0.22),
-      ),
-      child: Column(
+    if (topic == null) {
+      return Column(
+        key: const ValueKey('topic_empty'),
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(
-                isRandom ? Icons.casino_rounded : Icons.lightbulb_rounded,
-                size: 16,
-                color: AppTheme.accent,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  isRandom
-                      ? 'DIVOKÁ KARTA (NÁHODNÉ TÉMA)'
-                      : 'TÉMA NA POKEC Z HISTORIE',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.8,
-                    color: AppTheme.accent,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 6),
-              if (topicState.isLoading)
-                Padding(
-                  padding: const EdgeInsets.all(4.0),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const SizedBox(
-                        width: 12,
-                        height: 12,
-                        child: CircularProgressIndicator(strokeWidth: 1.5),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Připravuji nové…',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 11,
-                          color: AppTheme.mutedTextColor(context),
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              else
-                InkWell(
-                  onTap: () => _prepareNewTopic(ref),
-                  borderRadius: BorderRadius.circular(12),
-                  child: Padding(
-                    padding: const EdgeInsets.all(4.0),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.refresh_rounded, size: 14, color: AppTheme.primary),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Jiné téma',
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.primary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            preparedTopic.title,
-            style: GoogleFonts.plusJakartaSans(
-              fontWeight: FontWeight.w700,
-              fontSize: 14.5,
-              color: AppTheme.textColor(context),
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            '„${preparedTopic.openerEn}“',
-            style: GoogleFonts.plusJakartaSans(
-              fontStyle: FontStyle.italic,
-              fontSize: 12.5,
-              color: AppTheme.surfaceTextColor(context),
-              height: 1.35,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Icon(Icons.check_circle_rounded, size: 14, color: AppTheme.primary),
-              const SizedBox(width: 6),
-              Text(
-                'Aktivní téma pro hovor',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.primary,
-                ),
-              ),
-            ],
+          Text('Zatím nemáš připravené téma.', style: muted),
+          TextButton.icon(
+            style: TextButton.styleFrom(padding: EdgeInsets.zero),
+            onPressed: () => _prepareNewTopic(ref),
+            icon: const Icon(Icons.auto_awesome_rounded, size: 18),
+            label: const Text('Připravit téma z historie'),
           ),
         ],
-      ),
+      );
+    }
+
+    return Column(
+      key: const ValueKey('history_topic_card'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (topic.isRandomTopic)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 2),
+            child: Text('Náhodné téma', style: AppTheme.font(fontSize: 12.5, fontWeight: FontWeight.w500, color: AppTheme.textSecondary)),
+          ),
+        Text(
+          topic.title,
+          style: AppTheme.font(fontSize: 18, fontWeight: FontWeight.w600, color: AppTheme.textPrimary, letterSpacing: -0.2),
+        ),
+        const SizedBox(height: 6),
+        Text('„${topic.openerEn}“', style: muted.copyWith(fontStyle: FontStyle.italic)),
+        const SizedBox(height: 2),
+        if (topicState.isLoading)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Row(
+              children: [
+                const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 1.8)),
+                const SizedBox(width: 10),
+                Text('Připravuji nové…', style: AppTheme.font(fontSize: 14, color: AppTheme.textSecondary)),
+              ],
+            ),
+          )
+        else
+          TextButton.icon(
+            style: TextButton.styleFrom(padding: EdgeInsets.zero),
+            onPressed: () => _prepareNewTopic(ref),
+            icon: const Icon(Icons.refresh_rounded, size: 18),
+            label: const Text('Jiné téma'),
+          ),
+      ],
     );
   }
 }

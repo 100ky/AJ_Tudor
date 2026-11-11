@@ -100,8 +100,7 @@ void main() {
             .overrideWith(() => FakeTopicPreparationAgent(topicState ?? const TopicPreparationState())),
       ],
       child: MaterialApp(
-        theme: AppTheme.lightTheme,
-        darkTheme: AppTheme.darkTheme,
+        theme: AppTheme.darkTheme,
         home: const AgentsScreen(),
       ),
     );
@@ -121,7 +120,7 @@ void main() {
 
       // Agent 1: Tutor
       expect(find.text('1. Konverzační Tutor'), findsOneWidget);
-      expect(find.text('V POHOTOVOSTI'), findsOneWidget);
+      expect(find.text('V pohotovosti'), findsOneWidget);
 
       // Agent 2: Analyzer
       expect(find.text('2. Analytik skóre'), findsOneWidget);
@@ -146,7 +145,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Status badge renders text in uppercase
-      expect(find.text('POSLOUCHÁ TĚ...'), findsOneWidget);
+      expect(find.text('Poslouchá tě...'), findsOneWidget);
 
       await drainTimers(tester);
     });

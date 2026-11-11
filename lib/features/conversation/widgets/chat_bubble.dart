@@ -43,7 +43,7 @@ class ChatBubble extends StatelessWidget {
             const SizedBox(width: 8),
             Text(
               'Zpráva zkopírována do schránky',
-              style: GoogleFonts.plusJakartaSans(fontSize: 13),
+              style: GoogleFonts.hankenGrotesk(fontSize: 13),
             ),
           ],
         ),
@@ -60,8 +60,7 @@ class ChatBubble extends StatelessWidget {
     final maxBubbleWidth = screenWidth * maxWidthFraction;
 
     final tutorBgColor = AppTheme.glassColor(context);
-    final tutorBorderColor = AppTheme.glassBorderColor(context);
-    final tutorTextColor = AppTheme.textColor(context);
+        final tutorTextColor = AppTheme.textColor(context);
     final tutorStrongColor =
         isDark ? AppTheme.primaryLight : AppTheme.primaryDark;
 
@@ -75,36 +74,6 @@ class ChatBubble extends StatelessWidget {
           mainAxisAlignment:
               isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
           children: [
-            // Avatar tutora
-            if (!isUser) ...[
-              Container(
-                margin: const EdgeInsets.only(right: 8, bottom: 4),
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [AppTheme.primaryLight, AppTheme.primaryDark],
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppTheme.primary.withValues(alpha: 0.3),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: const Center(
-                  child: Icon(
-                    Icons.smart_toy_rounded,
-                    size: 15,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ],
 
             // Samotná bublina
             Flexible(
@@ -118,43 +87,18 @@ class ChatBubble extends StatelessWidget {
                     vertical: 12,
                   ),
                   decoration: BoxDecoration(
-                    gradient: isUser
-                        ? const LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              AppTheme.primary,
-                              AppTheme.primaryDark,
-                            ],
-                          )
-                        : null,
-                    color: isUser ? null : tutorBgColor,
+                    color: isUser ? AppTheme.surfaceHigh : tutorBgColor,
                     borderRadius: BorderRadius.only(
-                      topLeft: const Radius.circular(20),
-                      topRight: const Radius.circular(20),
-                      bottomLeft: Radius.circular(isUser ? 20 : 6),
-                      bottomRight: Radius.circular(isUser ? 6 : 20),
+                      topLeft: Radius.circular(isUser ? 18 : 6),
+                      topRight: Radius.circular(isUser ? 6 : 18),
+                      bottomLeft: const Radius.circular(18),
+                      bottomRight: const Radius.circular(18),
                     ),
-                    border: Border.all(
-                      color: isUser
-                          ? AppTheme.primaryLight.withValues(alpha: 0.4)
-                          : tutorBorderColor,
-                      width: 1.0,
-                    ),
-                    boxShadow: isUser
-                        ? [
-                            BoxShadow(
-                              color: AppTheme.primary.withValues(alpha: 0.25),
-                              blurRadius: 12,
-                              offset: const Offset(0, 4),
-                            ),
-                          ]
-                        : AppTheme.glassShadowsLight(context),
-                  ),
+                                      ),
                   child: isUser
                       ? Text(
                           text,
-                          style: GoogleFonts.plusJakartaSans(
+                          style: GoogleFonts.hankenGrotesk(
                             fontSize: 15,
                             color: Colors.white,
                             height: 1.45,
@@ -163,17 +107,17 @@ class ChatBubble extends StatelessWidget {
                         )
                       : InteractiveTutorText(
                           text: text,
-                          style: GoogleFonts.plusJakartaSans(
+                          style: GoogleFonts.hankenGrotesk(
                             fontSize: 15,
                             color: tutorTextColor,
                             height: 1.45,
                           ),
-                          strongStyle: GoogleFonts.plusJakartaSans(
+                          strongStyle: GoogleFonts.hankenGrotesk(
                             fontSize: 15,
                             fontWeight: FontWeight.w700,
                             color: tutorStrongColor,
                           ),
-                          emStyle: GoogleFonts.plusJakartaSans(
+                          emStyle: GoogleFonts.hankenGrotesk(
                             fontSize: 15,
                             fontStyle: FontStyle.italic,
                             color: tutorTextColor,

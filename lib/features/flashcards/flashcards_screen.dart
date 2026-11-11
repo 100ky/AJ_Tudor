@@ -176,7 +176,7 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
                     Expanded(
                       child: Text(
                         'Vytvořeno $count nových kartiček z tvých chyb!',
-                        style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600),
+                        style: GoogleFonts.hankenGrotesk(fontWeight: FontWeight.w600),
                       ),
                     ),
                   ],
@@ -191,7 +191,7 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
               SnackBar(
                 content: Text(
                   'Všechny tvé zaznamenané chyby už v kartičkách máš!',
-                  style: GoogleFonts.plusJakartaSans(),
+                  style: GoogleFonts.hankenGrotesk(),
                 ),
                 behavior: SnackBarBehavior.floating,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -366,11 +366,11 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
       builder: (ctx) => AlertDialog(
         title: Text(
           'Smazat kartičku?',
-          style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700),
+          style: GoogleFonts.hankenGrotesk(fontWeight: FontWeight.w700),
         ),
         content: Text(
           'Opravdu chceš tuto kartičku trvale smazat?\n\n"${card.backText}"',
-          style: GoogleFonts.plusJakartaSans(fontSize: 14),
+          style: GoogleFonts.hankenGrotesk(fontSize: 14),
         ),
         actions: [
           TextButton(
@@ -471,7 +471,7 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
     final currentCard = session.current;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Column(
         children: [
           // Sjednocený indikátor pokroku v dnešní relaci
@@ -540,26 +540,14 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
           ] else ...[
             SizedBox(
               width: double.infinity,
-              height: 52,
+              height: 56,
               child: FilledButton.icon(
                 style: FilledButton.styleFrom(
-                  backgroundColor: AppTheme.primary,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 ),
                 onPressed: _flipCard,
                 icon: const Icon(Icons.flip_to_back_rounded, size: 20),
-                label: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    'Otočit kartičku (Zobrazit řešení)',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
+                label: const Text('Zobrazit řešení'),
               ),
             ),
           ],
@@ -583,7 +571,6 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
       recordingVolume: _recordingVolume,
       onStartRecording: _startRecording,
       onStopRecording: () => _stopRecording(card),
-      onFlip: _flipCard,
     );
   }
 }

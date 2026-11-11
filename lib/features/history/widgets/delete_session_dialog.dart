@@ -18,26 +18,26 @@ Future<void> confirmAndDeleteSession(
     context: context,
     builder: (context) => AlertDialog(
       title: Text('Smazat lekci?',
-          style: GoogleFonts.plusJakartaSans(
+          style: GoogleFonts.hankenGrotesk(
             fontWeight: FontWeight.w600,
             color: AppTheme.textColor(context),
           )),
       content: Text(
           'Opravdu chceš smazat tuto lekci z historie? Tato akce je nevratná.',
-          style: GoogleFonts.plusJakartaSans(
+          style: GoogleFonts.hankenGrotesk(
             color: AppTheme.surfaceTextColor(context),
           )),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context, false),
           child: Text('Zrušit',
-              style: GoogleFonts.plusJakartaSans(
+              style: GoogleFonts.hankenGrotesk(
                   color: AppTheme.mutedTextColor(context))),
         ),
         TextButton(
           onPressed: () => Navigator.pop(context, true),
           child: Text('Smazat',
-              style: GoogleFonts.plusJakartaSans(color: AppTheme.error)),
+              style: GoogleFonts.hankenGrotesk(color: AppTheme.error)),
         ),
       ],
     ),

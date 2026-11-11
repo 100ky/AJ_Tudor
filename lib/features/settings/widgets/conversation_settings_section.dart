@@ -24,7 +24,7 @@ class ConversationSettingsSection extends ConsumerWidget {
               runSpacing: 4,
               children: [
                 Text('Chytré bubliny chatu',
-                    style: GoogleFonts.plusJakartaSans(
+                    style: GoogleFonts.hankenGrotesk(
                         fontWeight: FontWeight.w500,
                         color: AppTheme.textColor(context))),
                 Container(
@@ -34,8 +34,8 @@ class ConversationSettingsSection extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
-                    'NOVÉ ✨',
-                    style: GoogleFonts.plusJakartaSans(
+                    'Nové',
+                    style: GoogleFonts.hankenGrotesk(
                       fontSize: 9,
                       fontWeight: FontWeight.w700,
                       color: AppTheme.primary,
@@ -46,7 +46,7 @@ class ConversationSettingsSection extends ConsumerWidget {
             ),
             subtitle: Text(
                 'Zobrazuje interaktivní opravy chyb, vysvětlení gramatiky, poslech výslovnosti a tlačítko pro uložení do kartiček.',
-                style: GoogleFonts.plusJakartaSans(
+                style: GoogleFonts.hankenGrotesk(
                     fontSize: 13, color: AppTheme.mutedTextColor(context))),
             value: ref.watch(smartBubblesEnabledProvider),
             onChanged: (value) {
@@ -57,12 +57,12 @@ class ConversationSettingsSection extends ConsumerWidget {
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             title: Text('Pohlcující režim (Immersive Mode)',
-                style: GoogleFonts.plusJakartaSans(
+                style: GoogleFonts.hankenGrotesk(
                     fontWeight: FontWeight.w500,
                     color: AppTheme.textColor(context))),
             subtitle: Text(
                 'Učitel bude mluvit 100% anglicky a nebude opravovat chyby nahlas.',
-                style: GoogleFonts.plusJakartaSans(
+                style: GoogleFonts.hankenGrotesk(
                     fontSize: 13, color: AppTheme.mutedTextColor(context))),
             value: ref.watch(immersiveModeProvider),
             onChanged: (value) {
@@ -162,14 +162,14 @@ class _DropdownSetting<T> extends StatelessWidget {
                   children: [
                     Text(
                       title,
-                      style: GoogleFonts.plusJakartaSans(
+                      style: GoogleFonts.hankenGrotesk(
                         fontWeight: FontWeight.w500,
                         color: AppTheme.textColor(context),
                       ),
                     ),
                     Text(
                       subtitle,
-                      style: GoogleFonts.plusJakartaSans(
+                      style: GoogleFonts.hankenGrotesk(
                         fontSize: 12,
                         color: AppTheme.mutedTextColor(context),
                       ),
@@ -195,7 +195,7 @@ class _DropdownSetting<T> extends StatelessWidget {
                 value: value,
                 icon: Icon(Icons.keyboard_arrow_down_rounded,
                     color: AppTheme.mutedTextColor(context)),
-                style: GoogleFonts.plusJakartaSans(
+                style: GoogleFonts.hankenGrotesk(
                   fontWeight: FontWeight.w600,
                   color: AppTheme.primary,
                   fontSize: 14,

@@ -50,45 +50,20 @@ class TranscriptBubble extends StatelessWidget {
             padding: const EdgeInsets.all(14),
             constraints: BoxConstraints(maxWidth: maxWidth),
             decoration: BoxDecoration(
-              gradient: isUser
-                  ? LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        AppTheme.primary,
-                        AppTheme.primaryDark,
-                      ],
-                    )
-                  : null,
-              color: isUser ? null : AppTheme.glassColor(context),
+              color: isUser ? AppTheme.surfaceHigh : AppTheme.surface,
               borderRadius: BorderRadius.only(
                 topLeft: const Radius.circular(20),
                 topRight: const Radius.circular(20),
                 bottomLeft: Radius.circular(isUser ? 20 : 4),
                 bottomRight: Radius.circular(isUser ? 4 : 20),
               ),
-              border: Border.all(
-                color: isUser
-                    ? AppTheme.primaryLight.withValues(alpha: 0.35)
-                    : AppTheme.glassBorderColor(context),
-                width: 1.0,
-              ),
-              boxShadow: isUser
-                  ? [
-                      BoxShadow(
-                        color: AppTheme.primary.withValues(alpha: 0.25),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      )
-                    ]
-                  : AppTheme.glassShadowsLight(context),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   transcript.content,
-                  style: GoogleFonts.plusJakartaSans(
+                  style: GoogleFonts.hankenGrotesk(
                     color: isUser ? Colors.white : AppTheme.textColor(context),
                     fontSize: 14,
                     height: 1.45,
@@ -108,7 +83,7 @@ class TranscriptBubble extends StatelessWidget {
                       const SizedBox(width: 4),
                       Text(
                         'V kartičkách',
-                        style: GoogleFonts.plusJakartaSans(
+                        style: GoogleFonts.hankenGrotesk(
                           fontSize: 10,
                           fontWeight: FontWeight.w600,
                           color: Colors.white70,
@@ -144,7 +119,7 @@ class TranscriptBubble extends StatelessWidget {
                       Flexible(
                         child: Text(
                           error.correctForm,
-                          style: GoogleFonts.plusJakartaSans(
+                          style: GoogleFonts.hankenGrotesk(
                             color: AppTheme.success,
                             fontWeight: FontWeight.w700,
                             fontSize: 13,
@@ -156,7 +131,7 @@ class TranscriptBubble extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     error.explanation,
-                    style: GoogleFonts.plusJakartaSans(
+                    style: GoogleFonts.hankenGrotesk(
                       fontSize: 12,
                       color: AppTheme.mutedTextColor(context),
                       height: 1.35,
@@ -190,7 +165,7 @@ class TranscriptBubble extends StatelessWidget {
           Flexible(
             child: Text(
               issue.note,
-              style: GoogleFonts.plusJakartaSans(
+              style: GoogleFonts.hankenGrotesk(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
                 color: AppTheme.warning,
@@ -223,7 +198,7 @@ class TranscriptBubble extends StatelessWidget {
           const SizedBox(width: 4),
           Text(
             'V kartičkách 🃏',
-            style: GoogleFonts.plusJakartaSans(
+            style: GoogleFonts.hankenGrotesk(
               fontSize: 11,
               fontWeight: FontWeight.w700,
               color: AppTheme.success,
@@ -241,10 +216,10 @@ class TranscriptBubble extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
         decoration: BoxDecoration(
-          color: AppTheme.primary.withValues(alpha: 0.14),
+          color: AppTheme.surfaceRaised,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: AppTheme.primary.withValues(alpha: 0.4),
+            color: AppTheme.hairline,
           ),
         ),
         child: Row(
@@ -253,15 +228,15 @@ class TranscriptBubble extends StatelessWidget {
             const Icon(
               Icons.add_rounded,
               size: 14,
-              color: AppTheme.primary,
+              color: AppTheme.textPrimary,
             ),
             const SizedBox(width: 4),
             Text(
               'Přidat do kartiček',
-              style: GoogleFonts.plusJakartaSans(
+              style: GoogleFonts.hankenGrotesk(
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
-                color: AppTheme.primary,
+                color: AppTheme.textPrimary,
               ),
             ),
           ],

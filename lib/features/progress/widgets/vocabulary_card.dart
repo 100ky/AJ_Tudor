@@ -19,14 +19,11 @@ class VocabularyCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CollapsibleCard(
-      icon: Icons.menu_book_rounded,
-      color: AppTheme.success,
       title: 'Slovní zásoba',
-      trailing: [CardBadge('${vocabulary.length} slov', color: AppTheme.success)],
+      trailing: [CardBadge('${vocabulary.length} slov')],
       expanded: expanded,
       onToggle: onToggle,
       children: [
-        const SizedBox(height: 14),
         if (vocabulary.isEmpty)
           const EmptyStateCard('Zatím nemáš uložená žádná slovíčka.')
         else
@@ -46,7 +43,7 @@ class VocabularyCard extends StatelessWidget {
                       ),
                       child: Text(
                         word,
-                        style: GoogleFonts.plusJakartaSans(
+                        style: GoogleFonts.hankenGrotesk(
                           fontWeight: FontWeight.w500,
                           fontSize: 13,
                           color: AppTheme.textColor(context),

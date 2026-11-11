@@ -61,20 +61,20 @@ class SessionDetailHeader extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
-                    color: AppTheme.primary.withValues(alpha: 0.12),
+                    color: AppTheme.surfaceRaised,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(
                     Icons.chat_bubble_outline_rounded,
                     size: 15,
-                    color: AppTheme.primary,
+                    color: AppTheme.textPrimary,
                   ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     session.topicSummary ?? 'Detail lekce',
-                    style: GoogleFonts.plusJakartaSans(
+                    style: GoogleFonts.hankenGrotesk(
                       fontSize: 14.5,
                       fontWeight: FontWeight.w600,
                       color: AppTheme.textColor(context),
@@ -94,7 +94,7 @@ class SessionDetailHeader extends StatelessWidget {
                     ),
                     child: Text(
                       '${(session.fluencyScore! * 100).toInt()}%',
-                      style: GoogleFonts.plusJakartaSans(
+                      style: GoogleFonts.hankenGrotesk(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
                         color: AppTheme.success,
@@ -135,7 +135,7 @@ class SessionDetailHeader extends StatelessWidget {
               if (session.levelDetail ?? session.estimatedLevel case final level?) ...[
                 Text(
                   'Úroveň: $level${session.levelReason == null ? '' : '. ${session.levelReason}'}',
-                  style: GoogleFonts.plusJakartaSans(
+                  style: GoogleFonts.hankenGrotesk(
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
                     color: AppTheme.mutedTextColor(context),
@@ -147,7 +147,7 @@ class SessionDetailHeader extends StatelessWidget {
                 Text(
                   'Tvoje řeč: ${(share * 100).round()} % slov '
                   '(ty ${session.studentWords}, tutor ${session.tutorWords})',
-                  style: GoogleFonts.plusJakartaSans(
+                  style: GoogleFonts.hankenGrotesk(
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
                     color: share < 0.5 ? AppTheme.warning : AppTheme.mutedTextColor(context),
@@ -174,7 +174,7 @@ class SessionDetailHeader extends StatelessWidget {
                           )
                         : TextButton.icon(
                             icon: Icon(Icons.analytics_outlined,
-                                size: 15, color: AppTheme.primary),
+                                size: 15, color: AppTheme.textPrimary),
                             label: Text(isAnalyzed(session) ? 'Znovu analyzovat' : 'Analyzovat'),
                             style: _actionStyle(),
                             onPressed: onAnalyze,
@@ -186,7 +186,7 @@ class SessionDetailHeader extends StatelessWidget {
                               height: 14,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                color: AppTheme.primary,
+                                color: AppTheme.textPrimary,
                               ),
                             )
                           : const Icon(Icons.auto_awesome_rounded, size: 14),
@@ -218,8 +218,8 @@ class SessionDetailHeader extends StatelessWidget {
       visualDensity: VisualDensity.compact,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      foregroundColor: AppTheme.primary,
-      textStyle: GoogleFonts.plusJakartaSans(fontSize: 12),
+      foregroundColor: AppTheme.textPrimary,
+      textStyle: GoogleFonts.hankenGrotesk(fontSize: 12),
     );
   }
 }

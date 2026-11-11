@@ -39,10 +39,8 @@ class FluencyChartCard extends StatelessWidget {
     final latestScore = (recentSessions.last.fluencyScore! * 100).toInt();
 
     return CollapsibleCard(
-      icon: Icons.show_chart_rounded,
-      color: AppTheme.primary,
       title: 'Vývoj plynulosti',
-      trailing: [CardBadge('$latestScore% naposledy', color: AppTheme.primary)],
+      trailing: [CardBadge('$latestScore % naposledy')],
       expanded: expanded,
       onToggle: onToggle,
       children: [
@@ -75,7 +73,7 @@ class FluencyChartCard extends StatelessWidget {
                     getTitlesWidget: (value, meta) {
                       return Text(
                         '${value.toInt()}%',
-                        style: GoogleFonts.plusJakartaSans(
+                        style: GoogleFonts.hankenGrotesk(
                             fontSize: 10, color: AppTheme.onSurfaceMuted),
                       );
                     },
@@ -90,7 +88,7 @@ class FluencyChartCard extends StatelessWidget {
                     return touchedSpots.map((spot) {
                       return LineTooltipItem(
                         '${spot.y.toInt()}% plynulost',
-                        GoogleFonts.plusJakartaSans(
+                        GoogleFonts.hankenGrotesk(
                           color: Colors.white,
                           fontWeight: FontWeight.w700,
                           fontSize: 12,

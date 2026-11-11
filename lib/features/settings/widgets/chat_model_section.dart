@@ -19,7 +19,7 @@ class ChatModelSection extends ConsumerWidget {
           padding: const EdgeInsets.only(bottom: 10),
           child: Text(
             'Hlasový mód používá automaticky model optimalizovaný pro zvuk.',
-            style: GoogleFonts.plusJakartaSans(
+            style: GoogleFonts.hankenGrotesk(
               fontSize: 12,
               color: AppTheme.mutedTextColor(context),
             ),
@@ -31,7 +31,7 @@ class ChatModelSection extends ConsumerWidget {
             child: DropdownButton<String>(
               isExpanded: true,
               value: ref.watch(modelProvider),
-              style: GoogleFonts.plusJakartaSans(
+              style: GoogleFonts.hankenGrotesk(
                   color: AppTheme.textColor(context), fontSize: 14),
               items: GeminiModels.allowedChatModels.map((model) {
                 return DropdownMenuItem(

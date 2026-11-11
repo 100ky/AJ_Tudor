@@ -40,14 +40,14 @@ class PlannerAgentCard extends StatelessWidget {
             title: '3. Plánovač témat',
             subtitle: 'Agent vytvářející scénáře na základě chyb',
             badge: AgentStatusBadge(
-              isPlanning ? 'PLÁNUJE...' : 'PŘIPRAVEN',
+              isPlanning ? 'Plánuje…' : 'Připraven',
               isPlanning ? AppTheme.warning : AppTheme.accent,
             ),
           ),
           Divider(color: AppTheme.outlineLightColor(context), height: 24),
           Text(
             'Aktuální scénáře na míru:',
-            style: GoogleFonts.plusJakartaSans(
+            style: GoogleFonts.hankenGrotesk(
                 fontWeight: FontWeight.w600,
                 fontSize: 13,
                 color: AppTheme.textColor(context)),
@@ -58,7 +58,7 @@ class PlannerAgentCard extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Text(
                 'Zatím nejsou naplánovány žádné scénáře. Klikni na tlačítko níže.',
-                style: GoogleFonts.plusJakartaSans(
+                style: GoogleFonts.hankenGrotesk(
                     fontSize: 13,
                     fontStyle: FontStyle.italic,
                     color: AppTheme.mutedTextColor(context)),
@@ -103,7 +103,7 @@ class PlannerAgentCard extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             'Nebo napiš své vlastní téma:',
-            style: GoogleFonts.plusJakartaSans(
+            style: GoogleFonts.hankenGrotesk(
                 fontWeight: FontWeight.w600,
                 fontSize: 13,
                 color: AppTheme.textColor(context)),
@@ -114,11 +114,11 @@ class PlannerAgentCard extends StatelessWidget {
               Expanded(
                 child: TextField(
                   controller: customTopicController,
-                  style: GoogleFonts.plusJakartaSans(
+                  style: GoogleFonts.hankenGrotesk(
                       color: AppTheme.textColor(context), fontSize: 14),
                   decoration: InputDecoration(
                     hintText: 'Napiš téma (např. „objednávka v restauraci")...',
-                    hintStyle: GoogleFonts.plusJakartaSans(
+                    hintStyle: GoogleFonts.hankenGrotesk(
                         color: AppTheme.mutedTextColor(context), fontSize: 13),
                     contentPadding:
                         const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -144,18 +144,10 @@ class PlannerAgentCard extends StatelessWidget {
                   height: 44,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    gradient: const LinearGradient(
-                      colors: [AppTheme.accent, AppTheme.accentLight],
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppTheme.accent.withValues(alpha: 0.3),
-                        blurRadius: 10,
-                      ),
-                    ],
+                    color: AppTheme.textPrimary,
                   ),
                   child:
-                      const Icon(Icons.send_rounded, color: Colors.white, size: 18),
+                      const Icon(Icons.send_rounded, color: AppTheme.background, size: 18),
                 ),
               ),
             ],
@@ -216,14 +208,14 @@ class _MiniScenarioTile extends StatelessWidget {
                   children: [
                     Text(
                       scenario.title,
-                      style: GoogleFonts.plusJakartaSans(
+                      style: GoogleFonts.hankenGrotesk(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                           color: AppTheme.textColor(context)),
                     ),
                     Text(
                       scenario.description,
-                      style: GoogleFonts.plusJakartaSans(
+                      style: GoogleFonts.hankenGrotesk(
                           fontSize: 11, color: AppTheme.mutedTextColor(context)),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -243,14 +235,14 @@ class _MiniScenarioTile extends StatelessWidget {
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
-                  isSelected ? 'AKTIVNÍ' : scenario.difficulty.toUpperCase(),
-                  style: GoogleFonts.plusJakartaSans(
+                  isSelected ? 'Aktivní' : scenario.difficulty,
+                  style: GoogleFonts.hankenGrotesk(
                     fontSize: 8,
                     fontWeight: FontWeight.w700,
                     color: isSelected
                         ? AppTheme.accent
                         : AppTheme.mutedTextColor(context),
-                    letterSpacing: 0.5,
+                    letterSpacing: 0,
                   ),
                 ),
               ),

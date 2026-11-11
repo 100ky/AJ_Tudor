@@ -269,7 +269,7 @@ class _InteractiveTutorTextState extends ConsumerState<InteractiveTutorText> {
     final defaultTextColor = AppTheme.textColor(context);
 
     final baseStyle = widget.style ??
-        GoogleFonts.plusJakartaSans(
+        GoogleFonts.hankenGrotesk(
           fontSize: 15,
           color: defaultTextColor,
           height: 1.5,

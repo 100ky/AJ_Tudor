@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../core/app_theme.dart';
 import 'widgets/api_key_section.dart';
-import 'widgets/appearance_section.dart';
 import 'widgets/backup_section.dart';
 import 'widgets/chat_model_section.dart';
 import 'widgets/conversation_settings_section.dart';
@@ -11,7 +9,7 @@ import 'widgets/profile_memory_section.dart';
 import 'widgets/reminders_section.dart';
 import 'widgets/settings_common.dart';
 
-/// Nastavení aplikace: API klíč, vzhled, připomínky, hlas, model, profil a záloha.
+/// Nastavení aplikace: API klíč, připomínky, hlas, model, profil a záloha.
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
@@ -21,24 +19,18 @@ class SettingsScreen extends StatelessWidget {
       backgroundColor: Colors.transparent,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
+        titleSpacing: 20,
+        toolbarHeight: 64,
         title: Text(
           'Nastavení',
-          style: GoogleFonts.plusJakartaSans(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-            color: AppTheme.textColor(context),
-          ),
+          style: AppTheme.font(fontSize: 32, fontWeight: FontWeight.w600, color: AppTheme.textPrimary, letterSpacing: -0.8),
         ),
-        centerTitle: true,
       ),
       body: ListView(
         padding: const EdgeInsets.all(16.0),
         children: const [
           SectionLabel('Konfigurace umělé inteligence'),
           ApiKeySection(),
-          SizedBox(height: 24),
-          SectionLabel('Vzhled aplikace'),
-          AppearanceSection(),
           SizedBox(height: 24),
           SectionLabel('Upozornění a připomínky'),
           RemindersSection(),

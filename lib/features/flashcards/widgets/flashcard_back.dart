@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../../core/app_theme.dart';
 import '../../../core/widgets/glass_container.dart';
 import '../../../data/database/app_database.dart';
@@ -11,7 +10,8 @@ import 'pronunciation_result.dart';
 /// Rub kartičky: správné řešení, odpověď studenta, vysvětlení a původní věta.
 class FlashcardBack extends StatelessWidget {
   final Flashcard card;
-  /// Vysvetleni vyrazu (z CardExplanationResolver); null = box se nezobrazi.
+
+  /// Vysvětlení výrazu (z CardExplanationResolver); null = blok se nezobrazí.
   final String? explanation;
   final PronunciationAnalysis? lastPronunciation;
   final TypedAnswer? typedAnswer;
@@ -32,19 +32,18 @@ class FlashcardBack extends StatelessWidget {
     required this.onFlip,
   });
 
+  static final _label = AppTheme.font(fontSize: 12.5, fontWeight: FontWeight.w500, color: AppTheme.textTertiary);
+
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final lastPronunciation = this.lastPronunciation;
     final typedAnswer = this.typedAnswer;
     final explanation = this.explanation;
+    final hasSource = card.sourceSentence != null && card.sourceSentence!.trim().isNotEmpty;
 
     return GlassContainer(
-      padding: const EdgeInsets.all(22),
-      borderRadius: BorderRadius.circular(24),
-      color: AppTheme.success.withValues(alpha: isDark ? 0.12 : 0.05),
-      border: Border.all(color: AppTheme.success.withValues(alpha: 0.3)),
-      shadows: AppTheme.glassShadow,
+      padding: const EdgeInsets.fromLTRB(22, 14, 10, 14),
+      borderRadius: BorderRadius.circular(20),
       child: LayoutBuilder(
         builder: (context, constraints) {
           return SingleChildScrollView(
@@ -53,106 +52,72 @@ class FlashcardBack extends StatelessWidget {
               constraints: BoxConstraints(minHeight: constraints.maxHeight),
               child: IntrinsicHeight(
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Flexible(child: _correctAnswerLabel()),
-                        const SizedBox(width: 8),
-                        // Funkční tlačítko poslechu Gemini TTS
-                        _ActionButton(
-                          color: AppTheme.primary,
-                          backgroundAlpha: 0.12,
+                        Expanded(child: Text('Správné řešení', style: _label)),
+                        IconButton(
                           tooltip: 'Přehrát rodilou výslovnost (Gemini TTS)',
                           onPressed: isPlayingTts ? null : onPlayAudio,
+                          style: IconButton.styleFrom(backgroundColor: AppTheme.surfaceRaised),
                           icon: isPlayingTts
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: AppTheme.primary,
-                                  ),
-                                )
-                              : const Icon(
-                                  Icons.volume_up_rounded,
-                                  size: 20,
-                                  color: AppTheme.primary,
-                                ),
+                              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                              : const Icon(Icons.volume_up_rounded, size: 22, color: AppTheme.textPrimary),
                         ),
-                        const SizedBox(width: 6),
-                        // Tlačítko pro trvalé smazání kartičky
-                        _ActionButton(
-                          color: AppTheme.error,
-                          backgroundAlpha: 0.10,
+                        IconButton(
                           tooltip: 'Smazat tuto kartičku',
                           onPressed: onDelete,
-                          icon: const Icon(
-                            Icons.delete_outline_rounded,
-                            size: 20,
-                            color: AppTheme.error,
-                          ),
+                          icon: const Icon(Icons.delete_outline_rounded, size: 22, color: AppTheme.textTertiary),
                         ),
                       ],
                     ),
-
-                    // Správná věta + srovnání s výslovností
-                    Column(
-                      children: [
-                        Text(
-                          card.backText,
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 23,
-                            fontWeight: FontWeight.w800,
-                            color: isDark ? AppTheme.primaryLight : AppTheme.primaryDark,
-                            height: 1.3,
-                          ),
-                        ),
-                        if (lastPronunciation != null) ...[
-                          const SizedBox(height: 14),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: isDark
-                                  ? Colors.black.withValues(alpha: 0.25)
-                                  : Colors.white.withValues(alpha: 0.5),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: AppTheme.outline.withValues(alpha: 0.3),
-                              ),
-                            ),
-                            child: Column(
-                              children: [
-                                Center(child: PronunciationBadge(lastPronunciation)),
-                                const SizedBox(height: 8),
-                                WordAssessmentPills(lastPronunciation),
-                              ],
+                    Padding(
+                      padding: const EdgeInsets.only(right: 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            card.backText,
+                            style: AppTheme.font(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.textPrimary,
+                              height: 1.3,
+                              letterSpacing: -0.2,
                             ),
                           ),
+                          if (lastPronunciation != null) ...[
+                            const SizedBox(height: 16),
+                            PronunciationBadge(lastPronunciation),
+                            const SizedBox(height: 8),
+                            WordAssessmentPills(lastPronunciation),
+                          ],
+                          if (typedAnswer != null) ...[
+                            const SizedBox(height: 18),
+                            _typedAnswer(typedAnswer),
+                          ],
+                          if (explanation != null && explanation.isNotEmpty) ...[
+                            const SizedBox(height: 18),
+                            Text('Proč', style: _label),
+                            const SizedBox(height: 3),
+                            Text(explanation, style: AppTheme.font(fontSize: 15, color: AppTheme.onSurface, height: 1.5)),
+                          ],
+                          if (hasSource) ...[
+                            const SizedBox(height: 14),
+                            _highlightedSentence(),
+                          ],
                         ],
-                        if (typedAnswer != null) ...[
-                          const SizedBox(height: 14),
-                          _typedAnswer(context, isDark, typedAnswer),
-                        ],
-                        if (explanation != null && explanation.isNotEmpty) ...[
-                          const SizedBox(height: 14),
-                          _explanation(context, isDark, explanation),
-                        ],
-                        if (card.sourceSentence != null &&
-                            card.sourceSentence!.trim().isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          _sourceSentence(context, isDark),
-                        ],
-                      ],
+                      ),
                     ),
-
-                    // Tlačítko otočení zpět
-                    TextButton.icon(
-                      onPressed: onFlip,
-                      icon: const Icon(Icons.refresh_rounded, size: 16),
-                      label: const Text('Otočit zpět na zadání'),
+                    const Spacer(),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: onFlip,
+                        icon: const Icon(Icons.refresh_rounded, size: 18),
+                        label: const Text('Otočit zpět na zadání'),
+                      ),
                     ),
                   ],
                 ),
@@ -164,209 +129,43 @@ class FlashcardBack extends StatelessWidget {
     );
   }
 
-  Widget _correctAnswerLabel() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: AppTheme.success.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppTheme.success.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.check_circle_rounded, size: 13, color: AppTheme.success),
-          const SizedBox(width: 5),
-          Flexible(
-            child: Text(
-              'SPRÁVNÉ ŘEŠENÍ',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: AppTheme.success,
-                letterSpacing: 0.5,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _typedAnswer(BuildContext context, bool isDark, TypedAnswer answer) {
+  /// Napsaná odpověď a slovně, jak moc se shoduje se správným řešením.
+  Widget _typedAnswer(TypedAnswer answer) {
     final percent = (answer.score * 100).round();
-    final color = answerScoreColor(percent);
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: isDark
-            ? Colors.black.withValues(alpha: 0.25)
-            : Colors.white.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.4)),
-      ),
-      child: Column(
-        children: [
-          Text(
-            'TVOJE ODPOVĚĎ · SHODA $percent %',
-            style: GoogleFonts.plusJakartaSans(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: color,
-              letterSpacing: 0.5,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            answer.text,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.plusJakartaSans(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: AppTheme.textColor(context),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _explanation(BuildContext context, bool isDark, String explanation) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: isDark
-            ? Colors.black.withValues(alpha: 0.3)
-            : Colors.white.withValues(alpha: 0.6),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: AppTheme.outline.withValues(alpha: 0.4),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Tvoje odpověď', style: _label),
+        const SizedBox(height: 3),
+        Text(
+          '${answerScoreLabel(percent)} · shoda $percent %',
+          style: AppTheme.font(fontSize: 14, fontWeight: FontWeight.w600, color: answerScoreColor(percent)),
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.lightbulb_outline_rounded, size: 16, color: AppTheme.warning),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  'VYSVĚTLENÍ:',
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.warning,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            explanation,
-            style: GoogleFonts.plusJakartaSans(
-              fontSize: 12.5,
-              color: AppTheme.textColor(context),
-              height: 1.4,
-            ),
-          ),
-        ],
-      ),
+        const SizedBox(height: 2),
+        Text(answer.text, style: AppTheme.font(fontSize: 16, color: AppTheme.textSecondary, height: 1.4)),
+      ],
     );
   }
 
-  Widget _sourceSentence(BuildContext context, bool isDark) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: isDark
-            ? Colors.white.withValues(alpha: 0.04)
-            : Colors.black.withValues(alpha: 0.03),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.history_rounded, size: 14, color: AppTheme.mutedTextColor(context)),
-          const SizedBox(width: 6),
-          Expanded(child: _highlightedSentence(context, isDark)),
-        ],
-      ),
-    );
-  }
-
-  /// Puvodni veta s podtrzenymi slovy z karticky, at je student ve vete hned najde.
-  Widget _highlightedSentence(BuildContext context, bool isDark) {
+  /// Původní věta s podtrženými slovy z kartičky, ať je student ve větě hned najde.
+  Widget _highlightedSentence() {
     final sentence = card.sourceSentence!.trim();
-    final baseStyle = GoogleFonts.plusJakartaSans(
-      fontSize: 12,
-      fontStyle: FontStyle.italic,
-      color: AppTheme.mutedTextColor(context),
-      height: 1.4,
-    );
-    final markColor = isDark ? AppTheme.primaryLight : AppTheme.primaryDark;
+    final baseStyle = AppTheme.font(fontSize: 13, color: AppTheme.textTertiary, height: 1.45);
     final markStyle = baseStyle.copyWith(
-      fontWeight: FontWeight.w700,
-      color: markColor,
+      fontWeight: FontWeight.w600,
+      color: AppTheme.textSecondary,
       decoration: TextDecoration.underline,
-      decorationColor: markColor,
-      decorationThickness: 2,
+      decorationColor: AppTheme.textSecondary,
     );
 
-    final spans = <TextSpan>[const TextSpan(text: 'Původně v konverzaci: "')];
+    final spans = <TextSpan>[const TextSpan(text: 'Z hovoru: „')];
     var position = 0;
     for (final range in highlightRanges(sentence, card.backText)) {
-      if (range.start > position) {
-        spans.add(TextSpan(text: sentence.substring(position, range.start)));
-      }
+      if (range.start > position) spans.add(TextSpan(text: sentence.substring(position, range.start)));
       spans.add(TextSpan(text: sentence.substring(range.start, range.end), style: markStyle));
       position = range.end;
     }
-    spans.add(TextSpan(text: '${sentence.substring(position)}"'));
-
+    spans.add(TextSpan(text: '${sentence.substring(position)}“'));
     return Text.rich(TextSpan(style: baseStyle, children: spans));
-  }
-}
-
-/// Malé čtvercové akční tlačítko v hlavičce rubu kartičky.
-class _ActionButton extends StatelessWidget {
-  final Color color;
-  final double backgroundAlpha;
-  final String tooltip;
-  final VoidCallback? onPressed;
-  final Widget icon;
-
-  const _ActionButton({
-    required this.color,
-    required this.backgroundAlpha,
-    required this.tooltip,
-    required this.onPressed,
-    required this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: backgroundAlpha),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: color.withValues(alpha: 0.25),
-        ),
-      ),
-      child: IconButton(
-        icon: icon,
-        onPressed: onPressed,
-        tooltip: tooltip,
-        constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-        padding: EdgeInsets.zero,
-      ),
-    );
   }
 }

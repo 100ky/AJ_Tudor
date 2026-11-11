@@ -11,7 +11,19 @@ class CategoryTrend {
   /// Průměr na lekci v lekcích předtím; null, když ještě nejsou.
   final double? previous;
 
-  const CategoryTrend({required this.category, required this.recent, this.previous});
+  /// Kolikrát se chyba objevila v posledních lekcích.
+  final int recentCount;
+
+  /// Kolikrát se chyba objevila v lekcích předtím; null, když ještě nejsou.
+  final int? previousCount;
+
+  const CategoryTrend({
+    required this.category,
+    required this.recent,
+    this.previous,
+    this.recentCount = 0,
+    this.previousCount,
+  });
 
   /// Ubylo chyb (o víc, než je jedna chyba za tři lekce).
   bool get improved => previous != null && recent < previous! - 0.4;
@@ -28,11 +40,21 @@ class ProgressTrends {
   /// Z kolika lekcí se počítá průměrný podíl řeči.
   static const int shareWindow = 5;
 
+  /// Lekce, kde student řekl méně slov, se do trendů nepočítá. Hovor ukončený hned
+  /// po úvodu tutora (lekce 24: 0 slov) by vypadal jako lekce bez chyb a s podílem řeči 0 %.
+  static const int minStudentWords = 50;
+
   /// Druhy chyb od nejčastějšího v posledních lekcích.
   final List<CategoryTrend> categories;
 
   /// Lekce s rozborem podle druhů chyb (starší rozbory druhy neznají).
   final int analysedLessons;
+
+  /// Z kolika posledních lekcí jsou [CategoryTrend.recentCount] (nejvýš [window]).
+  final int recentLessons;
+
+  /// Z kolika lekcí předtím jsou [CategoryTrend.previousCount] (nejvýš [window]).
+  final int previousLessons;
 
   /// Podíl slov studenta v poslední lekci a průměr posledních lekcí (0–1).
   final double? lastShare;
@@ -41,6 +63,8 @@ class ProgressTrends {
   const ProgressTrends({
     required this.categories,
     required this.analysedLessons,
+    this.recentLessons = 0,
+    this.previousLessons = 0,
     this.lastShare,
     this.averageShare,
   });
@@ -53,14 +77,13 @@ class ProgressTrends {
   /// uložil počty slov), jinak by starší lekce vypadaly jako bez chyb.
   static ProgressTrends from(List<Session> sessions, List<ErrorLog> errors) {
     final newestFirst = [...sessions]..sort((a, b) => b.startedAt.compareTo(a.startedAt));
-    final analysed = newestFirst.where(isCategorized).toList();
+    final analysed = newestFirst.where(_counts).toList();
     final recent = analysed.take(window).toList();
     final previous = analysed.skip(window).take(window).toList();
 
-    double perLesson(List<Session> group, ErrorCategory category) {
+    int count(List<Session> group, ErrorCategory category) {
       final ids = {for (final s in group) s.id};
-      final count = errors.where((e) => ids.contains(e.sessionId) && e.category == category.id).length;
-      return count / group.length;
+      return errors.where((e) => ids.contains(e.sessionId) && e.category == category.id).length;
     }
 
     final categories = <CategoryTrend>[
@@ -68,17 +91,21 @@ class ProgressTrends {
         for (final category in ErrorCategory.values)
           CategoryTrend(
             category: category,
-            recent: perLesson(recent, category),
-            previous: previous.isEmpty ? null : perLesson(previous, category),
+            recent: count(recent, category) / recent.length,
+            previous: previous.isEmpty ? null : count(previous, category) / previous.length,
+            recentCount: count(recent, category),
+            previousCount: previous.isEmpty ? null : count(previous, category),
           ),
     ].where((t) => t.recent > 0 || (t.previous ?? 0) > 0).toList()
       ..sort((a, b) => b.recent.compareTo(a.recent));
 
-    final shares = [for (final s in newestFirst) ?studentShare(s)].take(shareWindow).toList();
+    final shares = [for (final s in analysed) ?studentShare(s)].take(shareWindow).toList();
 
     return ProgressTrends(
       categories: categories,
       analysedLessons: analysed.length,
+      recentLessons: recent.length,
+      previousLessons: previous.length,
       lastShare: shares.isEmpty ? null : shares.first,
       averageShare: shares.isEmpty ? null : shares.reduce((a, b) => a + b) / shares.length,
     );
@@ -86,6 +113,8 @@ class ProgressTrends {
 
   /// Lekci rozebral rozbor, který dělí chyby podle druhů (ukládá počty slov).
   static bool isCategorized(Session session) => session.studentWords != null;
+
+  static bool _counts(Session session) => isCategorized(session) && session.studentWords! >= minStudentWords;
 
   /// Podíl slov studenta v lekci [session] (0–1), když je známý.
   static double? studentShare(Session session) {

@@ -1,8 +1,68 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/app_theme.dart';
-import '../../../../core/widgets/glass_container.dart';
+
+/// Společný vzhled pruhů pod přepisem: tmavý povrch, popisek, text a křížek.
+class _Strip extends StatelessWidget {
+  final Widget child;
+  final VoidCallback? onDismiss;
+  final String dismissLabel;
+
+  const _Strip({super.key, required this.child, this.onDismiss, this.dismissLabel = 'Skrýt'});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+      child: Container(
+        padding: EdgeInsets.fromLTRB(16, 10, onDismiss == null ? 16 : 4, 10),
+        decoration: BoxDecoration(color: AppTheme.surface, borderRadius: BorderRadius.circular(14)),
+        child: Row(
+          children: [
+            Expanded(child: child),
+            if (onDismiss != null)
+              IconButton(
+                tooltip: dismissLabel,
+                onPressed: () {
+                  HapticFeedback.lightImpact();
+                  onDismiss!();
+                },
+                icon: const Icon(Icons.close_rounded, size: 20, color: AppTheme.textSecondary),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LabeledText extends StatelessWidget {
+  final String label;
+  final String text;
+  final IconData? icon;
+
+  static const Color labelColor = AppTheme.textSecondary;
+
+  const _LabeledText({required this.label, required this.text, this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            if (icon != null) ...[Icon(icon, size: 14, color: labelColor), const SizedBox(width: 5)],
+            Text(label, style: AppTheme.font(fontSize: 12.5, fontWeight: FontWeight.w500, color: labelColor)),
+          ],
+        ),
+        const SizedBox(height: 2),
+        Text(text, style: AppTheme.font(fontSize: 16, fontWeight: FontWeight.w600, color: AppTheme.textPrimary, height: 1.35)),
+      ],
+    );
+  }
+}
 
 /// Chybová zpráva hlasového tutora (např. nedostupný mikrofon).
 class TutorErrorBanner extends StatelessWidget {
@@ -12,30 +72,15 @@ class TutorErrorBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-      child: GlassContainer(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        borderRadius: BorderRadius.circular(12),
-        color: AppTheme.error.withValues(alpha: 0.08),
-        border: Border.all(color: AppTheme.error.withValues(alpha: 0.25)),
-        shadows: const [],
-        child: Row(
-          children: [
-            Icon(Icons.error_outline_rounded, color: AppTheme.error, size: 18),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                message,
-                style: GoogleFonts.plusJakartaSans(
-                  color: AppTheme.error,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-          ],
-        ),
+    return _Strip(
+      child: Row(
+        children: [
+          const Icon(Icons.error_outline_rounded, color: AppTheme.error, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(message, style: AppTheme.font(color: AppTheme.textPrimary, fontSize: 14, height: 1.4)),
+          ),
+        ],
       ),
     );
   }
@@ -50,59 +95,13 @@ class DirectorTipBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 300),
-        child: GlassContainer(
-          key: ValueKey('director_tip_$tip'),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          borderRadius: BorderRadius.circular(16),
-          color: AppTheme.primary.withValues(alpha: 0.10),
-          border: Border.all(
-            color: AppTheme.primary.withValues(alpha: 0.30),
-            width: 1,
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppTheme.primary.withValues(alpha: 0.18),
-                ),
-                child: Icon(
-                  Icons.lightbulb_outline_rounded,
-                  size: 14,
-                  color: AppTheme.primary,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  tip,
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.textColor(context),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 6),
-              GestureDetector(
-                onTap: () {
-                  HapticFeedback.lightImpact();
-                  onDismiss();
-                },
-                child: Icon(
-                  Icons.close_rounded,
-                  size: 14,
-                  color: AppTheme.onSurfaceMuted,
-                ),
-              ),
-            ],
-          ),
-        ),
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 300),
+      child: _Strip(
+        key: ValueKey('director_tip_$tip'),
+        onDismiss: onDismiss,
+        dismissLabel: 'Skrýt nápovědu',
+        child: _LabeledText(label: 'Nápověda', text: tip, icon: Icons.lightbulb_outline_rounded),
       ),
     );
   }
@@ -114,56 +113,43 @@ class LessonProgressBanner extends StatelessWidget {
   final int total;
   final bool finished;
 
-  const LessonProgressBanner({
-    super.key,
-    required this.completed,
-    required this.total,
-    required this.finished,
-  });
+  const LessonProgressBanner({super.key, required this.completed, required this.total, required this.finished});
 
   @override
   Widget build(BuildContext context) {
     final label = finished ? 'Lekce hotová: $completed z $total' : 'Lekce: $completed/$total výrazů';
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-      child: GlassContainer(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        borderRadius: BorderRadius.circular(14),
-        color: AppTheme.accent.withValues(alpha: 0.08),
-        border: Border.all(color: AppTheme.accent.withValues(alpha: 0.25)),
-        shadows: const [],
-        child: Row(
-          children: [
-            Icon(finished ? Icons.check_circle_rounded : Icons.school_rounded, size: 16, color: AppTheme.accent),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: AppTheme.textColor(context),
+      padding: const EdgeInsets.fromLTRB(20, 2, 20, 6),
+      child: Row(
+        children: [
+          Text(
+            label,
+            style: AppTheme.font(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: finished ? AppTheme.success : AppTheme.textPrimary,
+              fontFeatures: AppTheme.tabularFigures,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(2),
+              child: LinearProgressIndicator(
+                value: total == 0 ? 0 : completed / total,
+                minHeight: 4,
+                color: finished ? AppTheme.success : AppTheme.textPrimary,
+                backgroundColor: AppTheme.surfaceHigh,
               ),
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: LinearProgressIndicator(
-                  value: total == 0 ? 0 : completed / total,
-                  minHeight: 5,
-                  color: AppTheme.accent,
-                  backgroundColor: AppTheme.accent.withValues(alpha: 0.15),
-                ),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 }
 
-/// Výrazně vypíchnutá věta, kterou má student po opravě chyby zopakovat.
+/// Věta, kterou má student po opravě chyby zopakovat.
 class RepeatTargetBanner extends StatelessWidget {
   final String sentence;
   final VoidCallback onDismiss;
@@ -172,74 +158,12 @@ class RepeatTargetBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 300),
-        child: GlassContainer(
-          key: ValueKey('repeat_target_$sentence'),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          borderRadius: BorderRadius.circular(16),
-          color: AppTheme.primary.withValues(alpha: 0.16),
-          border: Border.all(
-            color: AppTheme.primary.withValues(alpha: 0.55),
-            width: 1.5,
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppTheme.primary.withValues(alpha: 0.22),
-                ),
-                child: Icon(
-                  Icons.record_voice_over_rounded,
-                  size: 16,
-                  color: AppTheme.primary,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Zopakuj:',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.onSurfaceMuted,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      sentence,
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: AppTheme.textColor(context),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 6),
-              GestureDetector(
-                onTap: () {
-                  HapticFeedback.lightImpact();
-                  onDismiss();
-                },
-                child: Icon(
-                  Icons.close_rounded,
-                  size: 16,
-                  color: AppTheme.onSurfaceMuted,
-                ),
-              ),
-            ],
-          ),
-        ),
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 300),
+      child: _Strip(
+        key: ValueKey('repeat_target_$sentence'),
+        onDismiss: onDismiss,
+        child: _LabeledText(label: 'Zopakuj nahlas', text: sentence, icon: Icons.record_voice_over_rounded),
       ),
     );
   }

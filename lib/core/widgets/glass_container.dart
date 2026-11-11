@@ -1,52 +1,48 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../app_theme.dart';
 
-/// Znovupoužitelný glassmorphism kontejner s adaptivní podporou světlého a tmavého režimu (Glassmorphism 2.0).
+/// Povrch karty: plná tmavá výplň se zaoblenými rohy, bez rozmazání a stínu.
 ///
-/// Poskytuje:
-/// - BackdropFilter (přirozený frosted glass blur)
-/// - Specular Gradient Rim Border (světelný odlesk na horní hraně)
-/// - Jemný gradient výplně simulující lom světla
-/// - Hluboké ambientní a kontaktní stíny
+/// Název zůstal z dřívějšího skleněného vzhledu, aby se nemusely měnit všechny obrazovky.
+/// [blur] a [useSpecularBorder] už nic nedělají, zůstaly kvůli starším voláním.
 class GlassContainer extends StatelessWidget {
-  /// Obsah uvnitř glass kontejneru.
+  /// Obsah karty.
   final Widget child;
 
   /// Vnitřní odsazení. Výchozí: `EdgeInsets.all(16)`.
   final EdgeInsets padding;
 
-  /// Zaoblení rohů. Výchozí: 20.
+  /// Zaoblení rohů. Výchozí: 16.
   final BorderRadius borderRadius;
 
-  /// Intenzita rozmazání pozadí. Výchozí: 16.0.
+  /// Bez účinku (dřívější rozmazání pozadí).
   final double blur;
 
-  /// Barva výplně glass kontejneru. Pokud není specifikována, adaptuje se dle tématu.
+  /// Barva výplně. Výchozí je [AppTheme.surface].
   final Color? color;
 
   /// Volitelný gradient výplně.
   final Gradient? gradient;
 
-  /// Volitelný vlastní border. Pokud není zadán a [useSpecularBorder] je true, použije se gradientní odlesk.
+  /// Volitelný okraj. Výchozí je bez okraje.
   final BoxBorder? border;
 
-  /// Zda použít moderní gradientní odlesk hrany (specular rim lighting). Výchozí: true.
+  /// Bez účinku (dřívější světelný odlesk hrany).
   final bool useSpecularBorder;
 
-  /// Tloušťka gradientního okraje. Výchozí: 1.0.
+  /// Bez účinku, zůstalo kvůli starším voláním.
   final double borderWidth;
 
-  /// Volitelné vlastní stíny.
+  /// Volitelné stíny. Výchozí je bez stínu.
   final List<BoxShadow>? shadows;
 
-  /// Volitelný margin kolem kontejneru.
+  /// Volitelný margin kolem karty.
   final EdgeInsets? margin;
 
-  /// Volitelná šířka kontejneru.
+  /// Volitelná šířka karty.
   final double? width;
 
-  /// Volitelná výška kontejneru.
+  /// Volitelná výška karty.
   final double? height;
 
   /// Ořezový režim pro vnitřní obsah.
@@ -56,12 +52,12 @@ class GlassContainer extends StatelessWidget {
     super.key,
     required this.child,
     this.padding = const EdgeInsets.all(16),
-    this.borderRadius = const BorderRadius.all(Radius.circular(20)),
-    this.blur = 16.0,
+    this.borderRadius = const BorderRadius.all(Radius.circular(16)),
+    this.blur = 0,
     this.color,
     this.gradient,
     this.border,
-    this.useSpecularBorder = true,
+    this.useSpecularBorder = false,
     this.borderWidth = 1.0,
     this.shadows,
     this.margin,
@@ -72,68 +68,21 @@ class GlassContainer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final effectiveShadows = shadows ?? AppTheme.glassShadows(context);
-    final effectiveGradient = gradient ??
-        (color == null ? AppTheme.glassFillGradient(context) : null);
-    final effectiveColor =
-        effectiveGradient == null ? (color ?? AppTheme.glassColor(context)) : null;
-
-    final hasCustomBorder = border != null;
-    final useRimGradient = useSpecularBorder && !hasCustomBorder && borderWidth > 0;
-
-    Widget glassBody = Container(
-      padding: padding,
-      decoration: BoxDecoration(
-        color: effectiveColor,
-        gradient: effectiveGradient,
-        borderRadius: borderRadius,
-        border: hasCustomBorder
-            ? border
-            : (useRimGradient
-                ? null
-                : Border.all(
-                    color: AppTheme.glassBorderColor(context),
-                    width: borderWidth,
-                  )),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: child,
-      ),
-    );
-
-    // Pokud je aktivní specular rim gradient, obalíme tělo do jemného gradientního rámečku
-    if (useRimGradient) {
-      glassBody = Container(
-        decoration: BoxDecoration(
-          borderRadius: borderRadius,
-          gradient: AppTheme.glassBorderGradient(context),
-        ),
-        padding: EdgeInsets.all(borderWidth),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(
-            (borderRadius.topLeft.x - borderWidth).clamp(0.0, 999.0),
-          ),
-          child: glassBody,
-        ),
-      );
-    }
-
     return Container(
       width: width,
       height: height,
       margin: margin,
+      clipBehavior: clipBehavior,
       decoration: BoxDecoration(
+        color: gradient == null ? (color ?? AppTheme.surface) : null,
+        gradient: gradient,
         borderRadius: borderRadius,
-        boxShadow: effectiveShadows,
+        border: border,
+        boxShadow: shadows,
       ),
-      child: ClipRRect(
-        borderRadius: borderRadius,
-        clipBehavior: clipBehavior,
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-          child: glassBody,
-        ),
+      child: Material(
+        color: Colors.transparent,
+        child: Padding(padding: padding, child: child),
       ),
     );
   }

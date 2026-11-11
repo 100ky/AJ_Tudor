@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
+import '../../../../core/app_theme.dart';
+import '../../../../core/widgets/grouped_section.dart';
+import '../../../../services/agents/voice_tutor_agent.dart';
 
-/// Režim tématu před zahájením hovoru.
+/// Druh hovoru před zahájením.
 enum TopicMode {
   /// Téma připravené z historie.
   history,
@@ -17,13 +19,13 @@ enum TopicMode {
   lesson,
 }
 
-/// Prázdný stav před hovorem: přepínač režimu tématu a obsah vybrané záložky.
+/// Výběr druhu hovoru: seznam čtyř druhů, vybraný se rozbalí s podrobnostmi.
 class SessionSetupView extends StatelessWidget {
   final TopicMode activeMode;
   final ValueChanged<TopicMode> onModeChanged;
 
-  /// Obsah aktivní záložky (s vlastním klíčem kvůli animaci přepnutí).
-  final Widget tabContent;
+  /// Podrobnosti vybraného druhu (téma, kartičky, scénáře); null = bez podrobností.
+  final Widget? tabContent;
 
   const SessionSetupView({
     super.key,
@@ -32,64 +34,106 @@ class SessionSetupView extends StatelessWidget {
     required this.tabContent,
   });
 
+  static const _modes = [
+    (TopicMode.history, 'Téma z historie', 'Navazuje na minulé hovory', Icons.lightbulb_outline_rounded),
+    (
+      TopicMode.lesson,
+      'Lekce s kartičkami',
+      'Až ${VoiceTutorAgent.lessonCardCount} výrazů z dnešních kartiček, do ${VoiceTutorAgent.lessonMinutes} min',
+      Icons.school_outlined
+    ),
+    (TopicMode.scenarios, 'Scénář', 'Role-play podle situace', Icons.theater_comedy_outlined),
+    (TopicMode.freeTalk, 'Volný pokec', 'Bez tématu, o čem chceš', Icons.chat_bubble_outline_rounded),
+  ];
+
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      children: [
+        const GroupLabel('Druh hovoru'),
+        GroupedSection(
+          dividerIndent: 54,
           children: [
-            // ── Přepínač režimu tématu ──────────────────────────────────────
-            SegmentedButton<TopicMode>(
-              style: ButtonStyle(
-                visualDensity: VisualDensity.compact,
-                textStyle: WidgetStatePropertyAll(
-                  GoogleFonts.plusJakartaSans(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+            for (final (mode, title, subtitle, icon) in _modes)
+              _ModeRow(
+                title: title,
+                subtitle: subtitle,
+                icon: icon,
+                selected: mode == activeMode,
+                onTap: () {
+                  if (mode == activeMode) return;
+                  HapticFeedback.selectionClick();
+                  onModeChanged(mode);
+                },
+                detail: mode == activeMode ? tabContent : null,
               ),
-              segments: const [
-                ButtonSegment<TopicMode>(
-                  value: TopicMode.history,
-                  icon: Icon(Icons.lightbulb_rounded, size: 14),
-                  label: Text('Historie', maxLines: 1),
-                ),
-                ButtonSegment<TopicMode>(
-                  value: TopicMode.scenarios,
-                  icon: Icon(Icons.theater_comedy_rounded, size: 14),
-                  label: Text('Scénáře', maxLines: 1),
-                ),
-                ButtonSegment<TopicMode>(
-                  value: TopicMode.freeTalk,
-                  icon: Icon(Icons.chat_bubble_outline_rounded, size: 14),
-                  label: Text('Volný', maxLines: 1),
-                ),
-                ButtonSegment<TopicMode>(
-                  value: TopicMode.lesson,
-                  icon: Icon(Icons.school_rounded, size: 14),
-                  label: Text('Lekce', maxLines: 1),
-                ),
-              ],
-              selected: {activeMode},
-              onSelectionChanged: (set) {
-                HapticFeedback.selectionClick();
-                onModeChanged(set.first);
-              },
-            ),
-
-            const SizedBox(height: 14),
-
-            // ── Obsah podle vybraného režimu ────────────────────────────────
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 280),
-              child: tabContent,
-            ),
           ],
         ),
-      ),
+      ],
+    );
+  }
+}
+
+class _ModeRow extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+  final Widget? detail;
+
+  const _ModeRow({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+    this.detail,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Semantics(
+          selected: selected,
+          inMutuallyExclusiveGroup: true,
+          button: true,
+          child: InkWell(
+            onTap: onTap,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 62),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                child: Row(
+                  children: [
+                    Icon(icon, size: 24, color: selected ? AppTheme.textPrimary : AppTheme.textSecondary),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(title, style: AppTheme.font(fontSize: 15.5, fontWeight: FontWeight.w500, color: AppTheme.textPrimary)),
+                          if (detail == null)
+                            Text(subtitle, style: AppTheme.font(fontSize: 13, color: AppTheme.textSecondary)),
+                        ],
+                      ),
+                    ),
+                    if (selected) const Icon(Icons.check_rounded, size: 22, color: AppTheme.textPrimary),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        if (detail != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(54, 0, 16, 14),
+            child: AnimatedSwitcher(duration: const Duration(milliseconds: 250), child: detail),
+          ),
+      ],
     );
   }
 }

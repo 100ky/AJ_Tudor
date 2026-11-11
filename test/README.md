@@ -13,14 +13,14 @@ test/
 │   ├── utils/
 │   │   └── logger_test.dart                      # Log lekce (bez šumu, přežije restart), mazání starých logů
 │   └── widgets/
-│       └── glass_container_test.dart             # Skleněný kontejner (blur, specular bordery, margin)
+│       └── glass_container_test.dart             # Povrch karty (plná výplň bez rozmazání, rozměry, okraj, gradient)
 ├── data/                                         # Testy datové vrstvy a repozitářů
 │   ├── database/
 │   │   └── app_database_test.dart                # Opravy při otevření DB (deduplikace kartiček po restartu)
 │   ├── models/
 │   │   ├── chat_message_test.dart                # ChatMessage a opravy pro chytré bubliny
-│   │   ├── progress_trends_test.dart             # Co se zlepšuje: chyby podle druhu, podíl řeči, gramatický cíl lekce
-│   │   ├── skill_profile_test.dart               # Profil dovedností: chyby na 100 slov, slova na repliku, průměr lekcí předtím
+│   │   ├── progress_trends_test.dart             # Co se zlepšuje: chyby podle druhu (průměr i počty), podíl řeči, gramatický cíl lekce
+│   │   ├── skill_profile_test.dart               # Profil dovedností: chyby na 100 slov, slova na chybu, historie pro graf, lepší/stejně/horší
 │   │   └── srs_scheduler_test.dart               # SRS plánovač (intervaly, mastery, meze)
 │   └── repositories/
 │       ├── session_repository_test.dart          # Lekce, transkripty, chyby, nahlášené problémy, kaskádový delete
@@ -29,11 +29,11 @@ test/
 │       └── flashcard_repository_test.dart        # Kartičky: duplicity, SRS hodnocení, statistiky, heuristiky
 ├── features/                                     # Testy obrazovek a modulů aplikace
 │   ├── skeleton/
-│   │   └── skeleton_screen_test.dart             # Hlavní shell, navigace (5 tabů), API klíč warning, téma až po načtení klíče
+│   │   └── skeleton_screen_test.dart             # Hlavní shell, navigace (5 tabů, Hovor uprostřed), API klíč warning, téma až po načtení klíče
 │   ├── conversation/
 │   │   ├── conversation_screen_test.dart         # Gramatická cvičebna a interaktivní dril
 │   │   ├── grammar_drill_controller_test.dart    # Controller drilu (výběr chyb, start, odeslání, reset)
-│   │   ├── voice_tutor_screen_test.dart          # Hlasový tutor (režimy včetně Lekce, průběh lekce, transkript, volání, audio)
+│   │   ├── voice_tutor_screen_test.dart          # Hlasový tutor (výběr druhu hovoru včetně Lekce, průběh lekce, transkript, volání, audio)
 │   │   └── widgets/
 │   │       ├── fluid_voice_wave_test.dart        # Vykreslování audio křivky (waveform, plynulé animace)
 │   │       ├── drill_input_bar_test.dart         # Bublina „tutor přemýšlí“ nepřeteče na úzkém displeji
@@ -43,12 +43,12 @@ test/
 │   │       ├── tutor_text_tokens_test.dart       # Dělení textu na slova, tučný text, které slovo je česky
 │   │       └── word_translation_sheet_test.dart  # Bottom sheet kontextového překladu a rozšiřování frází
 │   ├── history/
-│   │   ├── history_screen_test.dart              # Historie lekcí, filtry, detail lekce, mazání
+│   │   ├── history_screen_test.dart              # Historie lekcí po dnech, detail lekce, mazání podržením i z detailu
 │   │   └── session_detail_controller_test.dart   # Chat nad lekcí (kontext posledních 10 replik), nahlášení problému, mazání lekce
 │   ├── agents/
 │   │   └── agents_screen_test.dart               # Multi-agentní přehled, generování scénářů na míru
 │   ├── progress/
-│   │   └── progress_screen_test.dart             # Přehled pokroku, grafy (plynulost, chyby), co se zlepšuje, paměť, statistiky
+│   │   └── progress_screen_test.dart             # Přehled pokroku, co se zlepšuje (víc je líp), na čem pracovat, rozbalovací podrobnosti, souhrn
 │   ├── flashcards/
 │   │   ├── answer_recorder_test.dart             # Mluvená odpověď na kartičku: příliš krátká nahrávka, nahrávka bez řeči
 │   │   ├── flashcards_screen_test.dart           # Cvičebna kartiček, otočení až po odpovědi, „Nevím“, SRS hodnocení, TTS, rub s vysvětlením
@@ -58,7 +58,7 @@ test/
 │   │   ├── card_explanation_resolver_test.dart   # Vysvětlení výrazu na rubu (zástupné texty, příprava, selhání)
 │   │   └── sentence_highlight_test.dart          # Podtržení slov z kartičky v původní větě
 │   └── settings/
-│       ├── settings_screen_test.dart             # Nastavení API klíče, motivy, připomínky, chytré bubliny
+│       ├── settings_screen_test.dart             # Nastavení API klíče, připomínky, chytré bubliny (vzhled je jen tmavý)
 │       └── settings_screen_layout_test.dart      # Responzivita a prvky v nastavení
 ├── tool/
 │   └── prompt_eval_checks_test.dart             # Automatické kontroly testu promptu tutora (otázky, opravy, odbočení, opakování)
@@ -223,8 +223,7 @@ void main() {
         sessionRepositoryProvider.overrideWithValue(repo),
       ],
       child: MaterialApp(
-        theme: AppTheme.lightTheme,
-        darkTheme: AppTheme.darkTheme,
+        theme: AppTheme.darkTheme,
         home: child,
       ),
     );

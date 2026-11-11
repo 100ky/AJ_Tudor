@@ -66,16 +66,9 @@ void main() {
         databaseProvider.overrideWithValue(db),
         sessionRepositoryProvider.overrideWithValue(repo),
       ],
-      child: Consumer(
-        builder: (context, ref, child) {
-          final mode = ref.watch(themeModeProvider);
-          return MaterialApp(
-            theme: AppTheme.lightTheme,
-            darkTheme: AppTheme.darkTheme,
-            themeMode: mode,
-            home: const SettingsScreen(),
-          );
-        },
+      child: MaterialApp(
+        theme: AppTheme.darkTheme,
+        home: const SettingsScreen(),
       ),
     );
   }
@@ -91,19 +84,15 @@ void main() {
       expect(find.text('Nastavení'), findsOneWidget);
 
       // Section labels
-      expect(find.text('KONFIGURACE UMĚLÉ INTELIGENCE'), findsOneWidget);
-      expect(find.text('VZHLED APLIKACE'), findsOneWidget);
-      expect(find.text('UPOZORNĚNÍ A PŘIPOMÍNKY'), findsOneWidget);
-      expect(find.text('HLASOVÉ A KONVERZAČNÍ NASTAVENÍ'), findsOneWidget);
+      expect(find.text('Konfigurace umělé inteligence'), findsOneWidget);
+      // Aplikace je jen tmavá, volba vzhledu není
+      expect(find.text('Vzhled aplikace'), findsNothing);
+      expect(find.text('Upozornění a připomínky'), findsOneWidget);
+      expect(find.text('Hlasové a konverzační nastavení'), findsOneWidget);
 
       // Initial API key state (not set)
       expect(find.text('Není nastaven žádný klíč. Aplikace nebude fungovat.'), findsOneWidget);
       expect(find.text('Vložit API klíč'), findsOneWidget);
-
-      // Appearance segment buttons
-      expect(find.text('Světlý'), findsOneWidget);
-      expect(find.text('Tmavý'), findsOneWidget);
-      expect(find.text('Systém'), findsOneWidget);
 
       // Reminders switch
       expect(find.text('Denní připomínky'), findsOneWidget);
@@ -141,33 +130,6 @@ void main() {
       expect(secureMap['gemini_api_key'], 'AIzaSyTestKeyValid123');
       expect(find.text('Klíč je uložen a připraven k použití.'), findsOneWidget);
       expect(find.text('Změnit API klíč'), findsOneWidget);
-
-      await drainTimers(tester);
-    });
-
-    testWidgets('switches theme mode between light, dark and system',
-        (WidgetTester tester) async {
-      configureViewport(tester);
-      await tester.pumpWidget(buildTestWidget());
-      await tester.pumpAndSettle();
-
-      // Switch to Dark mode
-      await tester.tap(find.text('Tmavý'));
-      await tester.pumpAndSettle();
-
-      expect(prefs.getString('app_theme_mode'), 'dark');
-
-      // Switch to Light mode
-      await tester.tap(find.text('Světlý'));
-      await tester.pumpAndSettle();
-
-      expect(prefs.getString('app_theme_mode'), 'light');
-
-      // Switch to System mode
-      await tester.tap(find.text('Systém'));
-      await tester.pumpAndSettle();
-
-      expect(prefs.getString('app_theme_mode'), 'system');
 
       await drainTimers(tester);
     });

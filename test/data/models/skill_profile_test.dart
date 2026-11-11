@@ -65,4 +65,40 @@ void main() {
     );
     expect(profile.isEmpty, isTrue);
   });
+
+  test('history for the chart goes from the oldest lesson and changes ignore noise', () {
+    final profile = SkillProfile.from(
+      [
+        _session(1, student: 100, replies: 20),
+        _session(2, student: 200, replies: 20),
+        _session(3, student: 200, replies: 25),
+      ],
+      [
+        _error(1, 1, ErrorCategory.tense),
+        _error(2, 1, ErrorCategory.tense),
+        _error(3, 2, ErrorCategory.preposition),
+        _error(4, 3, ErrorCategory.verbForm),
+      ],
+    );
+
+    expect(profile.history.length, 3);
+    expect(profile.history.first.grammarPer100, 2.0); // lekce 1
+    expect(profile.history.last.grammarPer100, 0.5); // poslední lekce
+    // Na 1 chybu v gramatice v poslední lekci připadá 200 slov
+    expect(profile.last!.wordsPerGrammarError, 200);
+    // Žádné české slovo: počet slov na chybu není
+    expect(profile.last!.wordsPerVocabularyError, isNull);
+    // 0,5 proti průměru 1,25 je rozdíl 0,75, tedy zlepšení
+    expect(profile.grammarChange, SkillChange.better);
+    expect(profile.vocabularyChange, SkillChange.same);
+    // 8 slov na odpověď proti 7,5 je pod hranicí 1 slova
+    expect(profile.repliesChange, SkillChange.same);
+  });
+
+  test('a single lesson has nothing to compare with', () {
+    final profile = SkillProfile.from([_session(1, student: 100, replies: 10)], const []);
+    expect(profile.history.length, 1);
+    expect(profile.grammarChange, isNull);
+    expect(profile.shareChange, isNull);
+  });
 }

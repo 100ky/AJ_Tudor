@@ -28,7 +28,7 @@ class PreparedTopicCard extends ConsumerWidget {
             Expanded(
               child: Text(
                 'Tudor připravuje nové originální téma z historie...',
-                style: GoogleFonts.plusJakartaSans(
+                style: GoogleFonts.hankenGrotesk(
                   fontSize: 13,
                   color: AppTheme.mutedTextColor(context),
                 ),
@@ -51,7 +51,7 @@ class PreparedTopicCard extends ConsumerWidget {
             Expanded(
               child: Text(
                 'Zatím není připraveno žádné téma.',
-                style: GoogleFonts.plusJakartaSans(
+                style: GoogleFonts.hankenGrotesk(
                   fontSize: 13,
                   color: AppTheme.mutedTextColor(context),
                 ),
@@ -101,18 +101,18 @@ class PreparedTopicCard extends ConsumerWidget {
                       Padding(
                         padding: const EdgeInsets.only(bottom: 2),
                         child: Text(
-                          'DIVOKÁ KARTA (NÁHODNÉ TÉMA)',
-                          style: GoogleFonts.plusJakartaSans(
+                          'Náhodné téma',
+                          style: GoogleFonts.hankenGrotesk(
                             fontSize: 10,
                             fontWeight: FontWeight.w800,
-                            letterSpacing: 0.6,
+                            letterSpacing: 0,
                             color: AppTheme.accent,
                           ),
                         ),
                       ),
                     Text(
                       topic.title,
-                      style: GoogleFonts.plusJakartaSans(
+                      style: GoogleFonts.hankenGrotesk(
                         fontWeight: FontWeight.w700,
                         fontSize: 15,
                         color: AppTheme.textColor(context),
@@ -148,7 +148,7 @@ class PreparedTopicCard extends ConsumerWidget {
                 Expanded(
                   child: Text(
                     topic.openerEn,
-                    style: GoogleFonts.plusJakartaSans(
+                    style: GoogleFonts.hankenGrotesk(
                       fontSize: 13,
                       fontStyle: FontStyle.italic,
                       color: AppTheme.textColor(context),
@@ -163,7 +163,7 @@ class PreparedTopicCard extends ConsumerWidget {
             const SizedBox(height: 8),
             Text(
               topic.rationale,
-              style: GoogleFonts.plusJakartaSans(
+              style: GoogleFonts.hankenGrotesk(
                 fontSize: 11.5,
                 color: AppTheme.mutedTextColor(context),
               ),

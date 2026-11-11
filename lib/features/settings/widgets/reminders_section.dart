@@ -19,11 +19,11 @@ class RemindersSection extends ConsumerWidget {
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             title: Text('Denní připomínky',
-                style: GoogleFonts.plusJakartaSans(
+                style: GoogleFonts.hankenGrotesk(
                     fontWeight: FontWeight.w500,
                     color: AppTheme.textColor(context))),
             subtitle: Text('AI se připomene, když zapomenete trénovat.',
-                style: GoogleFonts.plusJakartaSans(
+                style: GoogleFonts.hankenGrotesk(
                     fontSize: 13, color: AppTheme.mutedTextColor(context))),
             value: remindersEnabled,
             onChanged: (value) {
@@ -35,11 +35,11 @@ class RemindersSection extends ConsumerWidget {
             ListTile(
               contentPadding: EdgeInsets.zero,
               title: Text('Čas upozornění',
-                  style: GoogleFonts.plusJakartaSans(
+                  style: GoogleFonts.hankenGrotesk(
                       color: AppTheme.textColor(context))),
               trailing: Text(
                 ref.watch(reminderTimeProvider),
-                style: GoogleFonts.plusJakartaSans(
+                style: GoogleFonts.hankenGrotesk(
                     fontWeight: FontWeight.w700,
                     fontSize: 16,
                     color: AppTheme.primary),
@@ -50,11 +50,11 @@ class RemindersSection extends ConsumerWidget {
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: Text('Otravný režim 😈',
-                  style: GoogleFonts.plusJakartaSans(
+                  style: GoogleFonts.hankenGrotesk(
                       fontWeight: FontWeight.w500,
                       color: AppTheme.textColor(context))),
               subtitle: Text('Více upozornění během dne. Nenechá vás v klidu.',
-                  style: GoogleFonts.plusJakartaSans(
+                  style: GoogleFonts.hankenGrotesk(
                       fontSize: 13, color: AppTheme.mutedTextColor(context))),
               value: ref.watch(annoyingModeProvider),
               onChanged: (value) {

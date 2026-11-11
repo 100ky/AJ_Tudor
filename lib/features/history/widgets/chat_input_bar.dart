@@ -52,13 +52,13 @@ class ChatInputBar extends StatelessWidget {
                 child: TextField(
                   controller: controller,
                   textCapitalization: TextCapitalization.sentences,
-                  style: GoogleFonts.plusJakartaSans(
+                  style: GoogleFonts.hankenGrotesk(
                     fontSize: 14,
                     color: AppTheme.textColor(context),
                   ),
                   decoration: InputDecoration(
                     hintText: 'Napiš Tudorovi zprávu...',
-                    hintStyle: GoogleFonts.plusJakartaSans(
+                    hintStyle: GoogleFonts.hankenGrotesk(
                       fontSize: 13,
                       color: AppTheme.mutedTextColor(context),
                     ),
@@ -75,16 +75,7 @@ class ChatInputBar extends StatelessWidget {
             Container(
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  colors: [AppTheme.primary, AppTheme.primaryDark],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppTheme.primary.withValues(alpha: 0.35),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
+                color: AppTheme.textPrimary,
               ),
               child: IconButton(
                 icon: isSending
@@ -93,10 +84,10 @@ class ChatInputBar extends StatelessWidget {
                         height: 18,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: Colors.white,
+                          color: AppTheme.background,
                         ),
                       )
-                    : const Icon(Icons.send_rounded, color: Colors.white, size: 18),
+                    : const Icon(Icons.send_rounded, color: AppTheme.background, size: 18),
                 onPressed: isSending ? null : onSend,
                 tooltip: 'Odeslat zprávu',
               ),

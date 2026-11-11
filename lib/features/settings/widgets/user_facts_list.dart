@@ -31,7 +31,7 @@ class UserFactsList extends ConsumerWidget {
                 style: TextButton.styleFrom(
                   visualDensity: VisualDensity.compact,
                   foregroundColor: AppTheme.primary,
-                  textStyle: GoogleFonts.plusJakartaSans(
+                  textStyle: GoogleFonts.hankenGrotesk(
                     fontWeight: FontWeight.w600,
                     fontSize: 12.5,
                   ),
@@ -47,7 +47,7 @@ class UserFactsList extends ConsumerWidget {
               child: Text(
                 'Zatím zde nejsou žádná fakta.\nTudor si automaticky ukládá informace z konverzací, nebo je můžete přidat ručně tlačítkem výše.',
                 textAlign: TextAlign.center,
-                style: GoogleFonts.plusJakartaSans(
+                style: GoogleFonts.hankenGrotesk(
                   color: AppTheme.mutedTextColor(context),
                   fontSize: 13,
                 ),
@@ -69,7 +69,7 @@ class UserFactsList extends ConsumerWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
           'Přidat informaci o mně',
-          style: GoogleFonts.plusJakartaSans(
+          style: GoogleFonts.hankenGrotesk(
             fontWeight: FontWeight.w600,
             fontSize: 17,
             color: AppTheme.textColor(context),
@@ -81,7 +81,7 @@ class UserFactsList extends ConsumerWidget {
           children: [
             Text(
               'Zadej fakt, který by si měl Tudor pamatovat (např. o zálibách, mazlíčcích, práci nebo životě):',
-              style: GoogleFonts.plusJakartaSans(
+              style: GoogleFonts.hankenGrotesk(
                 fontSize: 13,
                 color: AppTheme.mutedTextColor(context),
               ),
@@ -93,7 +93,7 @@ class UserFactsList extends ConsumerWidget {
               maxLines: 2,
               decoration: InputDecoration(
                 hintText: 'Např. Mám psa labradora jménem Rex',
-                hintStyle: GoogleFonts.plusJakartaSans(
+                hintStyle: GoogleFonts.hankenGrotesk(
                   fontSize: 13,
                   color: AppTheme.onSurfaceMuted,
                 ),
@@ -104,7 +104,7 @@ class UserFactsList extends ConsumerWidget {
                   borderSide: BorderSide(color: AppTheme.glassBorderColor(context)),
                 ),
               ),
-              style: GoogleFonts.plusJakartaSans(
+              style: GoogleFonts.hankenGrotesk(
                 fontSize: 14,
                 color: AppTheme.textColor(context),
               ),
@@ -116,7 +116,7 @@ class UserFactsList extends ConsumerWidget {
             onPressed: () => Navigator.pop(dialogCtx),
             child: Text(
               'Zrušit',
-              style: GoogleFonts.plusJakartaSans(color: AppTheme.mutedTextColor(context)),
+              style: GoogleFonts.hankenGrotesk(color: AppTheme.mutedTextColor(context)),
             ),
           ),
           FilledButton(
@@ -138,7 +138,7 @@ class UserFactsList extends ConsumerWidget {
             ),
             child: Text(
               'Uložit',
-              style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600),
+              style: GoogleFonts.hankenGrotesk(fontWeight: FontWeight.w600),
             ),
           ),
         ],
@@ -176,7 +176,7 @@ class _FactTile extends ConsumerWidget {
           Expanded(
             child: Text(
               fact,
-              style: GoogleFonts.plusJakartaSans(
+              style: GoogleFonts.hankenGrotesk(
                 fontSize: 13.5,
                 fontWeight: FontWeight.w500,
                 color: AppTheme.textColor(context),

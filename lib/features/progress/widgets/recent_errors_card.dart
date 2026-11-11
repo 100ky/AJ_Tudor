@@ -25,8 +25,6 @@ class RecentErrorsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CollapsibleCard(
-      icon: Icons.warning_amber_rounded,
-      color: AppTheme.error,
       title: 'Nedávné chyby',
       trailing: [
         if (errors.isNotEmpty) ...[
@@ -38,23 +36,22 @@ class RecentErrorsCard extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
               child: Text(
-                'Historie →',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 12,
+                'Historie',
+                style: GoogleFonts.hankenGrotesk(
+                  fontSize: 13.5,
                   fontWeight: FontWeight.w600,
-                  color: AppTheme.primary,
+                  color: AppTheme.textPrimary,
                 ),
               ),
             ),
           ),
-          const SizedBox(width: 4),
+          const SizedBox(width: 10),
         ],
-        CardBadge('${errors.length}', color: AppTheme.error),
+        CardBadge('${errors.length}'),
       ],
       expanded: expanded,
       onToggle: onToggle,
       children: [
-        const SizedBox(height: 14),
         if (errors.isEmpty)
           const EmptyStateCard('Zatím nemáš žádné zaznamenané chyby. Skvělá práce!')
         else
@@ -75,14 +72,10 @@ class _ErrorTile extends StatelessWidget {
     final icon = AppTheme.errorTypeIcon(error.errorType);
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: AppTheme.glassColor(context),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppTheme.glassBorderColor(context),
-        ),
-        boxShadow: AppTheme.glassShadowsLight(context),
+        color: AppTheme.surfaceRaised,
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Material(
         color: Colors.transparent,
@@ -91,17 +84,10 @@ class _ErrorTile extends StatelessWidget {
           child: ExpansionTile(
             iconColor: color,
             collapsedIconColor: AppTheme.mutedTextColor(context),
-            leading: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon, color: color, size: 20),
-            ),
+            leading: Icon(icon, color: color, size: 20),
             title: Text(
               error.userSaid,
-              style: GoogleFonts.plusJakartaSans(
+              style: GoogleFonts.hankenGrotesk(
                 decoration: TextDecoration.lineThrough,
                 color: AppTheme.error,
                 fontSize: 14,
@@ -109,7 +95,7 @@ class _ErrorTile extends StatelessWidget {
             ),
             subtitle: Text(
               error.correctForm,
-              style: GoogleFonts.plusJakartaSans(
+              style: GoogleFonts.hankenGrotesk(
                 color: AppTheme.success,
                 fontWeight: FontWeight.w600,
                 fontSize: 15,
@@ -121,7 +107,7 @@ class _ErrorTile extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: AppTheme.backgroundSecondaryColor(context),
+                    color: AppTheme.surface,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
@@ -132,7 +118,7 @@ class _ErrorTile extends StatelessWidget {
                       Expanded(
                         child: Text(
                           error.explanation,
-                          style: GoogleFonts.plusJakartaSans(
+                          style: GoogleFonts.hankenGrotesk(
                             fontSize: 13,
                             color: AppTheme.surfaceTextColor(context),
                             height: 1.4,

@@ -1,175 +1,83 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../../core/app_theme.dart';
-import '../../../core/widgets/glass_container.dart';
+import '../../../core/utils/czech_plural.dart';
 import '../../../data/data_providers.dart';
 import '../../../data/database/app_database.dart';
+import '../../../data/models/progress_trends.dart';
 import 'delete_session_dialog.dart';
+import 'session_detail_header.dart';
 import 'session_detail_sheet.dart';
 
-/// Karta jedné lekce v historii (datum, délka, plynulost, počet chyb).
-/// Klepnutí otevře detail s přepisem.
+/// Řádek jedné lekce v historii: čas, téma a délka, chyby, plynulost.
+/// Klepnutí otevře detail s přepisem, podržení nabídne smazání.
 class SessionCard extends ConsumerWidget {
   final Session session;
 
   const SessionCard({super.key, required this.session});
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final dateFormat = DateFormat('d. MMMM yyyy, HH:mm', 'cs');
-    final dateStr = dateFormat.format(session.startedAt);
-
-    String? durationStr;
+  /// Délka, chyby a plynulost; u krátké nebo nerozebrané lekce proč se nepočítá.
+  static ({String text, bool warning}) meta(Session session) {
+    final parts = <String>[];
     if (session.endedAt != null) {
       final diff = session.endedAt!.difference(session.startedAt);
-      final minutes = diff.inMinutes;
-      final seconds = diff.inSeconds.remainder(60);
-      durationStr = minutes > 0 ? '$minutes min' : '$seconds s';
+      parts.add(diff.inMinutes > 0 ? '${diff.inMinutes} min' : '${diff.inSeconds.remainder(60)} s');
     }
+    final tooShort = ProgressTrends.isCategorized(session) && session.studentWords! < ProgressTrends.minStudentWords;
+    if (tooShort) return (text: [...parts, 'do pokroku se nepočítá'].join(' · '), warning: true);
+    if (!SessionDetailHeader.isAnalyzed(session)) return (text: [...parts, 'rozbor zatím není'].join(' · '), warning: true);
 
-    return GlassContainer(
-      margin: const EdgeInsets.only(bottom: 14),
-      child: InkWell(
-        onTap: () => _showSessionDetail(context, ref),
-        borderRadius: BorderRadius.circular(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          dateStr,
-                          style: GoogleFonts.plusJakartaSans(
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.primary,
-                            fontSize: 13,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      if (durationStr != null) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: AppTheme.primary.withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.schedule_rounded,
-                                  size: 11,
-                                  color: AppTheme.mutedTextColor(context)),
-                              const SizedBox(width: 3),
-                              Text(
-                                durationStr,
-                                style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 11,
-                                  color: AppTheme.mutedTextColor(context),
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
+    final errors = session.totalErrors;
+    parts.add(errors == 0 ? 'bez chyb' : '$errors ${czechPlural(errors, 'chyba', 'chyby', 'chyb')}');
+    if (session.fluencyScore != null) parts.add('plynulost ${(session.fluencyScore! * 100).round()} %');
+    return (text: parts.join(' · '), warning: false);
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final info = meta(session);
+    return InkWell(
+      onTap: () => _showSessionDetail(context, ref),
+      onLongPress: () => confirmAndDeleteSession(context, ref, session),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 66),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 46,
+                child: Text(
+                  DateFormat('H:mm', 'cs').format(session.startedAt),
+                  style: AppTheme.font(fontSize: 13.5, color: AppTheme.textSecondary, fontFeatures: AppTheme.tabularFigures),
                 ),
-                if (session.fluencyScore != null) ...[
-                  const SizedBox(width: 8),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          AppTheme.success.withValues(alpha: 0.12),
-                          AppTheme.successLight.withValues(alpha: 0.06),
-                        ],
-                      ),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                          color: AppTheme.success.withValues(alpha: 0.3)),
-                    ),
-                    child: Text(
-                      '${(session.fluencyScore! * 100).toInt()}% plynulost',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 12,
-                        color: AppTheme.success,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ],
-                const SizedBox(width: 4),
-                IconButton(
-                  icon: Icon(
-                    Icons.delete_outline,
-                    size: 18,
-                    color: AppTheme.mutedTextColor(context),
-                  ),
-                  tooltip: 'Smazat lekci',
-                  visualDensity: VisualDensity.compact,
-                  padding: const EdgeInsets.all(4),
-                  constraints: const BoxConstraints(),
-                  onPressed: () => confirmAndDeleteSession(context, ref, session),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              session.topicSummary ?? 'Lekce angličtiny',
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: AppTheme.textColor(context),
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                if (session.totalErrors == 0) ...[
-                  Icon(Icons.check_circle_outline_rounded,
-                      size: 15, color: AppTheme.success),
-                  const SizedBox(width: 4),
-                  Text('Bez chyb 🎉',
-                      style: GoogleFonts.plusJakartaSans(
-                          color: AppTheme.success,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13)),
-                ] else ...[
-                  Icon(Icons.error_outline, size: 15, color: AppTheme.error),
-                  const SizedBox(width: 4),
-                  Text('${session.totalErrors} chyb',
-                      style: GoogleFonts.plusJakartaSans(
-                          color: AppTheme.mutedTextColor(context),
-                          fontSize: 13)),
-                ],
-                const Spacer(),
-                Text(
-                  'Zobrazit přepis',
-                  style: GoogleFonts.plusJakartaSans(
-                    color: AppTheme.primary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      session.topicSummary ?? 'Lekce angličtiny',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTheme.font(fontSize: 15.5, fontWeight: FontWeight.w500, color: AppTheme.textPrimary),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      info.text,
+                      style: AppTheme.font(
+                        fontSize: 13,
+                        color: info.warning ? AppTheme.warning : AppTheme.textSecondary,
+                        fontFeatures: AppTheme.tabularFigures,
+                      ),
+                    ),
+                  ],
                 ),
-                Icon(Icons.chevron_right, size: 16, color: AppTheme.primary),
-              ],
-            ),
-          ],
+              ),
+              const Icon(Icons.chevron_right_rounded, size: 22, color: AppTheme.textTertiary),
+            ],
+          ),
         ),
       ),
     );

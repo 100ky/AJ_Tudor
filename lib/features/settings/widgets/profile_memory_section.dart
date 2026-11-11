@@ -23,7 +23,7 @@ class ProfileMemorySection extends ConsumerWidget {
         if (profile == null) {
           return GlassContainer(
             child: Text('Zatím neproběhla žádná lekce.',
-                style: GoogleFonts.plusJakartaSans(
+                style: GoogleFonts.hankenGrotesk(
                     color: AppTheme.mutedTextColor(context))),
           );
         }

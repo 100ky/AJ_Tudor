@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/app_theme.dart';
+import '../../../core/utils/czech_plural.dart';
 import '../../../data/models/flashcard_stats.dart';
 import 'collapsible_card.dart';
 
@@ -25,16 +26,13 @@ class MasteryOverviewCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CollapsibleCard(
-      icon: Icons.style_rounded,
-      color: AppTheme.primary,
-      title: 'Stav cvičebny & kartiček',
+      title: 'Kartičky',
       subtitle: stats.totalCards > 0
-          ? '${stats.masteredCards} z ${stats.totalCards} kartiček zvládnuto'
-          : 'Zatím žádné vytvořené kartičky',
+          ? '${stats.masteredCards} z ${stats.totalCards} umíš'
+              '${stats.dueCards > 0 ? ', ${stats.dueCards} dnes čeká' : ''}'
+          : 'Zatím žádné kartičky',
       trailing: [
-        if (stats.totalCards > 0)
-          CardBadge('${stats.masteredPercentage}% hotovo',
-              color: AppTheme.success, outlined: true),
+        if (stats.totalCards > 0) CardBadge('${stats.masteredPercentage} %'),
       ],
       expanded: expanded,
       onToggle: onToggle,
@@ -91,18 +89,14 @@ class MasteryOverviewCard extends StatelessWidget {
               onOpenFlashcards();
             },
             style: FilledButton.styleFrom(
-              backgroundColor: AppTheme.primary,
               padding: const EdgeInsets.symmetric(vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
             ),
-            icon: const Icon(Icons.fitness_center_rounded, size: 16),
+            icon: const Icon(Icons.style_rounded, size: 18),
             label: Text(
               stats.dueCards > 0
-                  ? 'Procvičit kartičky (${stats.dueCards} dnes čeká) →'
-                  : 'Otevřít Cvičebnu →',
-              style: GoogleFonts.plusJakartaSans(
+                  ? 'Procvičit ${stats.dueCards} ${czechPlural(stats.dueCards, 'kartičku', 'kartičky', 'kartiček')}'
+                  : 'Otevřít kartičky',
+              style: GoogleFonts.hankenGrotesk(
                 fontWeight: FontWeight.w600,
                 fontSize: 13,
               ),
@@ -133,7 +127,7 @@ class _MiniLegend extends StatelessWidget {
         const SizedBox(width: 4),
         Text(
           label,
-          style: GoogleFonts.plusJakartaSans(
+          style: GoogleFonts.hankenGrotesk(
             fontSize: 11,
             color: AppTheme.mutedTextColor(context),
             fontWeight: FontWeight.w500,

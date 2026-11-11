@@ -8,6 +8,7 @@ import '../../data/data_providers.dart';
 import '../../data/database/app_database.dart';
 import '../../data/models/chat_message.dart';
 import '../../services/agents/scenario_planner_agent.dart';
+import '../../services/agents/topic_preparation_agent.dart';
 import '../../services/agents/voice_director_agent.dart';
 import '../../services/agents/voice_tutor_agent.dart';
 import '../../services/audio/audio_session_controller.dart';
@@ -97,7 +98,7 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
                 Expanded(
                   child: Text(
                     'Scénář "${scenario.title}" byl vytvořen a aktivován! 🎭',
-                    style: GoogleFonts.plusJakartaSans(
+                    style: GoogleFonts.hankenGrotesk(
                         fontWeight: FontWeight.w600),
                   ),
                 ),
@@ -149,12 +150,6 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
         setState(() => _isGeneratingScenarios = false);
       }
     }
-  }
-
-  /// Zruší vybraný scénář / volný režim a vrátí se k tématu z historie.
-  void _clearScenario() {
-    _tutor.selectScenario(0, '');
-    setState(() => _selectedMode = TopicMode.history);
   }
 
   void _onModeChanged(TopicMode mode, VoiceTutorState tutorState) {
@@ -290,7 +285,7 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
               waveColor: waveColor,
               activeVolumeStream: activeVolumeStream,
               isIdle: isIdle,
-              onClearScenario: _clearScenario,
+              title: _callTitle(tutorState),
               onInterruptTutor: _interruptTutor,
             ),
 
@@ -363,6 +358,21 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
     );
   }
 
+  /// Název probíhajícího hovoru v hlavičce: lekce, volný pokec, scénář nebo téma z historie.
+  String _callTitle(VoiceTutorState state) {
+    if (state.lessonMode) return 'Lekce s kartičkami';
+    if (state.scenarioContext == '__free_talk__') return 'Volný pokec';
+    final scenarioId = state.selectedScenarioId;
+    if (scenarioId != null && scenarioId > 0) {
+      final scenarios = ref.watch(availableScenariosProvider).value ?? const <Scenario>[];
+      for (final s in scenarios) {
+        if (s.id == scenarioId) return s.title;
+      }
+      return 'Scénář';
+    }
+    return ref.watch(topicPreparationAgentProvider).topic?.title ?? 'Téma z historie';
+  }
+
   // ── Prázdný stav před zahájením konverzace (Výběr tématu a scénářů) ───────
   Widget _buildSessionSetup(VoiceTutorState tutorState) {
     final activeMode = _activeMode(tutorState);
@@ -390,15 +400,9 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
           onCreateCustomScenario: _createCustomScenario,
         );
       case TopicMode.freeTalk:
-        tabContent = FreeTalkTab(
-          key: const ValueKey('free_talk_card'),
-          onCancel: _clearScenario,
-        );
+        tabContent = const FreeTalkTab(key: ValueKey('free_talk_card'));
       case TopicMode.lesson:
-        tabContent = LessonTab(
-          key: const ValueKey('lesson_card'),
-          onCancel: _clearScenario,
-        );
+        tabContent = const LessonTab(key: ValueKey('lesson_card'));
     }
 
     return SessionSetupView(
@@ -429,12 +433,7 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
       blendMode: BlendMode.dstIn,
       child: ListView.builder(
         controller: _scrollController,
-        padding: EdgeInsets.fromLTRB(
-          16,
-          isActive ? 12 : 24,
-          16,
-          isActive ? 100 : 16,
-        ),
+        padding: EdgeInsets.fromLTRB(16, isActive ? 12 : 24, 16, 16),
         itemCount: itemCount,
         itemBuilder: (context, index) {
           // Live transkript na konci listu

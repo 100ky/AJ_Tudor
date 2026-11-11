@@ -22,7 +22,18 @@ class SkillSnapshot {
     required this.share,
     this.wordsPerReply,
   });
+
+  /// Kolik slov student průměrně řekne na jednu chybu v gramatice (víc je líp);
+  /// null, když v gramatice chybu neudělal.
+  double? get wordsPerGrammarError => grammarPer100 > 0 ? 100 / grammarPer100 : null;
+
+  /// Kolik slov připadá na jedno české nebo špatně zvolené slovo (víc je líp);
+  /// null, když takové slovo neřekl.
+  double? get wordsPerVocabularyError => vocabularyPer100 > 0 ? 100 / vocabularyPer100 : null;
 }
+
+/// Jak se ukazatel poslední lekce liší od průměru lekcí předtím.
+enum SkillChange { better, same, worse }
 
 /// Profil dovedností: poslední lekce proti průměru lekcí předtím.
 ///
@@ -31,7 +42,7 @@ class SkillSnapshot {
 /// má student repliky a kolik mluví.
 class SkillProfile {
   /// Lekce s méně slovy studenta se nepočítá, ukazatele by byly náhodné.
-  static const int minStudentWords = 50;
+  static const int minStudentWords = ProgressTrends.minStudentWords;
 
   /// Z kolika lekcí před poslední se počítá průměr.
   static const int previousLessons = 4;
@@ -51,7 +62,10 @@ class SkillProfile {
   /// Průměr až [previousLessons] lekcí před ní; null, když ještě nejsou.
   final SkillSnapshot? previous;
 
-  const SkillProfile({this.lastLesson, this.last, this.previous});
+  /// Poslední lekce a až [previousLessons] lekcí před ní, od nejstarší (pro graf vývoje).
+  final List<SkillSnapshot> history;
+
+  const SkillProfile({this.lastLesson, this.last, this.previous, this.history = const []});
 
   bool get isEmpty => last == null;
 
@@ -69,7 +83,30 @@ class SkillProfile {
       lastLesson: lessons.first,
       last: snapshots.first,
       previous: earlier.isEmpty ? null : _average(earlier),
+      history: snapshots.reversed.toList(),
     );
+  }
+
+  /// Změna chyb v gramatice (méně je líp, rozdíl do 0,5 na 100 slov je šum).
+  SkillChange? get grammarChange =>
+      _change(last?.grammarPer100, previous?.grammarPer100, lowerIsBetter: true, noise: 0.5);
+
+  /// Změna českých a špatně zvolených slov (méně je líp, rozdíl do 0,5 na 100 slov je šum).
+  SkillChange? get vocabularyChange =>
+      _change(last?.vocabularyPer100, previous?.vocabularyPer100, lowerIsBetter: true, noise: 0.5);
+
+  /// Změna délky odpovědí (víc je líp, rozdíl do 1 slova je šum).
+  SkillChange? get repliesChange =>
+      _change(last?.wordsPerReply, previous?.wordsPerReply, lowerIsBetter: false, noise: 1);
+
+  /// Změna podílu řeči studenta (víc je líp, rozdíl do 5 procentních bodů je šum).
+  SkillChange? get shareChange => _change(last?.share, previous?.share, lowerIsBetter: false, noise: 0.05);
+
+  /// Null, když není s čím srovnat.
+  static SkillChange? _change(double? now, double? before, {required bool lowerIsBetter, required double noise}) {
+    if (now == null || before == null) return null;
+    if ((now - before).abs() <= noise) return SkillChange.same;
+    return (lowerIsBetter ? now < before : now > before) ? SkillChange.better : SkillChange.worse;
   }
 
   static SkillSnapshot _snapshot(Session session, List<ErrorLog> errors) {

@@ -18,11 +18,11 @@ class AgentsLinkTile extends StatelessWidget {
         leading: SettingsIcon(Icons.smart_toy_rounded, AppTheme.primary,
             backgroundAlpha: 0.1),
         title: Text('Správa a přehled AI agentů',
-            style: GoogleFonts.plusJakartaSans(
+            style: GoogleFonts.hankenGrotesk(
                 fontWeight: FontWeight.w600,
                 color: AppTheme.textColor(context))),
         subtitle: Text('Tutor, Analytik skóre a Plánovač témat na míru',
-            style: GoogleFonts.plusJakartaSans(
+            style: GoogleFonts.hankenGrotesk(
                 fontSize: 12, color: AppTheme.mutedTextColor(context))),
         trailing: const Icon(Icons.chevron_right_rounded, color: AppTheme.primary),
         onTap: () {
@@ -50,10 +50,10 @@ class AppInfoCard extends StatelessWidget {
           Icon(Icons.info_outline, color: AppTheme.mutedTextColor(context), size: 20),
           const SizedBox(width: 12),
           Text('Verze',
-              style: GoogleFonts.plusJakartaSans(color: AppTheme.textColor(context))),
+              style: GoogleFonts.hankenGrotesk(color: AppTheme.textColor(context))),
           const Spacer(),
           Text('0.1.0 - Dev Preview',
-              style: GoogleFonts.plusJakartaSans(
+              style: GoogleFonts.hankenGrotesk(
                   color: AppTheme.mutedTextColor(context), fontSize: 13)),
         ],
       ),

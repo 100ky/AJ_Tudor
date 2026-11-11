@@ -12,19 +12,7 @@ class AgentsIntroCard extends StatelessWidget {
     return GlassContainer(
       child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  AppTheme.primary.withValues(alpha: 0.15),
-                  AppTheme.speaking.withValues(alpha: 0.10),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(Icons.diversity_3, size: 28, color: AppTheme.primary),
-          ),
+          const Icon(Icons.diversity_3, size: 28, color: AppTheme.textSecondary),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -32,16 +20,16 @@ class AgentsIntroCard extends StatelessWidget {
               children: [
                 Text(
                   'Multi-agentní systém AJ Tudor',
-                  style: GoogleFonts.plusJakartaSans(
+                  style: GoogleFonts.hankenGrotesk(
                     fontSize: 15,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                     color: AppTheme.textColor(context),
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   'Tři specializovaní AI agenti spolupracují na tvé výuce angličtiny.',
-                  style: GoogleFonts.plusJakartaSans(
+                  style: GoogleFonts.hankenGrotesk(
                     fontSize: 12,
                     color: AppTheme.mutedTextColor(context),
                   ),

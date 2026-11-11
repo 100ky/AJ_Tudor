@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:aj_tudor/features/skeleton/skeleton_screen.dart';
+import 'package:aj_tudor/features/skeleton/widgets/app_navigation_bar.dart';
 import 'package:aj_tudor/core/app_theme.dart';
 import 'package:aj_tudor/data/database/app_database.dart';
 import 'package:aj_tudor/data/repositories/session_repository.dart';
@@ -112,8 +113,7 @@ void main() {
         wordTranslationServiceProvider.overrideWithValue(mockTranslation),
       ],
       child: MaterialApp(
-        theme: AppTheme.lightTheme,
-        darkTheme: AppTheme.darkTheme,
+        theme: AppTheme.darkTheme,
         home: const SkeletonScreen(),
       ),
     );
@@ -132,13 +132,15 @@ void main() {
       await tester.pump(const Duration(milliseconds: 350));
 
       expect(find.byType(SkeletonScreen), findsOneWidget);
-      expect(find.byType(NavigationBar), findsOneWidget);
+      expect(find.byType(AppNavigationBar), findsOneWidget);
 
-      expect(find.text('Hlas'), findsOneWidget);
-      expect(find.text('Dril'), findsOneWidget);
-      expect(find.text('Kartičky'), findsOneWidget);
-      expect(find.text('Pokrok'), findsOneWidget);
-      expect(find.text('Profil'), findsOneWidget);
+      // Pořadí na liště: Dril, Kartičky, Hovor uprostřed, Pokrok, Profil
+      Finder inBar(String label) => find.descendant(of: find.byType(AppNavigationBar), matching: find.text(label));
+      for (final label in ['Dril', 'Kartičky', 'Hovor', 'Pokrok', 'Profil']) {
+        expect(inBar(label), findsOneWidget);
+      }
+      final xs = [for (final label in ['Dril', 'Kartičky', 'Hovor', 'Pokrok', 'Profil']) tester.getCenter(inBar(label)).dx];
+      expect(xs, orderedEquals([...xs]..sort()));
 
       // Warning banner should NOT be present when API key exists
       expect(find.text('Chybí Gemini API klíč'), findsNothing);
@@ -156,29 +158,29 @@ void main() {
       await tester.tap(find.text('Dril'));
       await tester.pump(const Duration(milliseconds: 350));
 
-      final navBar = tester.widget<NavigationBar>(find.byType(NavigationBar));
-      expect(navBar.selectedIndex, 1);
+      final navBar = tester.widget<AppNavigationBar>(find.byType(AppNavigationBar));
+      expect(navBar.currentIndex, 1);
 
       // Tap on 'Kartičky' tab (index 2)
       await tester.tap(find.text('Kartičky'));
       await tester.pump(const Duration(milliseconds: 350));
 
-      final navBar2 = tester.widget<NavigationBar>(find.byType(NavigationBar));
-      expect(navBar2.selectedIndex, 2);
+      final navBar2 = tester.widget<AppNavigationBar>(find.byType(AppNavigationBar));
+      expect(navBar2.currentIndex, 2);
 
       // Tap on 'Pokrok' tab (index 3)
       await tester.tap(find.text('Pokrok'));
       await tester.pump(const Duration(milliseconds: 350));
 
-      final navBar3 = tester.widget<NavigationBar>(find.byType(NavigationBar));
-      expect(navBar3.selectedIndex, 3);
+      final navBar3 = tester.widget<AppNavigationBar>(find.byType(AppNavigationBar));
+      expect(navBar3.currentIndex, 3);
 
       // Tap on 'Profil' tab (index 4)
       await tester.tap(find.text('Profil'));
       await tester.pump(const Duration(milliseconds: 350));
 
-      final navBar4 = tester.widget<NavigationBar>(find.byType(NavigationBar));
-      expect(navBar4.selectedIndex, 4);
+      final navBar4 = tester.widget<AppNavigationBar>(find.byType(AppNavigationBar));
+      expect(navBar4.currentIndex, 4);
 
       await drainTimers(tester);
     });
@@ -192,15 +194,15 @@ void main() {
 
       // Warning banner is displayed
       expect(find.text('Chybí Gemini API klíč'), findsOneWidget);
-      expect(find.text('NASTAVIT'), findsOneWidget);
+      expect(find.text('Nastavit'), findsOneWidget);
 
-      // Tap on NASTAVIT
-      await tester.tap(find.text('NASTAVIT'));
+      // Tap on Nastavit
+      await tester.tap(find.text('Nastavit'));
       await tester.pump(const Duration(milliseconds: 350));
 
       // Should have switched to settings tab (index 4)
-      final navBar = tester.widget<NavigationBar>(find.byType(NavigationBar));
-      expect(navBar.selectedIndex, 4);
+      final navBar = tester.widget<AppNavigationBar>(find.byType(AppNavigationBar));
+      expect(navBar.currentIndex, 4);
 
       // And on tab 4, the warning banner is hidden
       expect(find.text('Chybí Gemini API klíč'), findsNothing);

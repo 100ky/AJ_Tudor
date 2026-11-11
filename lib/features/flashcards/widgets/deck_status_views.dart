@@ -40,8 +40,7 @@ class ReviewCompletedView extends StatelessWidget {
                 height: 64,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: AppTheme.success.withValues(alpha: 0.15),
-                  border: Border.all(color: AppTheme.success.withValues(alpha: 0.3)),
+                  color: AppTheme.success.withValues(alpha: 0.12),
                 ),
                 child: const Icon(
                   Icons.task_alt_rounded,
@@ -53,7 +52,7 @@ class ReviewCompletedView extends StatelessWidget {
               Text(
                 'Skvělá práce! Relace dokončena',
                 textAlign: TextAlign.center,
-                style: GoogleFonts.plusJakartaSans(
+                style: GoogleFonts.hankenGrotesk(
                   fontSize: 19,
                   fontWeight: FontWeight.w800,
                   color: AppTheme.textColor(context),
@@ -63,7 +62,7 @@ class ReviewCompletedView extends StatelessWidget {
               Text(
                 'Všechny kartičky z této studijní dávky máš úspěšně procvičené.',
                 textAlign: TextAlign.center,
-                style: GoogleFonts.plusJakartaSans(
+                style: GoogleFonts.hankenGrotesk(
                   fontSize: 13,
                   color: AppTheme.mutedTextColor(context),
                   height: 1.4,
@@ -94,13 +93,12 @@ class ReviewCompletedView extends StatelessWidget {
                   onPressed: onPracticeMore,
                   style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
-                    backgroundColor: AppTheme.primary,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   ),
                   icon: const Icon(Icons.play_arrow_rounded),
                   label: Text(
                     'Procvičit další ($remainingDueCount)',
-                    style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700),
+                    style: GoogleFonts.hankenGrotesk(fontWeight: FontWeight.w700),
                   ),
                 )
               else ...[
@@ -109,7 +107,7 @@ class ReviewCompletedView extends StatelessWidget {
                   child: Text(
                     'Nové kartičky se automaticky tvoří z chyb při konverzaci v hlasovém tutorovi.',
                     textAlign: TextAlign.center,
-                    style: GoogleFonts.plusJakartaSans(
+                    style: GoogleFonts.hankenGrotesk(
                       fontSize: 12.5,
                       color: AppTheme.mutedTextColor(context),
                       height: 1.4,
@@ -160,18 +158,18 @@ class FlashcardsEmptyState extends StatelessWidget {
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: (hasCards ? AppTheme.success : AppTheme.primary).withValues(alpha: 0.12),
+                  color: hasCards ? AppTheme.success.withValues(alpha: 0.12) : AppTheme.surfaceRaised,
                 ),
                 child: Icon(
                   hasCards ? Icons.check_circle_outline_rounded : Icons.forum_rounded,
                   size: 44,
-                  color: hasCards ? AppTheme.success : AppTheme.primary,
+                  color: hasCards ? AppTheme.success : AppTheme.textSecondary,
                 ),
               ),
               const SizedBox(height: 16),
               Text(
                 hasCards ? 'Máš na dnes splněno!' : 'Žádné kartičky k procvičení',
-                style: GoogleFonts.plusJakartaSans(
+                style: GoogleFonts.hankenGrotesk(
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
                   color: AppTheme.textColor(context),
@@ -181,9 +179,9 @@ class FlashcardsEmptyState extends StatelessWidget {
               Text(
                 hasCards
                     ? 'Všechny kartičky k dnešnímu opakování máš hotové.\nNová slovíčka a fráze se ti sem automaticky ukládají z chyb při konverzacích s tutorem.'
-                    : 'Kartičky vznikají automaticky z chyb během rozhovorů v záložce Voice.\nZačni mluvit s tutorem a nová slovíčka se ti sem sama vytvoří!',
+                    : 'Kartičky vznikají automaticky z chyb během rozhovorů v Hovoru.\nZačni mluvit s tutorem a nová slovíčka se ti sem sama vytvoří!',
                 textAlign: TextAlign.center,
-                style: GoogleFonts.plusJakartaSans(
+                style: GoogleFonts.hankenGrotesk(
                   fontSize: 13,
                   color: AppTheme.mutedTextColor(context),
                   height: 1.45,
@@ -234,7 +232,7 @@ class _GenerateFromErrorsButton extends StatelessWidget {
           : const Icon(Icons.sync_rounded, size: 18),
       label: Text(
         isGenerating ? 'Kontroluji chyby...' : label,
-        style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600, fontSize: fontSize),
+        style: GoogleFonts.hankenGrotesk(fontWeight: FontWeight.w600, fontSize: fontSize),
       ),
     );
   }
@@ -263,7 +261,7 @@ class _StatBadge extends StatelessWidget {
           const SizedBox(width: 5),
           Text(
             label,
-            style: GoogleFonts.plusJakartaSans(
+            style: GoogleFonts.hankenGrotesk(
               fontSize: 12,
               fontWeight: FontWeight.w700,
               color: color,

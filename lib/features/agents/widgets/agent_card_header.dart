@@ -38,14 +38,14 @@ class AgentCardHeader extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: GoogleFonts.plusJakartaSans(
+                style: GoogleFonts.hankenGrotesk(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
                     color: AppTheme.textColor(context)),
               ),
               Text(
                 subtitle,
-                style: GoogleFonts.plusJakartaSans(
+                style: GoogleFonts.hankenGrotesk(
                     fontSize: 11, color: AppTheme.mutedTextColor(context)),
               ),
             ],
@@ -84,23 +84,17 @@ class AgentStatusBadge extends StatelessWidget {
               decoration: BoxDecoration(
                 color: color,
                 shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                      color: color.withValues(alpha: 0.6),
-                      blurRadius: 4,
-                      spreadRadius: 1),
-                ],
               ),
             ),
             const SizedBox(width: 6),
           ],
           Text(
-            text.toUpperCase(),
-            style: GoogleFonts.plusJakartaSans(
+            text,
+            style: GoogleFonts.hankenGrotesk(
               color: color,
               fontSize: 9,
               fontWeight: FontWeight.w700,
-              letterSpacing: 0.5,
+              letterSpacing: 0,
             ),
           ),
         ],

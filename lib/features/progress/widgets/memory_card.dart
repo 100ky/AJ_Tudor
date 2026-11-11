@@ -19,24 +19,14 @@ class MemoryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CollapsibleCard(
-      backgroundColor: AppTheme.primary.withValues(alpha: 0.05),
-      border: Border.all(color: AppTheme.primary.withValues(alpha: 0.15)),
-      icon: Icons.psychology_rounded,
-      color: AppTheme.primary,
-      title: 'Co si tutor pamatuje',
-      titleColor: AppTheme.primary,
-      trailing: [
-        CardBadge('Aktivní paměť', color: AppTheme.primary, fontWeight: FontWeight.w600),
-      ],
+      title: 'Co si o tobě Tudor pamatuje',
       expanded: expanded,
       onToggle: onToggle,
       children: [
-        const SizedBox(height: 12),
         Text(
           briefing,
-          style: GoogleFonts.plusJakartaSans(
-            fontStyle: FontStyle.italic,
-            fontSize: 13,
+          style: GoogleFonts.hankenGrotesk(
+            fontSize: 14,
             color: AppTheme.surfaceTextColor(context),
             height: 1.5,
           ),

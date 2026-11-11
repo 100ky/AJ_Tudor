@@ -368,21 +368,21 @@ class _WordTranslationSheetState extends ConsumerState<WordTranslationSheet> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: AppTheme.primary.withValues(alpha: isDark ? 0.25 : 0.12),
+                      color: AppTheme.surfaceRaised,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.translate_rounded, size: 14, color: AppTheme.primary),
+                        const Icon(Icons.translate_rounded, size: 14, color: AppTheme.textSecondary),
                         const SizedBox(width: 6),
                         Text(
-                          'PŘEKLAD DO ČEŠTINY',
-                          style: GoogleFonts.plusJakartaSans(
+                          'Překlad do češtiny',
+                          style: GoogleFonts.hankenGrotesk(
                             fontSize: 10.5,
                             fontWeight: FontWeight.w700,
-                            letterSpacing: 0.8,
-                            color: isDark ? AppTheme.primaryLight : AppTheme.primary,
+                            letterSpacing: 0,
+                            color: AppTheme.textSecondary,
                           ),
                         ),
                       ],
@@ -407,7 +407,7 @@ class _WordTranslationSheetState extends ConsumerState<WordTranslationSheet> {
                   Expanded(
                     child: Text(
                       cleanEn,
-                      style: GoogleFonts.plusJakartaSans(
+                      style: GoogleFonts.hankenGrotesk(
                         fontSize: 20,
                         fontWeight: FontWeight.w700,
                         color: AppTheme.textColor(context),
@@ -473,7 +473,7 @@ class _WordTranslationSheetState extends ConsumerState<WordTranslationSheet> {
                                   const SizedBox(width: 4),
                                   Text(
                                     '+ Slovo vlevo',
-                                    style: GoogleFonts.plusJakartaSans(
+                                    style: GoogleFonts.hankenGrotesk(
                                       fontSize: 11,
                                       fontWeight: FontWeight.w600,
                                       color: isDark ? AppTheme.primaryLight : AppTheme.primary,
@@ -504,7 +504,7 @@ class _WordTranslationSheetState extends ConsumerState<WordTranslationSheet> {
                                 children: [
                                   Text(
                                     '+ Slovo vpravo',
-                                    style: GoogleFonts.plusJakartaSans(
+                                    style: GoogleFonts.hankenGrotesk(
                                       fontSize: 11,
                                       fontWeight: FontWeight.w600,
                                       color: isDark ? AppTheme.primaryLight : AppTheme.primary,
@@ -541,7 +541,7 @@ class _WordTranslationSheetState extends ConsumerState<WordTranslationSheet> {
                       const SizedBox(width: 10),
                       Text(
                         'Překládám v kontextu věty...',
-                        style: GoogleFonts.plusJakartaSans(
+                        style: GoogleFonts.hankenGrotesk(
                           fontSize: 14,
                           color: AppTheme.mutedTextColor(context),
                           fontStyle: FontStyle.italic,
@@ -556,7 +556,7 @@ class _WordTranslationSheetState extends ConsumerState<WordTranslationSheet> {
                     Expanded(
                       child: Text(
                         _errorMessage!,
-                        style: GoogleFonts.plusJakartaSans(
+                        style: GoogleFonts.hankenGrotesk(
                           fontSize: 14,
                           color: AppTheme.error,
                         ),
@@ -574,7 +574,7 @@ class _WordTranslationSheetState extends ConsumerState<WordTranslationSheet> {
                             const SizedBox(width: 4),
                             Text(
                               'Zkusit znovu',
-                              style: GoogleFonts.plusJakartaSans(
+                              style: GoogleFonts.hankenGrotesk(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
                                 color: isDark ? AppTheme.primaryLight : AppTheme.primary,
@@ -589,7 +589,7 @@ class _WordTranslationSheetState extends ConsumerState<WordTranslationSheet> {
               else
                 Text(
                   _translatedText,
-                  style: GoogleFonts.plusJakartaSans(
+                  style: GoogleFonts.hankenGrotesk(
                     fontSize: 17,
                     fontWeight: FontWeight.w600,
                     color: isDark ? AppTheme.accentLight : AppTheme.accent,
@@ -616,7 +616,7 @@ class _WordTranslationSheetState extends ConsumerState<WordTranslationSheet> {
                   ),
                   child: Text(
                     '„${widget.contextSentence!.trim()}“',
-                    style: GoogleFonts.plusJakartaSans(
+                    style: GoogleFonts.hankenGrotesk(
                       fontSize: 12,
                       fontStyle: FontStyle.italic,
                       color: AppTheme.mutedTextColor(context),
@@ -633,7 +633,7 @@ class _WordTranslationSheetState extends ConsumerState<WordTranslationSheet> {
                 const SizedBox(height: 12),
                 Text(
                   'Vyber slovíčko z věty pro kartičku:',
-                  style: GoogleFonts.plusJakartaSans(
+                  style: GoogleFonts.hankenGrotesk(
                     fontSize: 11.5,
                     fontWeight: FontWeight.w700,
                     color: isDark ? AppTheme.primaryLight : AppTheme.primary,
@@ -660,7 +660,7 @@ class _WordTranslationSheetState extends ConsumerState<WordTranslationSheet> {
                           ),
                           child: Text(
                             word,
-                            style: GoogleFonts.plusJakartaSans(
+                            style: GoogleFonts.hankenGrotesk(
                               fontSize: 12.5,
                               fontWeight: FontWeight.w600,
                               color: AppTheme.textColor(context),
@@ -711,7 +711,7 @@ class _WordTranslationSheetState extends ConsumerState<WordTranslationSheet> {
                             : (_isSentence
                                 ? 'Není v kartičkách (vyber slovo výše)'
                                 : 'Není v kartičkách'),
-                        style: GoogleFonts.plusJakartaSans(
+                        style: GoogleFonts.hankenGrotesk(
                           fontSize: 12.5,
                           fontWeight: FontWeight.w600,
                           color: _isSaved
@@ -731,7 +731,7 @@ class _WordTranslationSheetState extends ConsumerState<WordTranslationSheet> {
                             _isSaved
                                 ? 'Vrátit ↩'
                                 : (_isSentence ? '+ Uložit celou větu' : '+ Uložit'),
-                            style: GoogleFonts.plusJakartaSans(
+                            style: GoogleFonts.hankenGrotesk(
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
                               color: _isSaved

@@ -1,57 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../../core/app_theme.dart';
 import '../../../core/widgets/glass_container.dart';
 
-/// Rozbalovací karta přehledu pokroku.
+/// Rozbalovací řádek přehledu pokroku.
 ///
-/// Hlavička (ikona, nadpis, odznaky, šipka) přepíná [expanded] přes [onToggle];
+/// Hlavička (nadpis, podnadpis, hodnota vpravo, šipka) přepíná [expanded] přes [onToggle];
 /// [children] se zobrazí jen v rozbaleném stavu. Stav rozbalení drží obrazovka,
 /// aby přetrval i přepnutí záložek.
 class CollapsibleCard extends StatelessWidget {
-  final IconData icon;
-  final Color color;
   final String title;
-  final Color? titleColor;
   final String? subtitle;
   final List<Widget> trailing;
   final bool expanded;
   final VoidCallback onToggle;
   final List<Widget> children;
-  final Color? backgroundColor;
-  final BoxBorder? border;
 
   const CollapsibleCard({
     super.key,
-    required this.icon,
-    required this.color,
     required this.title,
-    this.titleColor,
     this.subtitle,
     this.trailing = const [],
     required this.expanded,
     required this.onToggle,
     required this.children,
-    this.backgroundColor,
-    this.border,
   });
 
   @override
   Widget build(BuildContext context) {
-    final titleText = Text(
-      title,
-      style: GoogleFonts.plusJakartaSans(
-        fontWeight: FontWeight.w600,
-        fontSize: 15,
-        color: titleColor ?? AppTheme.textColor(context),
-      ),
-    );
-
     return GlassContainer(
-      color: backgroundColor,
-      border: border,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      padding: EdgeInsets.zero,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -60,93 +38,65 @@ class CollapsibleCard extends StatelessWidget {
               HapticFeedback.selectionClick();
               onToggle();
             },
-            borderRadius: BorderRadius.circular(10),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(7),
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(icon, color: color, size: 18),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 56),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 10, 10),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            title,
+                            style: AppTheme.font(fontWeight: FontWeight.w500, fontSize: 15.5, color: AppTheme.textPrimary),
+                          ),
+                          if (subtitle != null)
+                            Text(subtitle!, style: AppTheme.font(fontSize: 13, color: AppTheme.textSecondary)),
+                        ],
+                      ),
+                    ),
+                    ...trailing,
+                    const SizedBox(width: 4),
+                    AnimatedRotation(
+                      turns: expanded ? 0.5 : 0,
+                      duration: const Duration(milliseconds: 200),
+                      child: const Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.textTertiary, size: 22),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: subtitle == null
-                      ? titleText
-                      : Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            titleText,
-                            Text(
-                              subtitle!,
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 11.5,
-                                color: AppTheme.mutedTextColor(context),
-                              ),
-                            ),
-                          ],
-                        ),
-                ),
-                ...trailing,
-                const SizedBox(width: 6),
-                Icon(
-                  expanded
-                      ? Icons.keyboard_arrow_up_rounded
-                      : Icons.keyboard_arrow_down_rounded,
-                  color: AppTheme.mutedTextColor(context),
-                  size: 20,
-                ),
-              ],
+              ),
             ),
           ),
-          if (expanded) ...children,
+          if (expanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: children),
+            ),
         ],
       ),
     );
   }
 }
 
-/// Malý barevný odznak v hlavičce karty (např. „12 slov“).
+/// Hodnota v hlavičce řádku (např. „12 slov“), šedým textem.
 class CardBadge extends StatelessWidget {
   final String text;
-  final Color color;
-  final FontWeight fontWeight;
 
-  /// Výraznější varianta se silnějším pozadím a orámováním.
-  final bool outlined;
-
-  const CardBadge(
-    this.text, {
-    super.key,
-    required this.color,
-    this.fontWeight = FontWeight.w700,
-    this.outlined = false,
-  });
+  const CardBadge(this.text, {super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: outlined ? 0.12 : 0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: outlined ? Border.all(color: color.withValues(alpha: 0.25)) : null,
-      ),
-      child: Text(
-        text,
-        style: GoogleFonts.plusJakartaSans(
-          fontSize: 11,
-          fontWeight: fontWeight,
-          color: color,
-        ),
-      ),
+    return Text(
+      text,
+      style: AppTheme.font(fontSize: 13.5, color: AppTheme.textSecondary, fontFeatures: AppTheme.tabularFigures),
     );
   }
 }
 
-/// Prázdný stav uvnitř karty přehledu.
+/// Prázdný stav uvnitř rozbaleného řádku.
 class EmptyStateCard extends StatelessWidget {
   final String message;
 
@@ -154,19 +104,11 @@ class EmptyStateCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GlassContainer(
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 16.0),
-          child: Text(
-            message,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.plusJakartaSans(
-              color: AppTheme.onSurfaceMuted,
-              fontSize: 14,
-            ),
-          ),
-        ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Text(
+        message,
+        style: AppTheme.font(color: AppTheme.textSecondary, fontSize: 14, height: 1.45),
       ),
     );
   }

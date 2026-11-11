@@ -45,7 +45,7 @@ class TutorAgentCard extends StatelessWidget {
         break;
       case TutorState.idle:
         statusColor = AppTheme.mutedTextColor(context);
-        statusText = 'V POHOTOVOSTI';
+        statusText = 'V pohotovosti';
     }
 
     return GlassContainer(
@@ -62,7 +62,7 @@ class TutorAgentCard extends StatelessWidget {
           Divider(color: AppTheme.outlineLightColor(context), height: 24),
           Text(
             'Osobnost a styl:',
-            style: GoogleFonts.plusJakartaSans(
+            style: GoogleFonts.hankenGrotesk(
                 fontWeight: FontWeight.w600,
                 fontSize: 13,
                 color: AppTheme.textColor(context)),
@@ -72,7 +72,7 @@ class TutorAgentCard extends StatelessWidget {
             '• AJ Tudor je rodilý mluvčí z Velké Británie, který momentálně žije v České republice.\n'
             '• NEBUDE tě jen vyslýchat! Rád reaguje, sdílí vlastní historky o svém dni, vaření, výletech nebo o tom, jak zápasí s češtinou.\n'
             '• Mluví pomalu a přizpůsobuje slova tvé úrovni angličtiny.',
-            style: GoogleFonts.plusJakartaSans(
+            style: GoogleFonts.hankenGrotesk(
                 fontSize: 12,
                 height: 1.5,
                 color: AppTheme.mutedTextColor(context)),

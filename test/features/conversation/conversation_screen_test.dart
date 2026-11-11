@@ -49,8 +49,7 @@ void main() {
         userProfileProvider.overrideWith((ref) => Stream.value(null)),
       ],
       child: MaterialApp(
-        theme: AppTheme.lightTheme,
-        darkTheme: AppTheme.darkTheme,
+        theme: AppTheme.darkTheme,
         home: const ConversationScreen(),
       ),
     );

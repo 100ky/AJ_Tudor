@@ -48,6 +48,23 @@ void main() {
       expect(tense.improved, isTrue);
       final preposition = trends.categories.firstWhere((t) => t.category == ErrorCategory.preposition);
       expect(preposition.worse, isFalse); // jedna chyba za tři lekce je šum
+      // Počty pro „předtím → teď“: 6 → 3 ve třech a třech lekcích
+      expect(tense.previousCount, 6);
+      expect(tense.recentCount, 3);
+      expect(trends.recentLessons, 3);
+      expect(trends.previousLessons, 3);
+    });
+
+    test('a lesson where the student said almost nothing counts neither in errors nor in the share', () {
+      // 9. 11.: lekce 24 skončila po úvodu tutora (0 slov studenta, 30 slov tutora)
+      final trends = ProgressTrends.from(
+        [_session(1, student: 300, tutor: 300), _session(2, student: 0, tutor: 30)],
+        [_error(1, ErrorCategory.tense), _error(1, ErrorCategory.tense)],
+      );
+      expect(trends.analysedLessons, 1);
+      expect(trends.categories.single.recent, 2);
+      expect(trends.averageShare, 0.5);
+      expect(trends.lastShare, 0.5);
     });
 
     test('without older lessons there is nothing to compare yet', () {

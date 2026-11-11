@@ -62,7 +62,7 @@ class _ReportIssueDialogState extends State<_ReportIssueDialog> {
 
     return AlertDialog(
       title: Text('Nahlásit problém',
-          style: GoogleFonts.plusJakartaSans(
+          style: GoogleFonts.hankenGrotesk(
             fontWeight: FontWeight.w600,
             color: AppTheme.textColor(context),
           )),
@@ -75,7 +75,7 @@ class _ReportIssueDialogState extends State<_ReportIssueDialog> {
               '${transcript.speaker == 'user' ? 'Ty' : 'Tudor'}: „${transcript.content}“',
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.plusJakartaSans(
+              style: GoogleFonts.hankenGrotesk(
                 fontSize: 12,
                 fontStyle: FontStyle.italic,
                 color: AppTheme.mutedTextColor(context),
@@ -100,13 +100,13 @@ class _ReportIssueDialogState extends State<_ReportIssueDialog> {
         TextButton(
           onPressed: () => Navigator.pop(context),
           child: Text('Zrušit',
-              style: GoogleFonts.plusJakartaSans(
+              style: GoogleFonts.hankenGrotesk(
                   color: AppTheme.mutedTextColor(context))),
         ),
         TextButton(
           onPressed: () => Navigator.pop(context, _controller.text),
           child: Text('Uložit',
-              style: GoogleFonts.plusJakartaSans(color: AppTheme.primary)),
+              style: GoogleFonts.hankenGrotesk(color: AppTheme.primary)),
         ),
       ],
     );

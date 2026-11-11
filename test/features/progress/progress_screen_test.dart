@@ -69,8 +69,7 @@ void main() {
         scenarioPlannerAgentProvider.overrideWithValue(mockPlanner),
       ],
       child: MaterialApp(
-        theme: AppTheme.lightTheme,
-        darkTheme: AppTheme.darkTheme,
+        theme: AppTheme.darkTheme,
         home: const ProgressScreen(),
       ),
     );
@@ -84,20 +83,20 @@ void main() {
       await tester.pumpAndSettle();
 
       // Screen title
-      expect(find.text('Tvůj pokrok'), findsOneWidget);
+      expect(find.text('Pokrok'), findsOneWidget);
 
       // Segmented control tabs
-      expect(find.text('Přehled a vývoj'), findsOneWidget);
+      expect(find.text('Přehled'), findsOneWidget);
       expect(find.text('Historie lekcí'), findsOneWidget);
 
-      // Summary grid items
-      expect(find.text('Lekce'), findsOneWidget);
-      expect(find.text('Čas'), findsOneWidget);
-      expect(find.text('Slovíčka'), findsOneWidget);
-      expect(find.text('Aktivní dny'), findsOneWidget);
+      // Souhrn v jednom řádku (bez lekcí: 0 lekcí, 0 min, 0 slovíček, 0 dní s lekcí)
+      expect(find.text('lekcí'), findsOneWidget);
+      expect(find.text('v hovoru'), findsOneWidget);
+      expect(find.text('slovíček'), findsOneWidget);
+      expect(find.text('dní s lekcí'), findsOneWidget);
 
-      // Flashcards mastery card
-      expect(find.text('Stav cvičebny & kartiček'), findsOneWidget);
+      // Flashcards mastery row
+      expect(find.text('Kartičky'), findsOneWidget);
 
       await drainTimers(tester);
     });
@@ -114,7 +113,7 @@ void main() {
 
       // Verify empty state in history tab
       expect(find.text('Zatím nemáš žádné lekce'), findsOneWidget);
-      expect(find.text('Spusť svou první hlasovou lekci v záložce Hlas.'), findsOneWidget);
+      expect(find.text('První lekci začneš tlačítkem Hovor uprostřed dole.'), findsOneWidget);
 
       await drainTimers(tester);
     });
@@ -143,7 +142,7 @@ void main() {
       // Verify session card is displayed
       expect(find.byType(SessionCard), findsOneWidget);
       expect(find.text('Příprava na pracovní pohovor'), findsOneWidget);
-      expect(find.text('Bez chyb 🎉'), findsOneWidget);
+      expect(find.text('15 min · bez chyb · plynulost 88 %'), findsOneWidget);
 
       await drainTimers(tester);
     });
@@ -176,13 +175,15 @@ void main() {
       await tester.pumpWidget(buildTestWidget());
       await tester.pumpAndSettle();
 
-      // Overview tab should show fluency chart
+      // Řádek s vývojem plynulosti se rozbalí klepnutím
       expect(find.text('Vývoj plynulosti'), findsOneWidget);
-      expect(find.text('85% naposledy'), findsOneWidget);
+      expect(find.text('85 % naposledy'), findsOneWidget);
+      await tester.tap(find.text('Vývoj plynulosti'));
+      await tester.pumpAndSettle();
       expect(find.byType(LineChart), findsOneWidget);
 
-      // Summary grid total time (20m + 10m = 30m)
-      expect(find.text('30m'), findsOneWidget);
+      // Celkový čas v hovoru (20 min + 10 min)
+      expect(find.text('30 min'), findsOneWidget);
 
       await drainTimers(tester);
     });
@@ -276,13 +277,19 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Co se zlepšuje'), findsOneWidget);
-      expect(find.text('Mluvíš 38 %'), findsOneWidget);
       expect(find.text('Čas slovesa'), findsOneWidget);
-      // Profil dovedností z poslední lekce
-      expect(find.text('Úroveň v poslední lekci: B1-. Mluví srozumitelně, ale chybuje v minulém čase.'), findsOneWidget);
-      expect(find.text('Gramatika: chyb na 100 slov'), findsOneWidget);
-      expect(find.text('0,8'), findsOneWidget);
-      expect(find.text('Slov na repliku'), findsOneWidget);
+      // Úroveň z poslední lekce s důvodem
+      expect(find.text('Úroveň v poslední lekci'), findsOneWidget);
+      expect(find.text('B1-'), findsOneWidget);
+      expect(find.text('Mluví srozumitelně, ale chybuje v minulém čase.'), findsOneWidget);
+      // Ukazatele otočené tak, že víc je líp: 120 slov na 1 chybu, 8 slov v odpovědi, 38 % řeči
+      expect(find.text('Gramatika'), findsOneWidget);
+      expect(find.textContaining('slov na 1 chybu'), findsOneWidget);
+      expect(find.text('Délka odpovědí'), findsOneWidget);
+      expect(find.text('Kolik mluvíš ty'), findsOneWidget);
+      expect(find.textContaining('38 %'), findsOneWidget);
+      // Jen jedna lekce: srovnání přibude později
+      expect(find.textContaining('Srovnání s dřívějšími přibude'), findsOneWidget);
 
       await drainTimers(tester);
     });
@@ -303,8 +310,8 @@ void main() {
       await tester.pumpAndSettle();
 
       // Expand memory briefing
-      expect(find.text('Co si tutor pamatuje'), findsOneWidget);
-      await tester.tap(find.text('Co si tutor pamatuje'));
+      expect(find.text('Co si o tobě Tudor pamatuje'), findsOneWidget);
+      await tester.tap(find.text('Co si o tobě Tudor pamatuje'));
       await tester.pumpAndSettle();
 
       expect(find.text('Student se připravuje na manažerskou schůzku.'), findsOneWidget);

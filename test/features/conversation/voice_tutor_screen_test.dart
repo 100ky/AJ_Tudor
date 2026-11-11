@@ -162,8 +162,7 @@ void main() {
             .overrideWith(() => FakeTopicPreparationAgent(topicState ?? const TopicPreparationState())),
       ],
       child: MaterialApp(
-        theme: AppTheme.lightTheme,
-        darkTheme: AppTheme.darkTheme,
+        theme: AppTheme.darkTheme,
         home: const VoiceTutorScreen(),
       ),
     );
@@ -179,16 +178,19 @@ void main() {
       // FluidVoiceWave & blinking cursor have infinite repeat tickers, use pump() with fixed duration
       await tester.pump(const Duration(milliseconds: 300));
 
-      // Title & Hero header
-      expect(find.text('Hlasový Tutor'), findsOneWidget);
+      // Nadpis a klidná vlna
+      expect(find.text('Hovor'), findsOneWidget);
       expect(find.byType(FluidVoiceWave), findsOneWidget);
 
-      // Mode switch tabs
-      expect(find.text('Historie'), findsOneWidget);
-      expect(find.text('Scénáře'), findsOneWidget);
-      expect(find.text('Volný'), findsOneWidget);
+      // Seznam druhů hovoru
+      expect(find.text('Druh hovoru'), findsOneWidget);
+      expect(find.text('Téma z historie'), findsOneWidget);
+      expect(find.text('Lekce s kartičkami'), findsOneWidget);
+      expect(find.text('Scénář'), findsOneWidget);
+      expect(find.text('Volný pokec'), findsOneWidget);
 
-      // Idle mic button
+      // Tlačítko Začít hovor
+      expect(find.text('Začít hovor'), findsOneWidget);
       expect(find.byIcon(Icons.mic_rounded), findsOneWidget);
 
       await drainTimers(tester);
@@ -201,24 +203,25 @@ void main() {
       await tester.pumpWidget(buildTestWidget(fakeTutorAgent: fakeAgent));
       await tester.pump(const Duration(milliseconds: 300));
 
-      // Switch to 'Scénáře' tab
-      await tester.tap(find.text('Scénáře'));
+      // Výběr scénáře rozbalí scénáře a vlastní zadání
+      await tester.tap(find.text('Scénář'));
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.text('Vygenerovat scénáře na míru'), findsOneWidget);
       expect(find.byType(TextField), findsOneWidget);
 
-      // Switch to 'Volný' tab
-      await tester.tap(find.text('Volný'));
+      // Volný pokec
+      await tester.tap(find.text('Volný pokec'));
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text('Volný pokec o čemkoliv'), findsOneWidget);
+      expect(find.textContaining('Žádný scénář ani předem dané téma'), findsOneWidget);
+      expect(find.byType(TextField), findsNothing);
 
-      // Switch back to 'Historie' tab
-      await tester.tap(find.text('Historie'));
+      // Zpět na téma z historie
+      await tester.tap(find.text('Téma z historie'));
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text('Historie'), findsOneWidget);
+      expect(find.textContaining('Žádný scénář ani předem dané téma'), findsNothing);
 
       await drainTimers(tester);
     });
@@ -250,7 +253,7 @@ void main() {
         ],
       ));
       await tester.pump(const Duration(milliseconds: 300));
-      await tester.tap(find.text('Lekce'));
+      await tester.tap(find.text('Lekce s kartičkami'));
       await tester.pump(const Duration(milliseconds: 300));
 
       // Záložka se načte až po animaci přepnutí
@@ -260,16 +263,15 @@ void main() {
       expect(find.text('Projdeme 2 výrazy z tvých kartiček'), findsOneWidget);
       expect(find.text('vzít si volno'), findsOneWidget);
       expect(find.text('alespoň'), findsNothing);
-      expect(find.text('Lekce s kartičkami aktivní'), findsOneWidget);
 
-      await tester.tap(find.text('Historie'));
+      await tester.tap(find.text('Téma z historie'));
       await tester.pump(const Duration(milliseconds: 300));
       expect(fakeAgent.state.lessonMode, isFalse);
 
       await drainTimers(tester);
     });
 
-    testWidgets('four mode tabs fit a narrow phone', (WidgetTester tester) async {
+    testWidgets('the list of call types fits a narrow phone', (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 3.0; // 360 dp
       addTearDown(tester.view.resetPhysicalSize);
@@ -280,7 +282,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(tester.takeException(), isNull);
-      expect(find.text('Lekce'), findsOneWidget);
+      expect(find.text('Lekce s kartičkami'), findsOneWidget);
 
       await drainTimers(tester);
     });

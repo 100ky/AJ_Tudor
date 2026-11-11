@@ -49,8 +49,7 @@ void main() {
         geminiBatchClientProvider.overrideWithValue(mockBatchClient),
       ],
       child: MaterialApp(
-        theme: AppTheme.lightTheme,
-        darkTheme: AppTheme.darkTheme,
+        theme: AppTheme.darkTheme,
         themeMode: themeMode,
         home: Scaffold(
           body: SingleChildScrollView(
@@ -78,7 +77,7 @@ void main() {
       expect(find.text('Proč? Zobrazit pravidlo...'), findsNothing);
     });
 
-    testWidgets('renders tutor message with robot avatar and TTS button', (WidgetTester tester) async {
+    testWidgets('renders tutor message without avatar and with TTS button', (WidgetTester tester) async {
       final msg = ChatMessage(
         'Great job! Keep it up.',
         isUser: false,
@@ -87,7 +86,7 @@ void main() {
 
       await tester.pumpWidget(buildTestWidget(message: msg));
 
-      expect(find.byIcon(Icons.smart_toy_rounded), findsOneWidget);
+      expect(find.byIcon(Icons.smart_toy_rounded), findsNothing);
       expect(find.byType(InteractiveTutorText), findsOneWidget);
 
       final ttsButton = find.byTooltip('Přehrát zprávu');

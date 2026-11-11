@@ -76,7 +76,7 @@ class _ApiKeySectionState extends ConsumerState<ApiKeySection>
               Expanded(
                 child: Text(
                   'Google Gemini API Klíč',
-                  style: GoogleFonts.plusJakartaSans(
+                  style: GoogleFonts.hankenGrotesk(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
                     color: AppTheme.textColor(context),
@@ -100,7 +100,7 @@ class _ApiKeySectionState extends ConsumerState<ApiKeySection>
               hasKey
                   ? 'Klíč je uložen a připraven k použití.'
                   : 'Není nastaven žádný klíč. Aplikace nebude fungovat.',
-              style: GoogleFonts.plusJakartaSans(
+              style: GoogleFonts.hankenGrotesk(
                 color: hasKey ? AppTheme.mutedTextColor(context) : AppTheme.error,
                 fontSize: 13,
               ),
@@ -123,7 +123,7 @@ class _ApiKeySectionState extends ConsumerState<ApiKeySection>
               controller: _apiKeyController,
               decoration: InputDecoration(
                 labelText: 'API Klíč',
-                labelStyle: GoogleFonts.plusJakartaSans(
+                labelStyle: GoogleFonts.hankenGrotesk(
                   color: AppTheme.mutedTextColor(context),
                 ),
                 hintText: 'AIzaSy...',
@@ -146,7 +146,7 @@ class _ApiKeySectionState extends ConsumerState<ApiKeySection>
                     });
                   },
                   child: Text('Zrušit',
-                      style: GoogleFonts.plusJakartaSans(
+                      style: GoogleFonts.hankenGrotesk(
                           color: AppTheme.mutedTextColor(context))),
                 ),
                 const SizedBox(width: 8),

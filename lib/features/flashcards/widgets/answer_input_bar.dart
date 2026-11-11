@@ -61,14 +61,11 @@ class _AnswerInputBarState extends State<AnswerInputBar> {
                 textCapitalization: TextCapitalization.none,
                 autocorrect: false,
                 onSubmitted: (_) => _submit(),
-                style: GoogleFonts.plusJakartaSans(fontSize: 15),
-                decoration: InputDecoration(
+                style: GoogleFonts.hankenGrotesk(fontSize: 15),
+                decoration: const InputDecoration(
                   hintText: 'Napiš odpověď anglicky…',
                   isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                 ),
               ),
             ),
@@ -77,9 +74,11 @@ class _AnswerInputBarState extends State<AnswerInputBar> {
               onPressed: canSubmit ? _submit : null,
               tooltip: 'Odeslat odpověď',
               style: IconButton.styleFrom(
-                backgroundColor: AppTheme.primary,
-                minimumSize: const Size(50, 50),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                backgroundColor: AppTheme.textPrimary,
+                foregroundColor: AppTheme.background,
+                disabledBackgroundColor: AppTheme.surfaceRaised,
+                minimumSize: const Size(52, 52),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               ),
               icon: const Icon(Icons.send_rounded, size: 20),
             ),
@@ -87,10 +86,10 @@ class _AnswerInputBarState extends State<AnswerInputBar> {
         ),
         TextButton.icon(
           onPressed: widget.enabled ? widget.onGiveUp : null,
-          icon: const Icon(Icons.help_outline_rounded, size: 16),
+          icon: const Icon(Icons.help_outline_rounded, size: 18),
           label: Text(
             'Nevím – ukázat řešení',
-            style: GoogleFonts.plusJakartaSans(fontSize: 12.5, fontWeight: FontWeight.w600),
+            style: GoogleFonts.hankenGrotesk(fontSize: 14, fontWeight: FontWeight.w600),
           ),
         ),
       ],

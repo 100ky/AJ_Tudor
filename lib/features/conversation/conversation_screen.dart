@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../core/app_theme.dart';
 import '../../core/config/config_providers.dart';
 import '../../data/data_providers.dart';
@@ -95,37 +94,18 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
       backgroundColor: Colors.transparent,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
+        titleSpacing: 20,
+        toolbarHeight: 64,
         title: Row(
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
           children: [
             Text(
               'Gramatický dril',
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 17,
-                fontWeight: FontWeight.w700,
-                color: AppTheme.textColor(context),
-                letterSpacing: -0.3,
-              ),
+              style: AppTheme.font(fontSize: 28, fontWeight: FontWeight.w600, color: AppTheme.textPrimary, letterSpacing: -0.6),
             ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-              decoration: BoxDecoration(
-                color: AppTheme.primary.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(
-                  color: AppTheme.primary.withValues(alpha: 0.3),
-                ),
-              ),
-              child: Text(
-                level,
-                style: GoogleFonts.plusJakartaSans(
-                  color: AppTheme.primary,
-                  fontSize: 9.5,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.5,
-                ),
-              ),
-            ),
+            const SizedBox(width: 10),
+            Text(level, style: AppTheme.font(fontSize: 15, fontWeight: FontWeight.w500, color: AppTheme.textSecondary)),
           ],
         ),
         actions: [
