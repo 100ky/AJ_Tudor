@@ -20,6 +20,7 @@ import 'package:aj_tudor/services/agents/memory_manager_agent.dart';
 import 'package:aj_tudor/services/system/wakelock_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:aj_tudor/core/error/error_handling.dart';
 import 'package:aj_tudor/core/utils/result.dart';
 import 'package:aj_tudor/data/database/app_database.dart';
 import 'package:aj_tudor/data/models/chat_message.dart';
@@ -138,7 +139,7 @@ void main() {
       timestamp: any(named: 'timestamp'),
     )).thenAnswer((_) async => Result.success(null));
     when(() => mockMemory.analyzeSession(any())).thenAnswer((_) async => true);
-    when(() => mockMemory.analysesAwaitingNetwork).thenReturn(const []);
+    when(() => mockMemory.unfinishedAnalyses).thenReturn(const []);
     when(() => mockRepo.getRecentCategorizedErrors()).thenAnswer((_) async => []);
     mockFlashcardRepo = MockFlashcardRepository();
     when(() => mockFlashcardRepo.getDueFlashcards()).thenAnswer((_) async => []);
@@ -154,6 +155,8 @@ void main() {
     // disconnect might be called
     when(() => mockClient.disconnect()).thenAnswer((_) {});
     when(() => mockClient.isConnected).thenReturn(true);
+    // Souvislý hovor je vypnutý: nové spojení na předchozí nenavazuje
+    when(() => mockClient.resumedSession).thenReturn(false);
 
     overrides = [
         geminiLiveClientProvider.overrideWithValue(mockClient),
@@ -654,7 +657,7 @@ void main() {
   });
 
   test('an analysis that failed without network runs again when the app is back', () async {
-    when(() => mockMemory.analysesAwaitingNetwork).thenReturn(const [7]);
+    when(() => mockMemory.unfinishedAnalyses).thenReturn(const [7]);
     final agent = container.read(voiceTutorAgentProvider.notifier);
 
     agent.didChangeAppLifecycleState(AppLifecycleState.resumed);
@@ -723,6 +726,180 @@ void main() {
 
     agent.sendText('Hello');
     verify(() => mockRepo.addTranscript(sessionId: 124, speaker: 'user', content: 'Hello')).called(1);
+  });
+
+  test('an analysis that failed without network runs again after the app starts and the API key loads', () async {
+    // Seznam lekcí čekajících na síť přežije ukončení aplikace (MemoryManagerAgent)
+    when(() => mockStorage.read(key: any(named: 'key'))).thenAnswer((_) async => 'test-key');
+    when(() => mockMemory.unfinishedAnalyses).thenReturn(const [7]);
+
+    container.read(voiceTutorAgentProvider);
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+
+    verify(() => mockMemory.analyzeSession(7)).called(1);
+  });
+
+  group('opening line of the tutor', () {
+    void Function()? setupCompleteCallback;
+
+    setUp(() {
+      setupCompleteCallback = null;
+      when(() => mockRepo.startNewSession()).thenAnswer((_) async => Result.success(123));
+      when(() => mockProfileRepo.getUserProfile()).thenAnswer((_) async => null);
+      when(() => mockAudio.start(onAudioChunk: any(named: 'onAudioChunk'))).thenAnswer((_) async {});
+      when(() => mockClient.connect(
+        modelName: any(named: 'modelName'),
+        systemPrompt: any(named: 'systemPrompt'),
+        voiceName: any(named: 'voiceName'),
+      )).thenAnswer((_) {});
+      // stopSession callbacky nuluje, proto si držíme ten poslední nenulový
+      when(() => mockClient.onSetupComplete = any()).thenAnswer((invocation) => setupCompleteCallback =
+          (invocation.positionalArguments[0] as void Function()?) ?? setupCompleteCallback);
+    });
+
+    testWidgets('on a slow connection the opener goes out once the connection is ready', (tester) async {
+      // Spojení se do vteřiny po zapnutí mikrofonu nestihlo připravit
+      when(() => mockClient.isConnected).thenReturn(false);
+      final agent = container.read(voiceTutorAgentProvider.notifier);
+      await agent.startSession();
+
+      await tester.pump(const Duration(milliseconds: 1100));
+      verifyNever(() => mockClient.sendText(any()));
+      expect(container.read(voiceTutorAgentProvider).status, TutorState.listening);
+
+      // Server potvrdil nastavení: úvod, který čekal, se pošle teď (dřív se neposlal vůbec)
+      when(() => mockClient.isConnected).thenReturn(true);
+      setupCompleteCallback!();
+
+      verify(() => mockClient.sendText(any())).called(1);
+      expect(container.read(voiceTutorAgentProvider).status, TutorState.thinking);
+
+      // Další potvrzení (obnovené spojení) už úvod neopakuje
+      setupCompleteCallback!();
+      verifyNever(() => mockClient.sendText(any()));
+
+      await agent.stopSession('test');
+    });
+
+    testWidgets('a connection ready within the first second does not send the opener early', (tester) async {
+      final agent = container.read(voiceTutorAgentProvider.notifier);
+      await agent.startSession();
+
+      // Student má vteřinu na to, aby začal sám
+      setupCompleteCallback!();
+      verifyNever(() => mockClient.sendText(any()));
+
+      await tester.pump(const Duration(milliseconds: 1100));
+      verify(() => mockClient.sendText(any())).called(1);
+
+      await agent.stopSession('test');
+    });
+
+    testWidgets('the timer of a lesson that ended does not send the opener of the next lesson early', (tester) async {
+      final agent = container.read(voiceTutorAgentProvider.notifier);
+      await agent.startSession();
+      await tester.pump(const Duration(milliseconds: 600));
+      await agent.stopSession('test');
+
+      // Druhá lekce začíná 0,6 s po první
+      await agent.startSession();
+      await tester.pump(const Duration(milliseconds: 500));
+      // Časovač první lekce už doběhl, druhá má vteřinu teprve před sebou
+      verifyNever(() => mockClient.sendText(any()));
+
+      await tester.pump(const Duration(milliseconds: 600));
+      verify(() => mockClient.sendText(any())).called(1);
+
+      await agent.stopSession('test');
+    });
+  });
+
+  group('a start that fails', () {
+    setUp(() {
+      when(() => mockRepo.startNewSession()).thenAnswer((_) async => Result.success(123));
+      when(() => mockProfileRepo.getUserProfile()).thenAnswer((_) async => null);
+      when(() => mockAudio.start(onAudioChunk: any(named: 'onAudioChunk'))).thenAnswer((_) async {});
+      when(() => mockClient.connect(
+        modelName: any(named: 'modelName'),
+        systemPrompt: any(named: 'systemPrompt'),
+        voiceName: any(named: 'voiceName'),
+      )).thenAnswer((_) {});
+    });
+
+    test('without an API key the display is not kept on', () async {
+      final noKey = ProviderContainer(
+        overrides: [geminiLiveClientProvider.overrideWithValue(null), ...overrides.skip(1)],
+      );
+      addTearDown(noKey.dispose);
+
+      await noKey.read(voiceTutorAgentProvider.notifier).startSession();
+
+      final state = noKey.read(voiceTutorAgentProvider);
+      expect(state.status, TutorState.error);
+      expect(state.errorMessage, contains('Chybí API klíč'));
+      verifyNever(() => mockWakelock.enable());
+      verifyNever(() => mockRepo.startNewSession());
+    });
+
+    test('when the lesson cannot be created, the display is released and the real reason is shown', () async {
+      when(() => mockRepo.startNewSession()).thenAnswer(
+          (_) async => const Result<int>.failure(DatabaseFailure('Nepodařilo se založit novou lekci.')));
+
+      final agent = container.read(voiceTutorAgentProvider.notifier);
+      await agent.startSession();
+
+      final state = container.read(voiceTutorAgentProvider);
+      expect(state.status, TutorState.error);
+      // Dřív „Neočekávaná chyba při startu: Failure(message: …)“
+      expect(state.errorMessage, 'Nepodařilo se založit novou lekci.');
+      verify(() => mockWakelock.enable()).called(1);
+      verify(() => mockWakelock.disable()).called(1);
+      verifyNever(() => mockClient.connect(
+        modelName: any(named: 'modelName'),
+        systemPrompt: any(named: 'systemPrompt'),
+        voiceName: any(named: 'voiceName'),
+      ));
+    });
+
+    test('a microphone failure closes the lesson, hangs up and releases the display', () async {
+      when(() => mockAudio.start(onAudioChunk: any(named: 'onAudioChunk'))).thenThrow(Exception('no microphone'));
+
+      final agent = container.read(voiceTutorAgentProvider.notifier);
+      await agent.startSession();
+
+      final state = container.read(voiceTutorAgentProvider);
+      expect(state.status, TutorState.error);
+      expect(state.errorMessage, contains('Chyba mikrofonu'));
+      expect(state.errorMessage, contains('no microphone'));
+      // Dřív zůstala lekce v databázi otevřená do příštího startu a displej svítil dál
+      verify(() => mockRepo.closeSession(123)).called(1);
+      verify(() => mockClient.disconnect()).called(1);
+      verify(() => mockWakelock.enable()).called(1);
+      verify(() => mockWakelock.disable()).called(1);
+
+      // Další start už nemá co dozavírat
+      when(() => mockAudio.start(onAudioChunk: any(named: 'onAudioChunk'))).thenAnswer((_) async {});
+      when(() => mockRepo.startNewSession()).thenAnswer((_) async => Result.success(124));
+      await agent.startSession();
+      expect(container.read(voiceTutorAgentProvider).status, TutorState.listening);
+      verifyNever(() => mockRepo.closeSession(123));
+
+      await agent.stopSession('test');
+    });
+
+    test('an unexpected error after the lesson was created closes it too', () async {
+      when(() => mockProfileRepo.getUserProfile()).thenThrow(StateError('profile is broken'));
+
+      final agent = container.read(voiceTutorAgentProvider.notifier);
+      await agent.startSession();
+
+      final state = container.read(voiceTutorAgentProvider);
+      expect(state.status, TutorState.error);
+      expect(state.errorMessage, contains('Neočekávaná chyba při startu'));
+      verify(() => mockRepo.closeSession(123)).called(1);
+      verify(() => mockWakelock.disable()).called(1);
+    });
   });
 
   group('manual speech activity and corrected transcript', () {
@@ -809,6 +986,38 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
       verify(() => mockClient.sendActivityEnd()).called(1);
       expect(container.read(voiceTutorAgentProvider).status, TutorState.thinking);
+
+      await agent.stopSession('test');
+    });
+
+    testWidgets('the lesson metrics measure the reply time from the end of speech and count the saved reply',
+        (tester) async {
+      when(() => mockTranscriber.transcribe(any(), previousTutorLine: any(named: 'previousTutorLine')))
+          .thenAnswer((_) async => 'I work on a new video for my app.');
+      final agent = container.read(voiceTutorAgentProvider.notifier);
+      await agent.startSession();
+
+      mic(noise);
+      speak();
+      // Ticho na konci se nahrává taky, celá nahrávka má přes 3 s (jako skoro každá replika)
+      for (var i = 0; i < 25; i++) {
+        mic(quiet);
+      }
+      await tester.pump(const Duration(milliseconds: 2100));
+      await tester.pump();
+      verify(() => mockClient.sendActivityEnd()).called(1);
+
+      // Tutor ještě neodpověděl a konec řeči už je zapsaný. Dřív se zapsal až s odpovědí,
+      // takže reakční doba vycházela na 0–2 ms (lekce 27).
+      expect(agent.metrics.isAwaitingResponse, isTrue);
+      expect(agent.metrics.userReplies, 0);
+
+      userTranscript!('I work on new video');
+      tutorText!('That sounds great!');
+      await tester.pump();
+
+      // Dřív se nahrávky od 3 s nepočítaly a souhrn lekce hlásil „user: 0“
+      expect(agent.metrics.userReplies, 1);
 
       await agent.stopSession('test');
     });
@@ -1590,6 +1799,113 @@ void main() {
         verifyNever(() => mockClient.forceReconnect());
 
         await agent.stopSession('test');
+      });
+
+      group('session continuity (trial)', () {
+        setUp(() {
+          when(() => mockClient.sendClientContent(
+                role: any(named: 'role'),
+                text: any(named: 'text'),
+                turnComplete: any(named: 'turnComplete'),
+              )).thenAnswer((_) {});
+        });
+
+        testWidgets('the lesson passes the setting to the connection', (tester) async {
+          when(() => mockPrefs.getBool('live_session_continuity')).thenReturn(true);
+          final agent = container.read(voiceTutorAgentProvider.notifier);
+          await agent.startSession();
+
+          verify(() => mockClient.sessionContinuity = true).called(1);
+
+          await agent.stopSession('test');
+          await tester.pump(const Duration(seconds: 1));
+        });
+
+        testWidgets('a connection that resumed the same conversation gets no briefing', (tester) async {
+          final agent = container.read(voiceTutorAgentProvider.notifier);
+          await agent.startSession();
+          await speakAndPause(tester);
+          userTranscript!('I like cooking.');
+          tutorText!('Nice! What do you cook?');
+          turnComplete!();
+
+          // Síť vypadla a nové spojení se přihlásilo tokenem: server hovor zná
+          connectionStatus!(false);
+          expect(container.read(voiceTutorAgentProvider).status, TutorState.reconnecting);
+          when(() => mockClient.resumedSession).thenReturn(true);
+          connectionStatus!(true);
+
+          expect(container.read(voiceTutorAgentProvider).status, TutorState.listening);
+          verifyNever(() => mockClient.sendClientContent(
+                role: any(named: 'role'),
+                text: any(named: 'text'),
+                turnComplete: any(named: 'turnComplete'),
+              ));
+
+          await agent.stopSession('test');
+        });
+
+        testWidgets('a resumed connection still answers the reply the old one left unanswered', (tester) async {
+          final agent = container.read(voiceTutorAgentProvider.notifier);
+          await agent.startSession();
+          await speakAndPause(tester);
+          userTranscript!('What does it mean?');
+
+          // Spojení spadlo dřív, než tutor odpověděl
+          connectionStatus!(false);
+          when(() => mockClient.resumedSession).thenReturn(true);
+          connectionStatus!(true);
+
+          // Bez shrnutí hovoru, jen pokyn odpovědět na poslední repliku
+          verify(() => mockClient.sendClientContent(
+                role: 'user',
+                text: any(
+                  named: 'text',
+                  that: allOf(
+                    contains(LiveTutorPrompts.answerAfterResume('What does it mean?')),
+                    isNot(contains('Recent Exchanges')),
+                  ),
+                ),
+                turnComplete: true,
+              )).called(1);
+          expect(container.read(voiceTutorAgentProvider).status, TutorState.thinking);
+
+          await agent.stopSession('test');
+        });
+
+        testWidgets('a model that stays silent gets a fresh connection, not the stuck conversation', (tester) async {
+          final agent = container.read(voiceTutorAgentProvider.notifier);
+          await agent.startSession();
+
+          await speakAndPause(tester);
+          await tester.pump(const Duration(seconds: 11));
+
+          verifyInOrder([
+            () => mockClient.forgetSession(),
+            () => mockClient.forceReconnect(),
+          ]);
+
+          await agent.stopSession('test');
+        });
+
+        testWidgets('a reconnect for the token limit starts fresh too', (tester) async {
+          when(() => mockClient.currentTokenCount).thenReturn(26000);
+          final agent = container.read(voiceTutorAgentProvider.notifier);
+          await agent.startSession();
+
+          await speakAndPause(tester);
+          userTranscript!('I like cooking.');
+          tutorText!('Nice! What do you cook?');
+          turnComplete!();
+
+          // Navázání tokenem by vrátilo stejně velký kontext
+          verifyInOrder([
+            () => mockClient.forgetSession(),
+            () => mockClient.forceReconnect(),
+          ]);
+
+          await agent.stopSession('test');
+        });
       });
 
       testWidgets('a reconnect for the token limit restores the conversation context', (tester) async {

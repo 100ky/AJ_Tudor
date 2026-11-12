@@ -70,6 +70,22 @@ class ConversationSettingsSection extends ConsumerWidget {
             },
           ),
           Divider(color: AppTheme.outlineLightColor(context)),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text('Souvislý hovor (zkušební)',
+                style: GoogleFonts.hankenGrotesk(
+                    fontWeight: FontWeight.w500,
+                    color: AppTheme.textColor(context))),
+            subtitle: Text(
+                'Po výpadku spojení tutor naváže přesně tam, kde hovor skončil. Když to server odmítne, hovor poběží jako dosud. Platí od příští lekce.',
+                style: GoogleFonts.hankenGrotesk(
+                    fontSize: 13, color: AppTheme.mutedTextColor(context))),
+            value: ref.watch(sessionContinuityProvider),
+            onChanged: (value) {
+              ref.read(sessionContinuityProvider.notifier).toggle(value);
+            },
+          ),
+          Divider(color: AppTheme.outlineLightColor(context)),
           _DropdownSetting<String>(
             icon: Icons.record_voice_over,
             color: AppTheme.speaking,

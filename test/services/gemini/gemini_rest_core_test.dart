@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:aj_tudor/services/gemini/gemini_json.dart';
@@ -17,6 +19,29 @@ DioException _dioError({
         ? null
         : Response(requestOptions: options, statusCode: statusCode, data: data),
   );
+}
+
+/// Síťová vrstva, která nic neposílá: zapamatuje si požadavky a vrátí [body] jako JSON.
+class _RecordingAdapter implements HttpClientAdapter {
+  _RecordingAdapter(this.body);
+
+  final String body;
+  final List<RequestOptions> requests = [];
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    requests.add(options);
+    return ResponseBody.fromString(body, 200, headers: {
+      Headers.contentTypeHeader: [Headers.jsonContentType],
+    });
+  }
+
+  @override
+  void close({bool force = false}) {}
 }
 
 Map<String, dynamic> _textResponse(String text) => {
@@ -242,6 +267,25 @@ void main() {
       });
       expect(parts, hasLength(1));
       expect(parts!.first['inlineData']['data'], 'AAAA');
+    });
+  });
+
+  group('GeminiRestCore request', () {
+    test('the API key travels in a header, never in the URL', () async {
+      final adapter = _RecordingAdapter('{"candidates": []}');
+      final api = GeminiRestCore(
+        connectTimeout: const Duration(seconds: 1),
+        receiveTimeout: const Duration(seconds: 1),
+        httpClientAdapter: adapter,
+      );
+
+      await api.generateContent(apiKey: 'secret-key', model: 'gemini-test', body: const {'contents': []});
+
+      final request = adapter.requests.single;
+      // Adresu Dart vypisuje do textu výjimek, a ty končí v logu
+      expect(request.uri.toString(), '${GeminiRestCore.baseUrl}/gemini-test:generateContent');
+      expect(request.uri.toString(), isNot(contains('secret-key')));
+      expect(request.headers['x-goog-api-key'], 'secret-key');
     });
   });
 

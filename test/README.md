@@ -11,7 +11,7 @@ test/
 ├── core/                                         # Testy jádra aplikace a utilit
 │   ├── result_test.dart                          # Typ Result<T> a zpracování chyb
 │   ├── utils/
-│   │   └── logger_test.dart                      # Log lekce (bez šumu, přežije restart), mazání starých logů
+│   │   └── logger_test.dart                      # Log lekce (bez šumu, přežije restart), mazání starých logů, API klíč se do logu nedostane
 │   └── widgets/
 │       └── glass_container_test.dart             # Povrch karty (plná výplň bez rozmazání, rozměry, okraj, gradient)
 ├── data/                                         # Testy datové vrstvy a repozitářů
@@ -64,24 +64,25 @@ test/
 │   └── prompt_eval_checks_test.dart             # Automatické kontroly testu promptu tutora (otázky, opravy, odbočení, opakování)
 ├── services/                                     # Testy aplikačních služeb a agentů
 │   ├── agents/
-│   │   ├── memory_manager_agent_test.dart        # Analýza session, Structured Outputs, memory pruning, fakta, přepis v cizím jazyce, zkrácení paměti, nejvýš 6 kartiček z lekce, druh chyby, ustálená úroveň, počty slov
+│   │   ├── memory_manager_agent_test.dart        # Analýza session, Structured Outputs, memory pruning, fakta, přepis v cizím jazyce, zkrácení paměti, nejvýš 6 kartiček z lekce, druh chyby, ustálená úroveň, počty slov, zápis rozboru v jedné transakci, nedokončený rozbor (bez sítě nebo přerušený ukončením aplikace) přežije restart
 │   │   ├── scenario_planner_agent_test.dart      # Plánování scénářů, integrace slabých kartiček, custom scénáře
 │   │   ├── topic_preparation_agent_test.dart     # Příprava témat, 12h čerstvost, wildcard, facts bootstrap
 │   │   ├── voice_director_agent_test.dart        # Režisér konverzace (cooldown, tipy, briefing pro reconnect, vpletená kartička)
-│   │   ├── voice_tutor_agent_test.dart           # Stavový automat tutora, ruční detekce řeči (activityStart/End), opravný přepis, reconnect a lhůta na odpověď, fronta pokynů, start/stop, pauza, kartičky splněné v hovoru, lekce s kartičkami
+│   │   ├── voice_tutor_agent_test.dart           # Stavový automat tutora, ruční detekce řeči (activityStart/End), opravný přepis, reconnect a lhůta na odpověď, fronta pokynů, start/stop, nepovedený start (klíč, databáze, mikrofon), úvodní replika na pomalé síti, metriky lekce (reakční doba, repliky studenta), souvislý hovor, pauza, kartičky splněné v hovoru, lekce s kartičkami
 │   │   └── voice_tutor/
 │   │       ├── pre_roll_buffer_test.dart         # Úvod řeči před activityStart (limit bajtů, vyprázdnění)
 │   │       ├── speech_activity_detector_test.dart # Detekce řeči (prahy, hystereze, adaptace na šum, délka hlasu)
 │   │       ├── student_utterance_test.dart       # Replika studenta (opravný vs. živý přepis, znovuotevření, limit zvuku)
-│   │       ├── tutor_text_analysis_test.dart     # Čištění přepisu, počet slov, opakování tutora
-│   │       └── tutor_timers_test.dart            # Časovače tutora (spuštění, zrušení, cancelAll)
+│   │       ├── tutor_text_analysis_test.dart     # Čištění přepisu, počet slov, opakování tutora, věta k zopakování po opravě
+│   │       ├── tutor_timers_test.dart            # Časovače tutora (spuštění, zrušení, cancelAll)
+│   │       └── session_metrics_test.dart         # Metriky lekce: reakční doba tutora od konce řeči, počet replik studenta
 │   ├── flashcards/
 │   │   ├── conversation_cards_test.dart          # Kartičky v hovoru: porovnání výrazu, zopakování po tutorovi, zásoba pro režiséra, druh kartičky
 │   │   ├── lesson_card_judge_test.dart           # Rozhodčí kartiček v lekci (odpověď modelu, chyby, bez klíče)
 │   │   └── flashcard_generation_service_test.dart # Kartičky z chyb, migrace starých zadání, nová slovíčka
 │   ├── gemini/
-│   │   ├── gemini_live_client_test.dart          # Spotřeba tokenů na konci tahu, vynucený reconnect, další řeč až po potvrzení konce předchozí
-│   │   ├── gemini_rest_core_test.dart            # Pořadí modelů, cooldown, denní a minutový limit, třídění chyb, dekódování JSON
+│   │   ├── gemini_live_client_test.dart          # Spotřeba tokenů na konci tahu, vynucený reconnect, další řeč až po potvrzení konce předchozí, souvislý hovor (token a komprese v nastavení spojení, navázání po výpadku, odmítnutí serverem)
+│   │   ├── gemini_rest_core_test.dart            # Pořadí modelů, cooldown, denní a minutový limit, třídění chyb, dekódování JSON, API klíč v hlavičce místo adresy
 │   │   └── speech_transcription_service_test.dart # Opravný přepis (WAV, kontext tutora, ticho, záložní modely)
 │   ├── prompt/
 │   │   ├── live_tutor_prompts_test.dart          # Pokyny během hovoru (úvodní zpráva, skryté instrukce, průběh lekce)
@@ -89,10 +90,11 @@ test/
 │   │   ├── task_prompts_test.dart                # Krátké úlohové prompty (překlad, výslovnost, dril)
 │   │   └── user_facts_and_topic_prompts_test.dart # Prompty s fakty „O mně“ a příprava témat
 │   ├── system/
-│   │   └── backup_service_test.dart              # Validace SQLite hlavičky, export/import zálohy databáze
+│   │   └── backup_service_test.dart              # Validace SQLite hlavičky, export zálohy, obnova ze zálohy (ověření souboru, původní data v .bak, otevřené spojení čte nová data)
 │   ├── gemini_tts_service_test.dart              # Gemini TTS, audio cache, zvuk z WAV odpovědi (bez hlavičky a C2PA)
 │   ├── pronunciation_service_test.dart           # Analýza výslovnosti, záložní modely (po přetížení všech se zkusí znovu všechny)
 │   └── translation_service_test.dart             # Překladový servis a disková cache
+├── architecture_test.dart                        # Pravidla struktury z README: směr závislostí, délka souborů, jediné místo s Dio, klíč mimo adresu
 ├── widget_test.dart                              # Základní smoke test
 └── README.md                                     # Tento průvodce testováním
 ```

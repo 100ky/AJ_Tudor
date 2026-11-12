@@ -26,4 +26,8 @@ Postup:
 2. Je-li u problému `transcript_id`, čas té repliky (`transcripts.timestamp`) ukazuje místo v logu lekce.
 3. V logu sledovat stavy agenta, `[VAD]` (místní detekce řeči, `➡️ activityStart` a `➡️ activityEnd` ohlášené serveru), `inputTranscription` (živý přepis), `✍️ Opravný přepis` (nahrazený text repliky), `turnComplete` a pauzy. Rozbor po lekci je na konci logu.
 
-Rozbor po lekci volá Gemini a při přetížení zkouší další modely, každý pokus až 55 s. Nevyhodnocená lekce hned po konci hovoru tedy ještě nemusí znamenat chybu.
+Rozbor po lekci volá Gemini a při přetížení zkouší další modely, každý pokus až 55 s. Nevyhodnocená lekce hned po konci hovoru tedy ještě nemusí znamenat chybu. Rozbor, kterému chyběla síť nebo ho přerušilo ukončení aplikace, se zopakuje po dalším spuštění (v logu „Opakuji rozbor lekce“).
+
+Soubory logu se zapisují průběžně, takže `latest.log` i log lekce jdou stáhnout i během hovoru. Poslední řádky ale můžou chybět, dokud aplikace log nezavře.
+
+Hotové skripty na čísla z logů nejsou v repu. Užitečné dotazy: skutečná reakční doba tutora je čas od `➡️ activityEnd` po první `Text z Gemini`; důvody obnovy spojení jsou řádky `WebSocket spojení UZAVŘENO. Code:`, `Spotřeba tokenů`, `Model neodpověděl`, `Watchdog`, `GoAway`; u zkušebního souvislého hovoru řádky začínající `Souvislý hovor:` a `SessionResumptionUpdate`.

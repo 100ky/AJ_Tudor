@@ -115,7 +115,7 @@ Set<String> _significantWords(String text) =>
 /// Zjistí, zda tutor opakuje některou ze svých nedávných promluv [history].
 ///
 /// Vrátí podobnost (Jaccardův index významných slov) první opakované promluvy –
-/// opakování je podobnost nad 0.45 nebo shodných prvních 20 znaků – jinak null.
+/// opakování je podobnost nad 0.45 nebo shodných prvních 40 znaků – jinak null.
 double? repeatedTurnSimilarity(String text, Iterable<String> history) {
   final currentWords = _significantWords(text);
   if (currentWords.isEmpty) return null;

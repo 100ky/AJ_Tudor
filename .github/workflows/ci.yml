@@ -1,0 +1,35 @@
+name: Kontrola změn
+
+# Stejné kontroly jako v README (oddíl „Kontrola změn“): statická analýza a všechny testy
+# včetně testu pravidel struktury (test/architecture_test.dart). Testy nevolají Gemini.
+on:
+  push:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      # Verze, na které je projekt ověřený (README, „Jak aplikaci spustit“)
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.5
+          cache: true
+
+      - name: Závislosti
+        run: flutter pub get
+
+      - name: Statická analýza
+        run: dart analyze lib test
+
+      - name: Testy
+        run: flutter test

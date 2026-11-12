@@ -66,6 +66,42 @@ void main() {
     expect(await sessionLog(L.keptSessionLogs + 2).exists(), isTrue);
   });
 
+  group('API key never reaches the log', () {
+    const key = 'AIzaSyA1b2C3d4E5f6G7h8I9j0K-lMnOpQrStUv';
+
+    test('the key parameter of a URL is masked, the rest of the URL stays', () {
+      expect(
+        L.redact("WebSocketException: Connection to 'https://host/ws/Bidi?key=$key&alt=json' was not upgraded"),
+        "WebSocketException: Connection to 'https://host/ws/Bidi?key=***&alt=json' was not upgraded",
+      );
+      // Klíč v jiném tvaru než AIza… (parametr key= se maskuje vždy)
+      expect(L.redact('uri = https://host/v1beta/models/x:generateContent?key=secret-123'),
+          'uri = https://host/v1beta/models/x:generateContent?key=***');
+    });
+
+    test('a bare Google API key is masked too', () {
+      expect(L.redact('Authorization failed for $key.'), 'Authorization failed for ***.');
+    });
+
+    test('lines without a key are left alone', () {
+      expect(L.redact('Tutor řekl: "The key is on the table."'), 'Tutor řekl: "The key is on the table."');
+    });
+
+    test('an exception with the request URL is written to the log files without the key', () async {
+      await L.startFileLog(tempDir);
+      await L.startSessionLog(11);
+      L.e('WebSocket CHYBA', Exception('Connection closed, uri = https://host/ws?key=$key'));
+      await L.stopFileLog();
+
+      final latest = await File('${tempDir.path}/logs/latest.log').readAsString();
+      final session = await sessionLog(11).readAsString();
+      for (final content in [latest, session]) {
+        expect(content, contains('uri = https://host/ws?key=***'));
+        expect(content, isNot(contains(key)));
+      }
+    });
+  });
+
   test('without file logging there is no session log', () async {
     await L.startSessionLog(9);
     L.i('Nowhere');

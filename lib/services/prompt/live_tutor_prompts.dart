@@ -83,6 +83,16 @@ abstract final class LiveTutorPrompts {
       "If the student was asking whether you are still there, reassure them in a few words and carry on. "
       "Do NOT talk about technical problems.";
 
+  /// Spojení navázalo na stejný hovor (souvislý hovor) a poslední replika studenta zůstala
+  /// bez odpovědi. Model hovor zná, repliku [studentReply] ale pro jistotu dostane znovu:
+  /// spojení mohlo spadnout dřív, než ji server celou přijal.
+  static String answerAfterResume(String studentReply) =>
+      "The connection dropped before you answered the student. "
+      "Their last message was: \"$studentReply\". "
+      "Answer it right now, naturally and briefly, as AJ Tudor. "
+      "If the student was asking whether you are still there, reassure them in a few words and carry on. "
+      "Do NOT talk about technical problems.";
+
   /// Konverzace se zacyklila – v příštím tahu nenápadně změnit téma.
   static const String changeTopicSilently =
       "CRITICAL INSTRUCTION: Okamžitě opusti současné téma hovoru, "

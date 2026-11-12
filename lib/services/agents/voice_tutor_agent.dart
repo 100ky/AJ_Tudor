@@ -171,6 +171,10 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   // Úvodní replika tutora; pošle se po 1 s, pokud student nezačal mluvit sám.
   String? _pendingOpener;
 
+  // Vteřina na to, aby student začal sám, už uplynula. Když spojení v tu chvíli ještě
+  // nebylo připravené (pomalá síť), úvod se pošle, jakmile se připraví (_onSetupComplete).
+  bool _openerDue = false;
+
   // Délka aktuálního souvislého hlasu se do repliky započítala (první blok běhu přidá celý začátek).
   bool _voiceRunCounted = false;
 
@@ -221,6 +225,10 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   // ─── SESSION METRIKY pro terminálový výstup ───
   final SessionMetrics _metrics = SessionMetrics();
 
+  /// Metriky probíhající lekce (pro testy).
+  @visibleForTesting
+  SessionMetrics get metrics => _metrics;
+
   late final WakelockService _wakelock;
   late final AudioSessionController _audio;
   late final SessionRepository _repo;
@@ -265,6 +273,12 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       if (previous != next && state.status != TutorState.idle) {
         stopSession('apiKey changed');
       }
+      // Klíč se právě načetl z úložiště (start aplikace): zopakuje se rozbor lekce, kterému
+      // minule chyběla síť a aplikace mezitím skončila
+      final hadKey = previous != null && previous.isNotEmpty;
+      if (!hadKey && next != null && next.isNotEmpty) {
+        unawaited(_retryUnfinishedAnalyses());
+      }
     });
     ref.listen(modelProvider, (previous, next) {
       if (previous != next && state.status != TutorState.idle) {
@@ -302,7 +316,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     // Pokud se aplikace vrátí z pozadí (resumed) a probíhá hovor, zkontrolujeme stav WebSocketu.
     // Pokud je socket odpojen, přepneme stav na reconnecting a vynutíme reconnect.
     if (state == AppLifecycleState.resumed) {
-      if (this.state.status == TutorState.idle) unawaited(_retryAnalysesWithoutNetwork());
+      if (this.state.status == TutorState.idle) unawaited(_retryUnfinishedAnalyses());
       final client = ref.read(geminiLiveClientProvider);
       if (client != null && this.state.status != TutorState.idle && this.state.status != TutorState.error && this.state.status != TutorState.paused) {
         if (!client.isConnected) {
@@ -323,15 +337,16 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
 
   bool _retryingAnalyses = false;
 
-  /// Zopakuje rozbor lekcí, kterým po konci hovoru chyběla síť. Jen mimo hovor,
-  /// výsledek se připíše do logu lekce.
-  Future<void> _retryAnalysesWithoutNetwork() async {
+  /// Zopakuje rozbor lekcí, kterým nedoběhl (chyběla síť, nebo se aplikace ukončila uprostřed
+  /// něj): po návratu do aplikace a po jejím spuštění, jakmile se načte API klíč. Jen mimo
+  /// hovor, výsledek se připíše do logu lekce.
+  Future<void> _retryUnfinishedAnalyses() async {
     if (_retryingAnalyses) return;
     _retryingAnalyses = true;
     try {
-      for (final sessionId in _memory.analysesAwaitingNetwork) {
+      for (final sessionId in _memory.unfinishedAnalyses) {
         if (!ref.mounted || state.status != TutorState.idle) break;
-        L.i('Aplikace je zpět v popředí, opakuji rozbor lekce $sessionId (předtím chyběla síť).');
+        L.i('Opakuji rozbor lekce $sessionId (minule nedoběhl).');
         await L.startSessionLog(sessionId);
         await _memory.analyzeSession(sessionId);
         await L.endSessionLog(sessionId);
@@ -397,7 +412,6 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     _lessonStartedAt = null;
     _conversationCardsSessionId = null;
     HapticFeedback.mediumImpact();
-    _wakelock.enable(); // Zabrání uspání displeje během konverzace
 
     final client = ref.read(geminiLiveClientProvider);
 
@@ -410,15 +424,19 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       return;
     }
 
-  L.i('Zahajuji startSession...');
+    // Displej svítí až od chvíle, kdy hovor opravdu začíná. Každá větev, která start
+    // odsud dál vzdá, ho musí zase uvolnit (dřív zůstal svítit až do konce příští lekce).
+    _wakelock.enable();
+    L.i('Zahajuji startSession...');
 
     try {
       // 0. Založení nového sezení v databázi přes repozitář
       final Result<int> sessionResult = await _repo.startNewSession();
       if (sessionResult.isFailure) {
+        _wakelock.disable();
         state = state.copyWith(
           status: TutorState.error,
-          errorMessage: sessionResult.getOrThrow().toString()
+          errorMessage: sessionResult.failureOrNull?.message ?? 'Nepodařilo se založit novou lekci.',
         );
         return;
       }
@@ -547,6 +565,8 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
 
       // Spuštění WebSocket připojení (konec řeči studenta určuje místní detekce řeči)
       client.muteOutput = false;
+      // Zkušební souvislý hovor: po výpadku spojení server v hovoru pokračuje (viz klient)
+      client.sessionContinuity = ref.read(sessionContinuityProvider);
       client.connect(
         modelName: liveModelName,
         systemPrompt: systemPrompt,
@@ -563,11 +583,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         });
       } catch (audioError, stack) {
         L.e('Chyba mikrofonu', audioError, stack);
-        state = state.copyWith(
-          status: TutorState.error,
-          errorMessage: 'Chyba mikrofonu: $audioError'
-        );
-        client.disconnect();
+        await _failStart('Chyba mikrofonu: $audioError');
         return;
       }
 
@@ -595,14 +611,31 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         briefing: userProfile?.memoryBriefing,
         lesson: state.lessonCards.isNotEmpty,
       );
-      Future.delayed(const Duration(milliseconds: 1000), _trySendOpener);
+      _openerDue = false;
+      Future.delayed(const Duration(milliseconds: 1000), () {
+        // Lekce mezitím skončila (nebo už běží další): úvod patří jen k té, která ho naplánovala
+        if (generation != _sessionGeneration) return;
+        _openerDue = true;
+        _trySendOpener();
+      });
 
 
     } catch (e, stack) {
       L.e('Chyba startu session', e, stack);
-      state = state.copyWith(status: TutorState.error, errorMessage: 'Neočekávaná chyba při startu: $e');
+      await _failStart('Neočekávaná chyba při startu: $e');
     } finally {
       _isStarting = false;
+    }
+  }
+
+  /// Start se nepovedl až po založení lekce (mikrofon, nečekaná chyba). Hovor se ukončí
+  /// jako každý jiný: lekce v databázi se uzavře, spojení a mikrofon se vypnou a displej
+  /// smí zhasnout. Dřív zůstala lekce otevřená do příštího startu a displej svítil dál.
+  /// Na displeji zůstane chyba [message].
+  Future<void> _failStart(String message) async {
+    await stopSession('start se nepovedl');
+    if (ref.mounted) {
+      state = state.copyWith(status: TutorState.error, errorMessage: message);
     }
   }
 
@@ -795,9 +828,6 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       if (spokeAtLength) _consecutiveShortAnswers = 0;
 
       if (wordCount != null) {
-        // ─── METRIKA: délka odpovědi uživatele ───
-        _metrics.recordUserAnswer(wordCount);
-
         // V lekci jsou krátké odpovědi běžné (student řekne výraz z kartičky)
         if (wordCount <= 3 && !_lessonRunning) {
           _consecutiveShortAnswers++;
@@ -812,13 +842,11 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         }
       }
 
-      // ─── METRIKA: timestamp konce řeči studenta (pro měření reakční doby AI) ───
-      _metrics.markUserSpeechEnd();
-
       // Bez nahrané repliky se ukládá rovnou živý přepis
       if (utterance == null && _currentSessionId != null) {
         L.i('💾 [TRANSCRIPT] Ukládám transkript uživatele do DB: "$userText"');
         _saveTranscript('user', userText);
+        _metrics.recordUserReply(userText);
       }
     }
   }
@@ -839,6 +867,14 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     state = state.copyWith(status: TutorState.thinking);
     _resetThinkingTimer();
     client.sendText(opener);
+  }
+
+  /// Spojení je připravené. Když se to stalo až po vteřině vyhrazené na úvod (pomalá síť,
+  /// nebo se spojení při startu navazovalo znovu), úvodní replika tutora pořád čeká
+  /// a pošle se teď. Dřív se zkusila poslat jen jednou a tutor pak mlčel, dokud
+  /// nepromluvil student.
+  void _onSetupComplete() {
+    if (_openerDue) _trySendOpener();
   }
 
   /// Začne nahrávat repliku studenta i s úvodem zachyceným před zjištěnou řečí.
@@ -906,6 +942,9 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   /// Ohlásí konec řeči studenta – model začne odpovídat.
   void _endStudentSpeech(GeminiLiveClient client) {
     _closeActivity(client);
+    // Odsud se měří reakční doba tutora. Dřív se konec řeči zapsal až s první odpovědí,
+    // takže metrika vycházela na 0–2 ms (lekce 27: ve skutečnosti 0,8–2,7 s).
+    _metrics.markUserSpeechEnd();
     state = state.copyWith(status: _reconnectPending ? TutorState.reconnecting : TutorState.thinking);
     _resetThinkingTimer();
     _awaitResponse();
@@ -1063,6 +1102,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         content: text,
         timestamp: utterance.endedAt,
       );
+      _metrics.recordUserReply(text);
       _checkConversationCards(utterance, text);
     }
     utterance.markSettled();
@@ -1080,6 +1120,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   void _resetSpeechActivity() {
     _activityOpen = false;
     _pendingOpener = null;
+    _openerDue = false;
     _voiceRunCounted = false;
     _utterance = null;
     _lastUtterance = null;
@@ -1100,6 +1141,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         (isConnected) => _onConnectionStatusChanged(isConnected, client);
     client.onError = _onError;
     client.onActivityEndUnconfirmed = _onActivityEndUnconfirmed;
+    client.onSetupComplete = _onSetupComplete;
   }
 
   /// Server nepotvrdil konec řeči studenta: tah se ztratil a odpověď na něj nepřijde.
@@ -1309,6 +1351,8 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     // Proaktivní obnova WebSocket relace při příliš vysoké spotřebě tokenů
     if (client.currentTokenCount > 25000) {
       L.w('Spotřeba tokenů (${client.currentTokenCount}) dosáhla limitu. Proaktivně provádím plynulý reconnect pro zamezení lagů...');
+      // Navázání tokenem by vrátilo stejně velký kontext, nové spojení má začít se shrnutím
+      client.forgetSession();
       client.forceReconnect();
     }
   }
@@ -1393,9 +1437,14 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         _resetWatchdog();
       }
 
-      // Pokud došlo k reconnectu během běžícího hovoru, obnovíme kontext do nové WebSocket relace
+      // Pokud došlo k reconnectu během běžícího hovoru, obnovíme kontext do nové WebSocket relace.
+      // Se souvislým hovorem si ho server pamatuje sám a shrnutí se neposílá.
       if (wasReconnecting && state.messages.isNotEmpty) {
-        _restoreConversationContext(client, answerStudent: answerStudent);
+        if (client.resumedSession) {
+          _continueResumedConversation(client, answerStudent: answerStudent);
+        } else {
+          _restoreConversationContext(client, answerStudent: answerStudent);
+        }
       }
     }
   }
@@ -1425,6 +1474,29 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         state = state.copyWith(status: TutorState.error, errorMessage: error);
       }
     });
+  }
+
+  /// Nové spojení se přihlásilo tokenem předchozího (zkušební souvislý hovor): server hovor
+  /// zná, shrnutí se neposílá a tutor pokračuje tam, kde skončil.
+  ///
+  /// S [answerStudent] tutor hned odpoví na poslední repliku studenta, na kterou staré
+  /// spojení neodpovědělo. Když ani pak neodpoví, lhůta na odpověď spojení obnoví znovu,
+  /// tentokrát bez tokenu a se shrnutím.
+  void _continueResumedConversation(GeminiLiveClient client, {required bool answerStudent}) {
+    L.i('Souvislý hovor: spojení navázalo na stejný hovor, shrnutí se neposílá.');
+    if (!answerStudent) return;
+
+    L.i('Poslední replika studenta zůstala bez odpovědi, tutor na ni odpoví hned.');
+    client.sendClientContent(
+      role: 'user',
+      text: LiveTutorPrompts.systemInstruction(
+        LiveTutorPrompts.answerAfterResume(state.messages.lastOrNull?.text ?? ''),
+      ),
+      turnComplete: true,
+    );
+    state = state.copyWith(status: TutorState.thinking);
+    _resetThinkingTimer();
+    _awaitResponse();
   }
 
   /// Po výpadku a znovupřipojení WebSocketu injektuje do nové relace Gemini
@@ -1522,6 +1594,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
             liveClient.onInterrupted = null;
             liveClient.onTokenCountUpdate = null;
             liveClient.onActivityEndUnconfirmed = null;
+            liveClient.onSetupComplete = null;
           }
         } catch (e, stack) {
           L.e('Chyba při odpojování WebSocketu', e, stack);
@@ -1776,9 +1849,11 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       );
       _resetThinkingTimer();
       client.sendText(text);
+      _metrics.markUserSpeechEnd();
 
       // Uložení manuálního textu do DB
       _saveTranscript('user', text.trim());
+      _metrics.recordUserReply(text.trim());
     }
   }
 
@@ -2067,6 +2142,9 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     final client = ref.read(geminiLiveClientProvider);
     if (client == null || !client.isConnected) return;
     L.w('Model neodpověděl na repliku studenta. Obnovuji spojení...');
+    // Hovor na serveru se zasekl, navazovat na něj tokenem nemá smysl: nové spojení
+    // začne se shrnutím a tutor na repliku odpoví (jako bez souvislého hovoru)
+    client.forgetSession();
     // Výpadek ohlásí sám klient, stav přepne na reconnecting
     client.forceReconnect();
   }

@@ -5,6 +5,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import '../../core/utils/logger.dart';
 import '../audio/audio_playback_service.dart';
 import 'live_activity_gate.dart';
+import 'live_session_continuity.dart';
 
 /// Klient pro obousměrnou real-time komunikaci s Gemini Live API přes WebSocket.
 /// 
@@ -81,6 +82,10 @@ class GeminiLiveClient {
   /// Vyvoláno při změně stavu připojení (true = připojeno, false = odpojeno).
   Function(bool)? onConnectionStatusChanged;
 
+  /// Vyvoláno, když server potvrdí úvodní nastavení: od té chvíle je [isConnected] true
+  /// a spojení přijímá zprávy (po prvním připojení i po každém obnovení).
+  void Function()? onSetupComplete;
+
   /// Vyvoláno, když model zavolá externí nástroj (Function Calling).
   Function(String name, Map<String, dynamic> args)? onToolCall;
 
@@ -95,7 +100,33 @@ class GeminiLiveClient {
   void Function()? onActivityEndUnconfirmed;
 
   /// Konstruktor vyžadující API klíč a instanci služby přehrávání zvuku.
-  GeminiLiveClient(this._apiKey, this._playbackService);
+  ///
+  /// [connectChannel] otevírá WebSocket; testy jím podstrčí vlastní kanál bez sítě.
+  GeminiLiveClient(
+    this._apiKey,
+    this._playbackService, {
+    WebSocketChannel Function(Uri uri)? connectChannel,
+  }) : _connectChannel = connectChannel ?? WebSocketChannel.connect;
+
+  final WebSocketChannel Function(Uri uri) _connectChannel;
+
+  // Zkušební souvislý hovor: token pro navázání na hovor a zkracování kontextu
+  final LiveSessionContinuity _continuity = LiveSessionContinuity();
+
+  /// Zkušební „souvislý hovor“ (viz [LiveSessionContinuity]): po výpadku se nové spojení
+  /// přihlásí tokenem a server v hovoru pokračuje, místo aby dostal jen textové shrnutí.
+  /// Nastavuje agent před [connect].
+  bool get sessionContinuity => _continuity.enabled;
+  set sessionContinuity(bool enabled) => _continuity.enabled = enabled;
+
+  /// Aktuální spojení navázalo tokenem na předchozí, takže server hovor zná a kontext
+  /// není potřeba posílat znovu. Platí od první zprávy ze serveru.
+  bool get resumedSession => _continuity.resumed;
+
+  /// Zapomene token pro navázání na hovor: další spojení začne s prázdným kontextem.
+  /// Agent to volá před obnovou spojení, když stav hovoru na serveru za navázání nestojí
+  /// (model neodpovídá, kontext je moc velký).
+  void forgetSession() => _continuity.forget();
 
   /// Bezpečně uzavře stávající kanál a zruší listener, aby nespouštěl onDone při úmyslném zavření.
   void _closeCurrentChannel() {
@@ -127,8 +158,10 @@ class GeminiLiveClient {
     _isManualDisconnect = false;
     if (!isReconnect) {
       _reconnectAttempts = 0;
+      _continuity.startLesson();
     }
     _isSetupComplete = false;
+    _continuity.startConnection();
     _lastModelName = modelName;
     _lastSystemPrompt = systemPrompt;
     _lastVoiceName = voiceName;
@@ -148,7 +181,7 @@ class GeminiLiveClient {
     final maskedUri = uri.replace(queryParameters: {'key': '***'});
     L.i('Připojování k: $maskedUri');
     
-    final channel = WebSocketChannel.connect(uri);
+    final channel = _connectChannel(uri);
     _channel = channel;
 
     // Naslouchání na příchozím streamu WebSocketu.
@@ -176,9 +209,12 @@ class GeminiLiveClient {
         final reason = channel.closeReason;
         L.w('WebSocket spojení UZAVŘENO. Code: $code, Reason: $reason');
         if (onConnectionStatusChanged != null) onConnectionStatusChanged!(false);
-        
+
         // Pokud nebylo spojení zavřeno ručně uživatelem, pokusíme se o reconnect.
         if (!_isManualDisconnect) {
+          // Server zavřel spojení s kódem ještě před potvrzením nastavení: odmítl ho.
+          // Bez kódu jde o síť, a tu souvislý hovor naopak má překlenout.
+          if (!_isSetupComplete && code != null) _continuity.degrade('$code $reason');
           _attemptReconnect();
         }
       },
@@ -279,11 +315,15 @@ class GeminiLiveClient {
           'activityHandling': 'START_OF_ACTIVITY_INTERRUPTS',
           'turnCoverage': 'TURN_INCLUDES_ONLY_ACTIVITY',
         },
-        // POZNÁMKA: sessionResumptionConfig a tools pro logování odstraněny,
-        // aby nedocházelo k zamrzání audio streamu a smyčkám v Live API.
+        // Zkušební souvislý hovor: sessionResumption a contextWindowCompression
+        ..._continuity.setupFields(),
+        // POZNÁMKA: nástroje (tools) pro logování jsou vypnuté, kvůli nim zamrzal zvuk.
       }
     };
-    L.d('Odesílám SETUP: ${jsonEncode(setupMessage)}');
+    // Token pro navázání na hovor do logu nepatří
+    final handle = _continuity.handleInSetup;
+    final loggedSetup = handle == null ? jsonEncode(setupMessage) : jsonEncode(setupMessage).replaceAll(handle, '***');
+    L.d('Odesílám SETUP: $loggedSetup');
     _safeSend(jsonEncode(setupMessage));
   }
 
@@ -430,6 +470,7 @@ class GeminiLiveClient {
       if (data.containsKey('setupComplete') || data.containsKey('setup_complete')) {
         L.i('✅ Gemini Live Setup úspěšně dokončen (setupComplete).');
         _isSetupComplete = true;
+        onSetupComplete?.call();
       }
 
       // Detekce systémové chyby ze strany API
@@ -437,6 +478,12 @@ class GeminiLiveClient {
         final error = data['error'];
         final msg = error['message'] ?? 'Neznámá chyba serveru';
         L.e('Gemini API Error: $msg');
+        // Chyba ještě před potvrzením nastavení: server odmítl pole souvislého hovoru.
+        // Místo konce lekce se spojení naváže znovu bez nich.
+        if (!_isSetupComplete && _continuity.degrade('$msg')) {
+          forceReconnect();
+          return;
+        }
         if (onError != null) onError!(msg);
         return;
       }
@@ -572,11 +619,9 @@ class GeminiLiveClient {
         L.w('ToolCall zrušen serverem.');
       }
 
-      // sessionResumptionUpdate: preview model tuto funkci nepodporuje při reconnectu,
-      // proto handle ignorujeme (způsoboval 1007 smyčku).
-      if (data.containsKey('sessionResumptionUpdate') || data.containsKey('session_resumption_update')) {
-        L.d('SessionResumptionUpdate: Přijat (ignorujeme — preview model nepodporuje při reconnectu).');
-      }
+      // Token pro navázání na hovor (používá se jen se zapnutým souvislým hovorem)
+      final resumption = data['sessionResumptionUpdate'] ?? data['session_resumption_update'];
+      if (resumption is Map) _continuity.onServerUpdate(resumption);
 
       // Detekce signálu GoAway (server plánuje brzy ukončit socket)
       // Proaktivní reconnect – okamžitě bezpečně restartujeme spojení bez souběhu
@@ -619,6 +664,8 @@ class GeminiLiveClient {
       if (_consecutiveControlTokens >= 5) {
         L.e('Detekovano zaseknuti Gemini Live API (prilis mnoho control tokenu). Spoustim forceReconnect...');
         _consecutiveControlTokens = 0; // reset
+        // Zacyklený hovor nemá smysl obnovovat i se stavem na serveru
+        forgetSession();
         forceReconnect();
       }
     }
@@ -658,6 +705,7 @@ class GeminiLiveClient {
   void disconnect() {
     _isManualDisconnect = true;
     _isReconnecting = false;
+    _continuity.forget();
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
     _closeCurrentChannel();

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:sqlite3/sqlite3.dart';
 import '../../core/utils/logger.dart';
 import '../../data/data_providers.dart';
 
@@ -93,11 +94,9 @@ class BackupService {
     }
   }
 
-  /// Importuje databázi z vybraného souboru SQLite.
-  /// Uzavře aktuální spojení, přepíše soubor databáze a obnoví stav providerů.
+  /// Importuje databázi ze souboru, který student vybere.
   Future<bool> importBackup() async {
     try {
-      // 1. Výběr souboru od uživatele (v12 API)
       final pickedFile = await FilePicker.pickFile(
         type: FileType.any,
       );
@@ -107,48 +106,123 @@ class BackupService {
         return false;
       }
 
-      final backupFilePath = pickedFile.path!;
-      final backupFile = File(backupFilePath);
-
-      if (!await backupFile.exists()) {
-        L.w('Vybraný soubor neexistuje.');
-        return false;
-      }
-
-      // Validace, že vybraný soubor je platná SQLite databáze
-      final isValid = await validateSqliteFile(backupFile);
-      if (!isValid) {
-        L.w('Vybraný soubor není platná SQLite databáze.');
-        return false;
-      }
-
-      L.i('Začíná proces obnovy z: $backupFilePath');
-
-      // 2. Uzavření databáze v aplikaci
-      // Invalidace databaseProvideru způsobí ref.onDispose, což zavolá db.close()
-      // Tím uvolníme soubor db.sqlite pro přepis.
-      _ref.invalidate(databaseProvider);
-
-      // Krátké vyčkání na dokončení dispose
-      await Future.delayed(const Duration(milliseconds: 300));
-
-      // 3. Přepis starého souboru novým
-      final dbFile = await _getDatabaseFile();
-      if (await dbFile.exists()) {
-        await dbFile.delete();
-      }
-
-      await backupFile.copy(dbFile.path);
-      L.i('Databáze byla přepsána záložním souborem.');
-
-      // 4. Inicializace nové databáze
-      // Tím, že vyvoláme čtení databaseProvider, se databáze znovu otevře
-      final _ = _ref.read(databaseProvider);
-
-      return true;
+      return await restoreFrom(File(pickedFile.path!));
     } catch (e, stack) {
       L.e('Chyba při importu zálohy', e, stack);
       return false;
+    }
+  }
+
+  /// Tabulky, které musí záloha obsahovat, aby šlo o databázi této aplikace.
+  static const List<String> requiredBackupTables = ['sessions', 'transcripts'];
+
+  /// Jak dlouho smí kopírování databáze čekat, až ji uvolní jiné spojení.
+  static const Duration copyTimeout = Duration(seconds: 15);
+
+  /// Nahradí data aplikace zálohou [backupFile]. Vrátí, zda se obnova povedla.
+  ///
+  /// Záloha se nejdřív zkopíruje vedle databáze a ověří: soubor musí být celistvý
+  /// a obsahovat tabulky aplikace. Původní data se uloží do `db.sqlite.bak`. Obsah zálohy
+  /// se pak do databáze zapíše zálohovacím API SQLite v jedné transakci, takže databáze
+  /// má buď celý obsah zálohy, nebo zůstane beze změny.
+  ///
+  /// Dřív se soubor databáze smazal a záloha se zkopírovala na jeho místo. Ověřovala se
+  /// jen hlavička souboru, takže poškozená záloha nebo přerušené kopírování znamenaly
+  /// ztrátu dat. Databázi navíc mezitím znovu otevřely obrazovky a zapisovaly dál
+  /// do smazaného souboru.
+  Future<bool> restoreFrom(File backupFile) async {
+    if (!await validateSqliteFile(backupFile)) {
+      L.w('Vybraný soubor není platná SQLite databáze.');
+      return false;
+    }
+
+    final dbFile = await _getDatabaseFile();
+    final incoming = File('${dbFile.path}.import');
+    try {
+      await _deleteDatabaseFile(incoming);
+      await backupFile.copy(incoming.path);
+
+      final problem = checkBackupDatabase(incoming);
+      if (problem != null) {
+        L.w('Záloha se neobnoví: $problem');
+        return false;
+      }
+
+      if (await dbFile.exists()) {
+        final previous = File('${dbFile.path}.bak');
+        await _deleteDatabaseFile(previous);
+        await _copyDatabase(from: dbFile, to: previous);
+        L.i('Původní data zůstávají v ${previous.path}.');
+      }
+
+      L.i('Začíná obnova ze zálohy: ${backupFile.path}');
+      await _copyDatabase(from: incoming, to: dbFile);
+      L.i('Databáze má obsah zálohy.');
+
+      // Nové spojení: při otevření proběhnou opravy schématu (záloha může být ze starší
+      // verze aplikace) a obrazovky si načtou nová data
+      _ref.invalidate(databaseProvider);
+      return true;
+    } catch (e, stack) {
+      L.e('Chyba při obnově ze zálohy', e, stack);
+      return false;
+    } finally {
+      try {
+        await _deleteDatabaseFile(incoming);
+      } catch (e) {
+        L.w('Dočasnou kopii zálohy se nepodařilo smazat: $e');
+      }
+    }
+  }
+
+  /// Ověří, že [file] je celistvá databáze této aplikace. Vrátí null, nebo popis problému.
+  static String? checkBackupDatabase(File file) {
+    Database? database;
+    try {
+      database = sqlite3.open(file.path, mode: OpenMode.readWrite);
+      final integrity = database.select('PRAGMA integrity_check');
+      final verdict = integrity.isEmpty ? '' : integrity.first.values.first?.toString() ?? '';
+      if (verdict != 'ok') return 'soubor je poškozený ($verdict)';
+
+      final tables = {
+        for (final row in database.select("SELECT name FROM sqlite_master WHERE type = 'table'"))
+          row['name'] as String,
+      };
+      final missing = [for (final table in requiredBackupTables) if (!tables.contains(table)) table];
+      if (missing.isNotEmpty) return 'není to záloha AJ Tudora (chybí tabulky ${missing.join(', ')})';
+      return null;
+    } on SqliteException catch (e) {
+      return 'soubor nejde přečíst jako databázi (${e.message})';
+    } finally {
+      database?.close();
+    }
+  }
+
+  /// Zkopíruje obsah databáze [from] do [to] zálohovacím API SQLite.
+  ///
+  /// Kopíruje se najednou v jedné transakci nad cílem, takže ostatní spojení vidí cíl
+  /// buď celý původní, nebo celý nový. Soubor cíle se nemaže ani nepřejmenovává, otevřená
+  /// spojení k němu proto zůstanou platná. Když cíl právě používá jiné spojení, kopírování
+  /// to zkouší znovu, nejdéle [copyTimeout].
+  static Future<void> _copyDatabase({required File from, required File to}) async {
+    final source = sqlite3.open(from.path, mode: OpenMode.readWrite);
+    try {
+      final target = sqlite3.open(to.path);
+      try {
+        await source.backup(target, nPage: -1).drain<void>().timeout(copyTimeout);
+      } finally {
+        target.close();
+      }
+    } finally {
+      source.close();
+    }
+  }
+
+  /// Smaže soubor databáze i s pomocnými soubory SQLite, pokud existují.
+  static Future<void> _deleteDatabaseFile(File file) async {
+    for (final suffix in const ['', '-journal', '-wal', '-shm']) {
+      final part = File('${file.path}$suffix');
+      if (await part.exists()) await part.delete();
     }
   }
 }

@@ -107,8 +107,25 @@ class L {
     }
   }
 
+  static final RegExp _keyParam = RegExp(r'''([?&]key=)[^&\s'"]+''');
+  static final RegExp _googleApiKey = RegExp(r'AIza[0-9A-Za-z_\-]{20,}');
+
+  /// Nahradí v [line] API klíč hvězdičkami: hodnotu parametru `key=` v adrese i samotný
+  /// klíč Google (`AIza…`).
+  ///
+  /// Adresa spojení s Gemini Live klíč obsahuje a Dart ji vypisuje do textu výjimek
+  /// (`WebSocketException: Connection to '…?key=…' was not upgraded`). Log se stahuje
+  /// z telefonu a posílá k rozboru, klíč v něm být nesmí.
+  static String redact(String line) {
+    if (!line.contains('key=') && !line.contains('AIza')) return line;
+    return line
+        .replaceAllMapped(_keyParam, (match) => '${match[1]}***')
+        .replaceAll(_googleApiKey, '***');
+  }
+
   /// Vypíše řádek do konzole a případně i do souboru logu s časem.
-  static void _out(String line) {
+  static void _out(String message) {
+    final line = redact(message);
     debugPrint(line);
     final sink = _fileSink;
     if (sink == null) return;

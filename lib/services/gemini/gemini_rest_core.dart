@@ -159,13 +159,17 @@ class GeminiRestCore {
 
   final Dio _dio;
 
+  /// [httpClientAdapter] nahrazuje síťovou vrstvu v testech.
   GeminiRestCore({
     required Duration connectTimeout,
     required Duration receiveTimeout,
+    HttpClientAdapter? httpClientAdapter,
   }) : _dio = Dio(BaseOptions(
           connectTimeout: connectTimeout,
           receiveTimeout: receiveTimeout,
-        ));
+        )) {
+    if (httpClientAdapter != null) _dio.httpClientAdapter = httpClientAdapter;
+  }
 
   /// Zavolá `generateContent` modelu [model] a vrátí dekódované JSON tělo odpovědi.
   ///
@@ -177,11 +181,13 @@ class GeminiRestCore {
     Duration? sendTimeout,
     Duration? receiveTimeout,
   }) async {
+    // Klíč jde v hlavičce, ne v adrese: adresu požadavku Dart vypisuje do textu výjimek
+    // (HttpException „…, uri = …“) a ty končí v logu, který se stahuje z telefonu.
     final response = await _dio.post<Map<String, dynamic>>(
-      '$baseUrl/$model:generateContent?key=$apiKey',
+      '$baseUrl/$model:generateContent',
       data: body,
       options: Options(
-        headers: {'Content-Type': 'application/json'},
+        headers: {'Content-Type': 'application/json', 'x-goog-api-key': apiKey},
         sendTimeout: sendTimeout,
         receiveTimeout: receiveTimeout,
       ),

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/config/config_providers.dart';
 import '../../data/data_providers.dart';
 import '../gemini/gemini_batch_client.dart';
 import '../system/wakelock_service.dart';
@@ -25,12 +26,39 @@ class MemoryManagerAgent {
   /// Inicializuje agenta paměti.
   MemoryManagerAgent(this._ref);
 
-  // Lekce, jejichž rozbor selhal kvůli chybějící síti
-  final Set<int> _awaitingNetwork = {};
+  /// Klíč v nastavení aplikace se seznamem lekcí, jejichž rozbor nedoběhl.
+  static const String unfinishedAnalysesKey = 'unfinished_analyses';
 
-  /// Lekce, jejichž rozbor selhal kvůli chybějící síti. Zopakuje se po návratu do aplikace
-  /// (9. 11.: displej zhasl pět vteřin po hovoru a systém aplikaci na pozadí odpojil).
-  List<int> get analysesAwaitingNetwork => List.unmodifiable(_awaitingNetwork);
+  // Lekce, jejichž rozbor nedoběhl: chyběla mu síť, nebo se aplikace ukončila dřív, než
+  // skončil. Seznam je uložený v nastavení aplikace, takže přežije i její ukončení (dřív
+  // byl jen v paměti a lekce zůstala bez rozboru, dokud ho student nespustil ručně).
+  Set<int>? _unfinishedLoaded;
+
+  Set<int> get _unfinished {
+    final loaded = _unfinishedLoaded;
+    if (loaded != null) return loaded;
+    final saved = _ref.read(sharedPreferencesProvider).getStringList(unfinishedAnalysesKey) ?? const <String>[];
+    return _unfinishedLoaded = saved.map(int.tryParse).whereType<int>().toSet();
+  }
+
+  /// Zapíše, jestli rozbor lekce [sessionId] ještě čeká na dokončení.
+  void _setUnfinished(int sessionId, bool unfinished) {
+    final changed = unfinished ? _unfinished.add(sessionId) : _unfinished.remove(sessionId);
+    if (!changed) return;
+    _ref
+        .read(sharedPreferencesProvider)
+        .setStringList(unfinishedAnalysesKey, [for (final id in _unfinished) '$id']);
+  }
+
+  /// Lekce, jejichž rozbor nedoběhl. Zopakuje se po návratu do aplikace nebo po jejím
+  /// dalším spuštění.
+  ///
+  /// Rozboru buď chyběla síť (9. 11.: displej zhasl pět vteřin po hovoru a systém aplikaci
+  /// na pozadí odpojil), nebo se aplikace ukončila uprostřed něj (11. 11.: lekce 27 zůstala
+  /// bez rozboru, protože aplikace skončila osm vteřin po hovoru). Rozbor, který selhal
+  /// z jiného důvodu, se sám neopakuje. Rozbor, který právě běží, v seznamu není.
+  List<int> get unfinishedAnalyses =>
+      List.unmodifiable([for (final id in _unfinished) if (!_running.containsKey(id)) id]);
 
   /// Nejvyšší délka briefingu pro příští lekci (bez kritiky tutora).
   static const int maxBriefingChars = 600;
@@ -136,18 +164,22 @@ class MemoryManagerAgent {
 
   Future<bool> _analyzeSession(int sessionId) async {
     L.i('Zahajuji analýzu session $sessionId pomocí Structured Outputs...');
-    _awaitingNetwork.remove(sessionId);
-    
+
     // Načtení repozitáře pro přístup k databázi a batch klienta Gemini určeného pro analýzy.
     final sessionRepo = _ref.read(sessionRepositoryProvider);
     final profileRepo = _ref.read(profileRepositoryProvider);
-    final flashcardRepo = _ref.read(flashcardRepositoryProvider);
     final gemini = _ref.read(geminiAnalysisClientProvider);
-    
+
     if (gemini == null) {
       L.e('Gemini Analysis Client není k dispozici (chybí API klíč). Analýza zrušena.');
+      _setUnfinished(sessionId, false);
       return false;
     }
+
+    // Rozbor je od teď rozdělaný. Když aplikace skončí dřív, než doběhne, zůstane
+    // v seznamu a zopakuje se po dalším spuštění.
+    _setUnfinished(sessionId, true);
+    var retryLater = false;
 
     try {
       // 1. Načtení historie transkriptu pro zadané sezení z databáze
@@ -205,234 +237,13 @@ class MemoryManagerAgent {
       // Dekódování strukturovaného JSON výsledku
       final data = jsonDecode(analysisResult);
 
-      // Nový rozbor nahradí předchozí. Jinak opakovaný rozbor zdvojil chyby i kartičky (9. 11.)
-      final previous = await sessionRepo.clearSessionAnalysis(sessionId);
-      if (previous.errors > 0) {
-        L.i('Nahrazuji předchozí rozbor lekce $sessionId: smazáno ${previous.errors} chyb '
-            'a ${previous.cards} neprocvičených kartiček.');
-      }
+      // Starý rozbor se smaže a nový zapíše v jedné transakci. Když zápis uprostřed selže
+      // (třeba na nečekaném tvaru odpovědi), zůstane lekci předchozí rozbor celý. Dřív po
+      // takové chybě zbyl smazaný starý rozbor a půlka nového.
+      await _ref.read(databaseProvider).transaction(
+            () => _saveAnalysis(sessionId, data, studentWords: studentWords, isTooShort: isTooShort),
+          );
 
-      // --- BEZPEČNÉ PARSOVÁNÍ ČÍSEL ---
-      double fluency = 0.0;
-      if (data['fluencyScore'] != null) {
-        fluency = double.tryParse(data['fluencyScore'].toString()) ?? 0.0;
-      }
-      
-      int totalErr = 0;
-      if (data['totalErrors'] != null) {
-        totalErr = int.tryParse(data['totalErrors'].toString()) ?? 0;
-      }
-
-      // ─── STRUKTUROVANÝ VÝPIS VÝSLEDKŮ ANALÝZY ───
-      final analysisLines = StringBuffer();
-      analysisLines.writeln('Plynulost: ${fluency.toStringAsFixed(2)} | Úroveň: ${data['estimatedLevel'] ?? '?'} | Chyby: $totalErr');
-      analysisLines.writeln('Shrnutí: ${data['topicSummary'] ?? 'Bez popisu'}');
-      if (data['briefing'] != null && data['briefing'].toString().isNotEmpty) {
-        analysisLines.writeln('Briefing pro příště: ${L.truncate(data['briefing'].toString(), 300)}');
-      }
-      if (data['tutorFeedback'] != null && data['tutorFeedback'].toString().isNotEmpty) {
-        analysisLines.writeln('⚠️ Tutor Feedback (sebe-reflexe): ${data['tutorFeedback']}');
-      }
-      if (data['resolvedErrors'] != null && (data['resolvedErrors'] as List).isNotEmpty) {
-        analysisLines.writeln('✅ Resolved Errors (Memory Pruning): ${(data['resolvedErrors'] as List).join(', ')}');
-      }
-      if (data['vocabulary'] != null && (data['vocabulary'] as List).isNotEmpty) {
-        analysisLines.writeln('📖 Nová slovíčka: ${(data['vocabulary'] as List).join(', ')}');
-      }
-      if (data['newLearnedUserFacts'] != null && (data['newLearnedUserFacts'] as List).isNotEmpty) {
-        analysisLines.writeln('🧑 Nové fakty o studentovi: ${(data['newLearnedUserFacts'] as List).join(', ')}');
-      }
-      L.block('ANALYSIS', 'Výsledky Gemini analýzy (session $sessionId)', analysisLines.toString());
-
-      // Výpis jednotlivých chyb s kartičkami
-      if (data['errors'] != null && (data['errors'] as List).isNotEmpty) {
-        final errorItems = <String>[];
-        for (var err in data['errors']) {
-          if (err is Map) {
-            final userSaid = err['userSaid']?.toString() ?? '';
-            final correctForm = err['correctForm']?.toString() ?? '';
-            final czechTranslation = err['czechTranslation']?.toString() ?? '';
-            errorItems.add('"$userSaid" → "$correctForm" (CZ: $czechTranslation)');
-          }
-        }
-        L.blockList('ANALYSIS', 'Kartičky z chyb', errorItems);
-      }
-      final estimatedLevel = data['estimatedLevel']?.toString().toUpperCase();
-      // Krátká lekce nebo lekce, kde student skoro jen opakoval, o úrovni nic neříká
-      final isKnownLevel = ['A1', 'A2', 'B1', 'B2'].contains(estimatedLevel) && studentWords >= minWordsForLevel;
-      await sessionRepo.updateSessionAnalysis(
-        sessionId: sessionId,
-        topicSummary: data['topicSummary']?.toString() ?? 'Bez popisu',
-        fluencyScore: fluency,
-        totalErrors: totalErr,
-        estimatedLevel: isKnownLevel && !isTooShort ? estimatedLevel : null,
-        levelDetail: isKnownLevel && !isTooShort ? _levelDetail(data['levelDetail'], estimatedLevel!) : null,
-        levelReason: isKnownLevel && !isTooShort ? data['levelReason']?.toString().trim() : null,
-      );
-
-      // --- ALGORITMUS ODNAUČOVÁNÍ (Memory Pruning) ---
-      // Extrahujeme seznam chyb, které student přestal opakovat.
-      if (data['resolvedErrors'] != null && data['resolvedErrors'] is List) {
-        // Bezpečné parsování pouze stringů z pole
-        final List<String> resolved = (data['resolvedErrors'] as List)
-            .map((e) => e?.toString() ?? '')
-            .where((s) => s.isNotEmpty)
-            .toList();
-            
-        if (resolved.isNotEmpty) {
-          L.i('Detekováno zlepšení studenta. Aplikuji Memory Pruning a prořezávám chyby: $resolved');
-          
-          // Repozitář provede vyhledání a odstranění těchto jevů z opakujících se chyb,
-          // čímž se efektivně uvolní kapacita kontextového okna a zabrání zacyklení
-          await profileRepo.pruneResolvedErrors(resolved); 
-        }
-      }
-
-      // --- INTEGRACE FRUSTRACE A SEBE-REFLEXE ---
-      // Uložení shrnutí/briefingu pro příští lekci do profilu studenta (pouze pokud nebyla lekce příliš krátká)
-      if (!isTooShort) {
-        // --- PREVENCE NAFUKOVÁNÍ PROMPTU ---
-        // Analytik má tendenci nabalovat staré briefingy, proto má briefing i kritika tutora
-        // svůj limit. Zachová se začátek briefingu (slabiny a téma na příště): dřív se nechával
-        // konec, takže z briefingu zbyla hlavně připojená kritika tutora.
-        var finalBriefing = clipBriefing(data['briefing']?.toString() ?? '', maxBriefingChars);
-        final tutorFeedback = data['tutorFeedback']?.toString() ?? '';
-
-        // Zřetězení analytického briefingu s kritikou chování AI
-        if (tutorFeedback.isNotEmpty) {
-          finalBriefing += '\n\nKRITICKÁ SEBE-REFLEXE (Self-Correction pro tutora na příště): '
-              '${clipBriefing(tutorFeedback, maxTutorFeedbackChars)}';
-        }
-
-        await profileRepo.updateUserMemory(finalBriefing);
-      }
-      
-      // Úroveň v profilu: nejčastější odhad z posledních lekcí, ne jen z této
-      if (isKnownLevel && !isTooShort) {
-        final recent = await sessionRepo.getRecentEstimatedLevels(limit: levelWindow, minStudentWords: minWordsForLevel);
-        final level = stableLevel(recent) ?? estimatedLevel!;
-        L.i('Rozbor odhadl úroveň $estimatedLevel, z posledních lekcí (${recent.join(', ')}) platí $level.');
-        await profileRepo.updateTargetLevel(level);
-      }
-      
-      // Uložení nově zaznamenaných slovíček do databáze
-      if (data['vocabulary'] != null && data['vocabulary'] is List) {
-        final List<String> newWords = (data['vocabulary'] as List)
-            .map((e) => e?.toString() ?? '')
-            .where((s) => s.isNotEmpty)
-            .toList();
-        if (newWords.isNotEmpty) {
-          await profileRepo.updateUserVocabulary(newWords);
-        }
-      }
-
-      // 4. Uložení nově zjištěných osobních faktů o studentovi do profilu ("O mně")
-      if (data['newLearnedUserFacts'] != null && data['newLearnedUserFacts'] is List) {
-        final List<String> newFacts = (data['newLearnedUserFacts'] as List)
-            .map((e) => e?.toString() ?? '')
-            .where((s) => s.isNotEmpty)
-            .toList();
-        if (newFacts.isNotEmpty) {
-          await profileRepo.updateUserFacts(newFacts);
-          L.i('Uloženo ${newFacts.length} nových faktů o studentovi do "O mně": $newFacts');
-        }
-      }
-
-      // 5. Uložení jednotlivých gramatických/výslovnostních chyb do detailního chybového logu a profilu
-      if (data['errors'] != null && data['errors'] is List) {
-        final List<String> newErrors = [];
-        var cardsCreated = 0;
-        for (var err in data['errors']) {
-          if (err is Map) {
-            final type = err['type']?.toString() ?? 'grammar';
-            final userSaid = err['userSaid']?.toString().trim() ?? '';
-            final correctForm = err['correctForm']?.toString().trim() ?? '';
-            final explanation = err['explanation']?.toString().trim() ?? '';
-            final targetWordOrPhrase = err['targetWordOrPhrase']?.toString().trim();
-            final czechCue = err['czechCue']?.toString().trim();
-            
-            // FILTRACE LEAKŮ A SYSTÉMOVÝCH HLÁŠEK:
-            // Tutorovy repliky, instrukce nebo příliš dlouhé texty nesmí proniknout do chyb ani kartiček
-            final lowerSaid = userSaid.toLowerCase();
-            final lowerCorrect = correctForm.toLowerCase();
-            if (userSaid.isEmpty ||
-                correctForm.isEmpty ||
-                userSaid.length > 200 ||
-                lowerSaid.contains('soustředit na naši') ||
-                lowerSaid.contains('nepřepínej') ||
-                lowerSaid.contains('how is your day') ||
-                lowerSaid.contains('as an ai') ||
-                lowerSaid.contains('translation task') ||
-                lowerCorrect.contains('soustředit na naši')) {
-              L.w('Filtrován neplatný záznam chyby (leaked tutor/system message): "$userSaid"');
-              continue;
-            }
-
-            // Přepis v cizím jazyce je chyba STT, ne chyba studenta
-            if (_foreignTranscriptChars.hasMatch(userSaid)) {
-              L.w('Filtrován záznam chyby s přepisem v cizím jazyce (chyba STT): "$userSaid"');
-              continue;
-            }
-
-            final errorLogRes = await sessionRepo.addErrorLog(
-              sessionId: sessionId,
-              errorType: type,
-              userSaid: userSaid,
-              correctForm: correctForm,
-              explanation: explanation,
-              category: ErrorCategory.parse(err['category']?.toString())?.id,
-            );
-            
-            newErrors.add('Řekl: "$userSaid", ale správně je: "$correctForm" ($explanation)');
-
-            final czechTranslation = err['czechTranslation']?.toString().trim();
-            final extracted = FlashcardRepository.extractCzechFromExplanation(explanation);
-            
-            // Cílové slovíčko pro rub kartičky (atomická jednotka)
-            final cardBack = (targetWordOrPhrase != null && targetWordOrPhrase.isNotEmpty)
-                ? targetWordOrPhrase
-                : correctForm;
-
-            // České zadání pro líc kartičky (atomická jednotka)
-            final cardFront = (czechCue != null && czechCue.isNotEmpty)
-                ? czechCue
-                : ((czechTranslation != null && czechTranslation.isNotEmpty)
-                    ? czechTranslation
-                    : (extracted != null && extracted.isNotEmpty ? extracted : 'Přeložte do angličtiny'));
-
-            // Celá opravená věta slouží jako příklad a kontext na rubu kartičky
-            final contextExample = (correctForm.isNotEmpty && correctForm.toLowerCase() != cardBack.toLowerCase())
-                ? correctForm
-                : (userSaid.isNotEmpty ? userSaid : null);
-
-            if (cardsCreated >= maxNewCardsPerLesson) {
-              L.i('Kartička "$cardBack" nevznikla: z lekce už je $maxNewCardsPerLesson kartiček.');
-              continue;
-            }
-            if (!isAtomicCardTarget(cardBack)) {
-              L.w('Kartička "$cardBack" nevznikla: cíl má víc než ${ConversationCards.maxTargetWords} slova.');
-              continue;
-            }
-
-            // Automatické vytvoření Smart Flashcard pro studenta v češtině k procvičení
-            await flashcardRepo.addFlashcard(
-              frontText: cardFront,
-              backText: cardBack,
-              explanation: explanation,
-              errorType: type,
-              sourceSentence: contextExample,
-              errorLogId: errorLogRes.valueOrNull,
-            );
-            cardsCreated++;
-          }
-        }
-        
-        if (newErrors.isNotEmpty) {
-          await profileRepo.updateUserRecurringErrors(newErrors);
-          L.i('Přidáno ${newErrors.length} chyb do opakujících se chyb v profilu.');
-        }
-      }
-      
       L.i('Analýza session $sessionId dokončena přesně (JSON).');
 
       // 6. Spuštění plánování nových scénářů na příště (asynchronně na pozadí)
@@ -442,12 +253,258 @@ class MemoryManagerAgent {
       _ref.read(topicPreparationAgentProvider.notifier).prepareTopic(force: true, resetCounter: true);
       return true;
     } on GeminiNetworkException {
-      _awaitingNetwork.add(sessionId);
+      retryLater = true;
       L.w('Rozbor lekce $sessionId selhal bez sítě, zopakuje se po návratu do aplikace.');
       return false;
     } catch (e, stack) {
       L.e('Chyba při strukturované analýze session', e, stack);
       return false;
+    } finally {
+      // Hotový rozbor i rozbor, který selhal jinak než na síti, se už sám neopakuje
+      if (!retryLater) _setUnfinished(sessionId, false);
+    }
+  }
+
+  /// Zapíše výsledek rozboru [data] lekce [sessionId] do databáze: nahradí předchozí rozbor,
+  /// uloží hodnocení lekce, chyby a kartičky z nich a upraví profil studenta.
+  ///
+  /// Volá se uvnitř jedné transakce ([_analyzeSession]), výjimka tedy vrátí všechno zpět.
+  Future<void> _saveAnalysis(
+    int sessionId,
+    dynamic data, {
+    required int studentWords,
+    required bool isTooShort,
+  }) async {
+    final sessionRepo = _ref.read(sessionRepositoryProvider);
+    final profileRepo = _ref.read(profileRepositoryProvider);
+    final flashcardRepo = _ref.read(flashcardRepositoryProvider);
+
+    // Nový rozbor nahradí předchozí. Jinak opakovaný rozbor zdvojil chyby i kartičky (9. 11.)
+    final previous = await sessionRepo.clearSessionAnalysis(sessionId);
+    if (previous.errors > 0) {
+      L.i('Nahrazuji předchozí rozbor lekce $sessionId: smazáno ${previous.errors} chyb '
+          'a ${previous.cards} neprocvičených kartiček.');
+    }
+
+    // --- BEZPEČNÉ PARSOVÁNÍ ČÍSEL ---
+    double fluency = 0.0;
+    if (data['fluencyScore'] != null) {
+      fluency = double.tryParse(data['fluencyScore'].toString()) ?? 0.0;
+    }
+
+    int totalErr = 0;
+    if (data['totalErrors'] != null) {
+      totalErr = int.tryParse(data['totalErrors'].toString()) ?? 0;
+    }
+
+    // ─── STRUKTUROVANÝ VÝPIS VÝSLEDKŮ ANALÝZY ───
+    final analysisLines = StringBuffer();
+    analysisLines.writeln('Plynulost: ${fluency.toStringAsFixed(2)} | Úroveň: ${data['estimatedLevel'] ?? '?'} | Chyby: $totalErr');
+    analysisLines.writeln('Shrnutí: ${data['topicSummary'] ?? 'Bez popisu'}');
+    if (data['briefing'] != null && data['briefing'].toString().isNotEmpty) {
+      analysisLines.writeln('Briefing pro příště: ${L.truncate(data['briefing'].toString(), 300)}');
+    }
+    if (data['tutorFeedback'] != null && data['tutorFeedback'].toString().isNotEmpty) {
+      analysisLines.writeln('⚠️ Tutor Feedback (sebe-reflexe): ${data['tutorFeedback']}');
+    }
+    if (data['resolvedErrors'] != null && (data['resolvedErrors'] as List).isNotEmpty) {
+      analysisLines.writeln('✅ Resolved Errors (Memory Pruning): ${(data['resolvedErrors'] as List).join(', ')}');
+    }
+    if (data['vocabulary'] != null && (data['vocabulary'] as List).isNotEmpty) {
+      analysisLines.writeln('📖 Nová slovíčka: ${(data['vocabulary'] as List).join(', ')}');
+    }
+    if (data['newLearnedUserFacts'] != null && (data['newLearnedUserFacts'] as List).isNotEmpty) {
+      analysisLines.writeln('🧑 Nové fakty o studentovi: ${(data['newLearnedUserFacts'] as List).join(', ')}');
+    }
+    L.block('ANALYSIS', 'Výsledky Gemini analýzy (session $sessionId)', analysisLines.toString());
+
+    // Výpis jednotlivých chyb s kartičkami
+    if (data['errors'] != null && (data['errors'] as List).isNotEmpty) {
+      final errorItems = <String>[];
+      for (var err in data['errors']) {
+        if (err is Map) {
+          final userSaid = err['userSaid']?.toString() ?? '';
+          final correctForm = err['correctForm']?.toString() ?? '';
+          final czechTranslation = err['czechTranslation']?.toString() ?? '';
+          errorItems.add('"$userSaid" → "$correctForm" (CZ: $czechTranslation)');
+        }
+      }
+      L.blockList('ANALYSIS', 'Kartičky z chyb', errorItems);
+    }
+    final estimatedLevel = data['estimatedLevel']?.toString().toUpperCase();
+    // Krátká lekce nebo lekce, kde student skoro jen opakoval, o úrovni nic neříká
+    final isKnownLevel = ['A1', 'A2', 'B1', 'B2'].contains(estimatedLevel) && studentWords >= minWordsForLevel;
+    await sessionRepo.updateSessionAnalysis(
+      sessionId: sessionId,
+      topicSummary: data['topicSummary']?.toString() ?? 'Bez popisu',
+      fluencyScore: fluency,
+      totalErrors: totalErr,
+      estimatedLevel: isKnownLevel && !isTooShort ? estimatedLevel : null,
+      levelDetail: isKnownLevel && !isTooShort ? _levelDetail(data['levelDetail'], estimatedLevel!) : null,
+      levelReason: isKnownLevel && !isTooShort ? data['levelReason']?.toString().trim() : null,
+    );
+
+    // --- ALGORITMUS ODNAUČOVÁNÍ (Memory Pruning) ---
+    // Extrahujeme seznam chyb, které student přestal opakovat.
+    if (data['resolvedErrors'] != null && data['resolvedErrors'] is List) {
+      // Bezpečné parsování pouze stringů z pole
+      final List<String> resolved = (data['resolvedErrors'] as List)
+          .map((e) => e?.toString() ?? '')
+          .where((s) => s.isNotEmpty)
+          .toList();
+
+      if (resolved.isNotEmpty) {
+        L.i('Detekováno zlepšení studenta. Aplikuji Memory Pruning a prořezávám chyby: $resolved');
+
+        // Repozitář provede vyhledání a odstranění těchto jevů z opakujících se chyb,
+        // čímž se efektivně uvolní kapacita kontextového okna a zabrání zacyklení
+        await profileRepo.pruneResolvedErrors(resolved); 
+      }
+    }
+
+    // --- INTEGRACE FRUSTRACE A SEBE-REFLEXE ---
+    // Uložení shrnutí/briefingu pro příští lekci do profilu studenta (pouze pokud nebyla lekce příliš krátká)
+    if (!isTooShort) {
+      // --- PREVENCE NAFUKOVÁNÍ PROMPTU ---
+      // Analytik má tendenci nabalovat staré briefingy, proto má briefing i kritika tutora
+      // svůj limit. Zachová se začátek briefingu (slabiny a téma na příště): dřív se nechával
+      // konec, takže z briefingu zbyla hlavně připojená kritika tutora.
+      var finalBriefing = clipBriefing(data['briefing']?.toString() ?? '', maxBriefingChars);
+      final tutorFeedback = data['tutorFeedback']?.toString() ?? '';
+
+      // Zřetězení analytického briefingu s kritikou chování AI
+      if (tutorFeedback.isNotEmpty) {
+        finalBriefing += '\n\nKRITICKÁ SEBE-REFLEXE (Self-Correction pro tutora na příště): '
+            '${clipBriefing(tutorFeedback, maxTutorFeedbackChars)}';
+      }
+
+      await profileRepo.updateUserMemory(finalBriefing);
+    }
+
+    // Úroveň v profilu: nejčastější odhad z posledních lekcí, ne jen z této
+    if (isKnownLevel && !isTooShort) {
+      final recent = await sessionRepo.getRecentEstimatedLevels(limit: levelWindow, minStudentWords: minWordsForLevel);
+      final level = stableLevel(recent) ?? estimatedLevel!;
+      L.i('Rozbor odhadl úroveň $estimatedLevel, z posledních lekcí (${recent.join(', ')}) platí $level.');
+      await profileRepo.updateTargetLevel(level);
+    }
+
+    // Uložení nově zaznamenaných slovíček do databáze
+    if (data['vocabulary'] != null && data['vocabulary'] is List) {
+      final List<String> newWords = (data['vocabulary'] as List)
+          .map((e) => e?.toString() ?? '')
+          .where((s) => s.isNotEmpty)
+          .toList();
+      if (newWords.isNotEmpty) {
+        await profileRepo.updateUserVocabulary(newWords);
+      }
+    }
+
+    // 4. Uložení nově zjištěných osobních faktů o studentovi do profilu ("O mně")
+    if (data['newLearnedUserFacts'] != null && data['newLearnedUserFacts'] is List) {
+      final List<String> newFacts = (data['newLearnedUserFacts'] as List)
+          .map((e) => e?.toString() ?? '')
+          .where((s) => s.isNotEmpty)
+          .toList();
+      if (newFacts.isNotEmpty) {
+        await profileRepo.updateUserFacts(newFacts);
+        L.i('Uloženo ${newFacts.length} nových faktů o studentovi do "O mně": $newFacts');
+      }
+    }
+
+    // 5. Uložení jednotlivých gramatických/výslovnostních chyb do detailního chybového logu a profilu
+    if (data['errors'] != null && data['errors'] is List) {
+      final List<String> newErrors = [];
+      var cardsCreated = 0;
+      for (var err in data['errors']) {
+        if (err is Map) {
+          final type = err['type']?.toString() ?? 'grammar';
+          final userSaid = err['userSaid']?.toString().trim() ?? '';
+          final correctForm = err['correctForm']?.toString().trim() ?? '';
+          final explanation = err['explanation']?.toString().trim() ?? '';
+          final targetWordOrPhrase = err['targetWordOrPhrase']?.toString().trim();
+          final czechCue = err['czechCue']?.toString().trim();
+
+          // FILTRACE LEAKŮ A SYSTÉMOVÝCH HLÁŠEK:
+          // Tutorovy repliky, instrukce nebo příliš dlouhé texty nesmí proniknout do chyb ani kartiček
+          final lowerSaid = userSaid.toLowerCase();
+          final lowerCorrect = correctForm.toLowerCase();
+          if (userSaid.isEmpty ||
+              correctForm.isEmpty ||
+              userSaid.length > 200 ||
+              lowerSaid.contains('soustředit na naši') ||
+              lowerSaid.contains('nepřepínej') ||
+              lowerSaid.contains('how is your day') ||
+              lowerSaid.contains('as an ai') ||
+              lowerSaid.contains('translation task') ||
+              lowerCorrect.contains('soustředit na naši')) {
+            L.w('Filtrován neplatný záznam chyby (leaked tutor/system message): "$userSaid"');
+            continue;
+          }
+
+          // Přepis v cizím jazyce je chyba STT, ne chyba studenta
+          if (_foreignTranscriptChars.hasMatch(userSaid)) {
+            L.w('Filtrován záznam chyby s přepisem v cizím jazyce (chyba STT): "$userSaid"');
+            continue;
+          }
+
+          final errorLogRes = await sessionRepo.addErrorLog(
+            sessionId: sessionId,
+            errorType: type,
+            userSaid: userSaid,
+            correctForm: correctForm,
+            explanation: explanation,
+            category: ErrorCategory.parse(err['category']?.toString())?.id,
+          );
+
+          newErrors.add('Řekl: "$userSaid", ale správně je: "$correctForm" ($explanation)');
+
+          final czechTranslation = err['czechTranslation']?.toString().trim();
+          final extracted = FlashcardRepository.extractCzechFromExplanation(explanation);
+
+          // Cílové slovíčko pro rub kartičky (atomická jednotka)
+          final cardBack = (targetWordOrPhrase != null && targetWordOrPhrase.isNotEmpty)
+              ? targetWordOrPhrase
+              : correctForm;
+
+          // České zadání pro líc kartičky (atomická jednotka)
+          final cardFront = (czechCue != null && czechCue.isNotEmpty)
+              ? czechCue
+              : ((czechTranslation != null && czechTranslation.isNotEmpty)
+                  ? czechTranslation
+                  : (extracted != null && extracted.isNotEmpty ? extracted : 'Přeložte do angličtiny'));
+
+          // Celá opravená věta slouží jako příklad a kontext na rubu kartičky
+          final contextExample = (correctForm.isNotEmpty && correctForm.toLowerCase() != cardBack.toLowerCase())
+              ? correctForm
+              : (userSaid.isNotEmpty ? userSaid : null);
+
+          if (cardsCreated >= maxNewCardsPerLesson) {
+            L.i('Kartička "$cardBack" nevznikla: z lekce už je $maxNewCardsPerLesson kartiček.');
+            continue;
+          }
+          if (!isAtomicCardTarget(cardBack)) {
+            L.w('Kartička "$cardBack" nevznikla: cíl má víc než ${ConversationCards.maxTargetWords} slova.');
+            continue;
+          }
+
+          // Automatické vytvoření Smart Flashcard pro studenta v češtině k procvičení
+          await flashcardRepo.addFlashcard(
+            frontText: cardFront,
+            backText: cardBack,
+            explanation: explanation,
+            errorType: type,
+            sourceSentence: contextExample,
+            errorLogId: errorLogRes.valueOrNull,
+          );
+          cardsCreated++;
+        }
+      }
+
+      if (newErrors.isNotEmpty) {
+        await profileRepo.updateUserRecurringErrors(newErrors);
+        L.i('Přidáno ${newErrors.length} chyb do opakujících se chyb v profilu.');
+      }
     }
   }
 }

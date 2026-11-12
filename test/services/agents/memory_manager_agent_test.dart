@@ -4,6 +4,8 @@ import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:aj_tudor/core/config/config_providers.dart';
 import 'package:aj_tudor/data/database/app_database.dart';
 import 'package:aj_tudor/data/repositories/session_repository.dart';
 import 'package:aj_tudor/data/repositories/profile_repository.dart';
@@ -63,10 +65,24 @@ void main() {
   late MockScenarioPlannerAgent mockScenarioPlanner;
   late FakeTopicPreparationAgent fakeTopicAgent;
   late ProviderContainer container;
+  late SharedPreferences prefs;
 
   late _FakeWakelock wakelock;
 
-  setUp(() {
+  /// Kontejner nad stejnou databází a nastavením aplikace (další je jako nové spuštění aplikace).
+  ProviderContainer createContainer() => ProviderContainer(
+        overrides: [
+          sessionRepositoryProvider.overrideWithValue(repo),
+          databaseProvider.overrideWithValue(db),
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          geminiAnalysisClientProvider.overrideWithValue(mockGemini),
+          scenarioPlannerAgentProvider.overrideWithValue(mockScenarioPlanner),
+          topicPreparationAgentProvider.overrideWith(() => fakeTopicAgent),
+          wakelockServiceProvider.overrideWithValue(wakelock),
+        ],
+      );
+
+  setUp(() async {
     wakelock = _FakeWakelock();
     db = AppDatabase.forTesting(NativeDatabase.memory());
     repo = SessionRepository(db);
@@ -75,19 +91,12 @@ void main() {
     mockGemini = MockGeminiBatchClient();
     mockScenarioPlanner = MockScenarioPlannerAgent();
     fakeTopicAgent = FakeTopicPreparationAgent();
+    SharedPreferences.setMockInitialValues({});
+    prefs = await SharedPreferences.getInstance();
 
     when(() => mockScenarioPlanner.planScenarios()).thenAnswer((_) async {});
 
-    container = ProviderContainer(
-      overrides: [
-        sessionRepositoryProvider.overrideWithValue(repo),
-        databaseProvider.overrideWithValue(db),
-        geminiAnalysisClientProvider.overrideWithValue(mockGemini),
-        scenarioPlannerAgentProvider.overrideWithValue(mockScenarioPlanner),
-        topicPreparationAgentProvider.overrideWith(() => fakeTopicAgent),
-        wakelockServiceProvider.overrideWithValue(wakelock),
-      ],
-    );
+    container = createContainer();
   });
 
   tearDown(() async {
@@ -101,6 +110,7 @@ void main() {
         overrides: [
           sessionRepositoryProvider.overrideWithValue(repo),
           databaseProvider.overrideWithValue(db),
+          sharedPreferencesProvider.overrideWithValue(prefs),
           geminiAnalysisClientProvider.overrideWithValue(null),
           wakelockServiceProvider.overrideWithValue(wakelock),
         ],
@@ -401,7 +411,7 @@ void main() {
         systemPrompt: any(named: 'systemPrompt'),
       )).thenThrow(const GeminiNetworkException());
       await agent.analyzeSession(s);
-      expect(agent.analysesAwaitingNetwork, [s]);
+      expect(agent.unfinishedAnalyses, [s]);
 
       when(() => mockGemini.sendMessage(
         any(),
@@ -409,7 +419,125 @@ void main() {
         systemPrompt: any(named: 'systemPrompt'),
       )).thenThrow(Exception('API Timeout'));
       await agent.analyzeSession(s);
-      expect(agent.analysesAwaitingNetwork, isEmpty);
+      expect(agent.unfinishedAnalyses, isEmpty);
+    });
+
+    test('an analysis waiting for the network is remembered when the app is closed in the meantime', () async {
+      final s = (await repo.startNewSession()).getOrThrow();
+      await repo.addTranscript(sessionId: s, speaker: 'user', content: 'User message 1');
+      await repo.addTranscript(sessionId: s, speaker: 'user', content: 'User message 2');
+      when(() => mockGemini.sendMessage(
+        any(),
+        responseSchema: any(named: 'responseSchema'),
+        systemPrompt: any(named: 'systemPrompt'),
+      )).thenThrow(const GeminiNetworkException());
+      await container.read(memoryManagerAgentProvider).analyzeSession(s);
+
+      // Systém aplikaci ukončil: nový agent (nové spuštění) o čekající lekci pořád ví
+      final restarted = createContainer();
+      addTearDown(restarted.dispose);
+      final agent = restarted.read(memoryManagerAgentProvider);
+      expect(agent.unfinishedAnalyses, [s]);
+
+      // Povedený rozbor lekci ze seznamu vyřadí natrvalo
+      when(() => mockGemini.sendMessage(
+        any(),
+        responseSchema: any(named: 'responseSchema'),
+        systemPrompt: any(named: 'systemPrompt'),
+      )).thenAnswer((_) async => jsonEncode({
+            'topicSummary': 'Work',
+            'fluencyScore': 0.6,
+            'totalErrors': 0,
+            'errors': [],
+          }));
+      expect(await agent.analyzeSession(s), isTrue);
+      final afterAnalysis = createContainer();
+      addTearDown(afterAnalysis.dispose);
+      expect(afterAnalysis.read(memoryManagerAgentProvider).unfinishedAnalyses, isEmpty);
+    });
+
+    test('an analysis interrupted by closing the app runs again after the next start', () async {
+      // Lekce 27 (11. 11.): aplikace skončila osm vteřin po hovoru, uprostřed rozboru,
+      // a lekce zůstala bez rozboru
+      final s = (await repo.startNewSession()).getOrThrow();
+      await repo.addTranscript(sessionId: s, speaker: 'user', content: 'User message 1');
+      await repo.addTranscript(sessionId: s, speaker: 'user', content: 'User message 2');
+      final reply = Completer<String>();
+      when(() => mockGemini.sendMessage(
+        any(),
+        responseSchema: any(named: 'responseSchema'),
+        systemPrompt: any(named: 'systemPrompt'),
+      )).thenAnswer((_) => reply.future);
+
+      final agent = container.read(memoryManagerAgentProvider);
+      final running = agent.analyzeSession(s);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      // Běžící rozbor se znovu nespouští
+      expect(agent.unfinishedAnalyses, isEmpty);
+
+      // Aplikace skončila, než model odpověděl: po dalším spuštění o rozboru ví nový agent
+      final restarted = createContainer();
+      addTearDown(restarted.dispose);
+      expect(restarted.read(memoryManagerAgentProvider).unfinishedAnalyses, [s]);
+
+      // Rozbor, který selhal jinak než na síti, se sám neopakuje
+      reply.completeError(Exception('API Timeout'));
+      expect(await running, isFalse);
+      final afterFailure = createContainer();
+      addTearDown(afterFailure.dispose);
+      expect(afterFailure.read(memoryManagerAgentProvider).unfinishedAnalyses, isEmpty);
+    });
+
+    test('a repeated analysis that fails while it is being saved keeps the previous analysis whole', () async {
+      final s = (await repo.startNewSession()).getOrThrow();
+      await repo.addTranscript(sessionId: s, speaker: 'user', content: 'I go there yesterday.');
+      await repo.addTranscript(sessionId: s, speaker: 'user', content: 'It was nice.');
+      final agent = container.read(memoryManagerAgentProvider);
+
+      when(() => mockGemini.sendMessage(
+        any(),
+        responseSchema: any(named: 'responseSchema'),
+        systemPrompt: any(named: 'systemPrompt'),
+      )).thenAnswer((_) async => jsonEncode({
+            'topicSummary': 'First analysis',
+            'fluencyScore': 0.6,
+            'totalErrors': 1,
+            'errors': [
+              {
+                'type': 'grammar',
+                'userSaid': 'I go there yesterday.',
+                'targetWordOrPhrase': 'went there',
+                'czechCue': 'šel jsem tam',
+                'correctForm': 'I went there yesterday.',
+                'explanation': 'Minulý čas.',
+              },
+            ],
+          }));
+      expect(await agent.analyzeSession(s), isTrue);
+      final errorsBefore = (await repo.getErrorLogs(s)).map((e) => e.id).toList();
+      final cardsBefore = (await flashcardRepo.getAllFlashcards()).map((c) => c.id).toList();
+      expect(errorsBefore, hasLength(1));
+      expect(cardsBefore, hasLength(1));
+
+      // Druhá odpověď má nečekaný tvar (seznam slovíček je text) a zápis na ní spadne.
+      // Dřív už byl v tu chvíli předchozí rozbor smazaný.
+      when(() => mockGemini.sendMessage(
+        any(),
+        responseSchema: any(named: 'responseSchema'),
+        systemPrompt: any(named: 'systemPrompt'),
+      )).thenAnswer((_) async => jsonEncode({
+            'topicSummary': 'Second analysis',
+            'fluencyScore': 0.9,
+            'totalErrors': 0,
+            'errors': [],
+            'vocabulary': 'not a list',
+          }));
+      expect(await agent.analyzeSession(s), isFalse);
+
+      expect((await repo.getErrorLogs(s)).map((e) => e.id), errorsBefore);
+      expect((await flashcardRepo.getAllFlashcards()).map((c) => c.id), cardsBefore);
+      final session = (await db.select(db.sessions).get()).singleWhere((row) => row.id == s);
+      expect(session.topicSummary, 'First analysis');
     });
 
     test('analyzeSession creates atomic flashcard and filters out leaked tutor messages', () async {
