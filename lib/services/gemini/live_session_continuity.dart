@@ -37,17 +37,6 @@ class LiveSessionContinuity {
   bool _setupHadFields = false;
   bool _setupHadHandle = false;
 
-  /// Kolikrát za sebou se zkusí navázat tokenem, když server hlásí, že předchozí spojení
-  /// ještě drží. Mezi pokusy jsou 2 s, celkem tedy asi 10 s navíc, než hovor dostane shrnutí.
-  static const int maxBusyRetries = 4;
-
-  /// Za jak dlouho se navázání tokenem zkusí znovu.
-  static const Duration busyRetryDelay = Duration(seconds: 2);
-
-  // Kolikrát už server navázání odmítl, protože předchozí spojení ještě drží, a odkdy
-  int _busyRetries = 0;
-  DateTime? _busySince;
-
   /// Aktuální spojení se přihlásilo tokenem předchozího, takže server v hovoru pokračuje
   /// a kontext není potřeba posílat znovu.
   bool get resumed => _setupHadHandle;
@@ -59,34 +48,6 @@ class LiveSessionContinuity {
   void startLesson() {
     _handle = null;
     _level = 2;
-    _busyRetries = 0;
-    _busySince = null;
-  }
-
-  /// Server potvrdil nastavení aktuálního spojení.
-  void onSetupComplete() {
-    final since = _busySince;
-    if (since != null && _setupHadHandle) {
-      L.i('Souvislý hovor: server předchozí spojení uvolnil po '
-          '${DateTime.now().difference(since).inSeconds} s ($_busyRetries. opakování).');
-    }
-    _busyRetries = 0;
-    _busySince = null;
-  }
-
-  /// Server navázání tokenem odmítl, protože předchozí spojení ještě považuje za živé.
-  /// Stává se to po výpadku sítě: klient o konci spojení ví hned, server až po chvíli
-  /// (lekce 28: deset vteřin po vypnutí Wi-Fi ho ještě držel). Token je v pořádku, takže
-  /// se navázání zkusí znovu. Vrátí false, když už se čekalo dost a má přijít shrnutí.
-  bool retryWhileStillConnected(String reason) {
-    if (!_setupHadHandle || !reason.contains('already connected')) return false;
-    if (_busyRetries >= maxBusyRetries) return false;
-    _busyRetries++;
-    _busySince ??= DateTime.now();
-    L.w('Souvislý hovor: server ještě drží předchozí spojení, navázání zkusím znovu '
-        'za ${busyRetryDelay.inSeconds} s ($_busyRetries/$maxBusyRetries).');
-    startConnection();
-    return true;
   }
 
   /// Otevírá se nové spojení a jeho nastavení ještě neodešlo.
@@ -133,18 +94,19 @@ class LiveSessionContinuity {
   void forget() {
     if (_handle != null) L.i('Souvislý hovor: token zahozen, další spojení začne znovu.');
     _handle = null;
-    _busyRetries = 0;
-    _busySince = null;
   }
 
   /// Server spojení odmítl dřív, než potvrdil nastavení. Pokud nastavení neslo pole
   /// souvislého hovoru, ubere se z nich. Vrátí, zda se něco ubralo (další pokus má smysl).
+  ///
+  /// Token se zahodí i při `1008 … already connected to an existing client`, kdy server
+  /// po výpadku sítě ještě drží mrtvé předchozí spojení. Čekat na jeho uvolnění se
+  /// nevyplácí: v lekci 33 ho držel ještě 18 s po výpadku a čtyři pokusy po 2 s jen
+  /// prodloužily ticho, kdežto spojení bez tokenu server přijal hned.
   bool degrade(String reason) {
     if (!_setupHadFields) return false;
     if (_setupHadHandle) {
       _handle = null;
-      _busyRetries = 0;
-      _busySince = null;
       L.w('Souvislý hovor: server odmítl spojení s tokenem ($reason). Zkusím to bez něj, hovor dostane shrnutí.');
     } else if (_level == 2) {
       _level = 1;

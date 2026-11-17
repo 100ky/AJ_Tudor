@@ -206,6 +206,15 @@ Automatické testy nepokryjí mikrofon, přehrávání zvuku ani skutečné vol�
 
 ---
 
+## 🛠️ Úpravy po lekci 33 (17. 11. 2026)
+
+Úpravy vzešly z logu lekce 33 (17. 11., 20 minut se souvislým hovorem a jedním vypnutím Wi-Fi). Komprese kontextu v ní zasáhla třikrát a hovor běžel do výpadku Wi-Fi na jednom spojení. Úpravy na telefonu ještě neběžely v lekci. Testů je 581: časomíra jeden přidala, dva testy opakování navázání nahradil jeden.
+
+- **Časomíra hovoru:** hlavička hovoru ukazuje vpravo od názvu, jak dlouho hovor trvá (`MM:SS`). Během pauzy se zastaví, délka lekce v historii pauzy zahrnuje.
+- **Dávkový překlad kartiček:** dvakrát selhal, model místo JSONu odpověděl jako tutor („Well, I think there is a little misunderstanding here…“). `GeminiBatchClient` bez zadaného systémového promptu posílal prompt hlasového tutora. Teď `system_instruction` posílá jen se zadaným promptem.
+- **Navázání po výpadku sítě:** server mrtvé spojení držel ještě 18 s po výpadku Wi-Fi. Všechna čtyři opakování navázání tokenem po 2 s skončila `1008 … already connected to an existing client` a hovor dostal shrnutí až asi 13 s poté, co se síť vrátila. Klient teď token zahodí po prvním takovém odmítnutí a nové spojení naváže za 0,3 s místo po 2 s prodlevy mezi pokusy. Okamžité navázání platí pro každé odmítnuté nastavení, ubírat se dá nejvýš třikrát.
+- **Denní připomínky:** plánují se přes `inexactAllowWhileIdle`. Přesné budíky na Androidu 14+ vyžadují zvláštní oprávnění (`exact_alarms_not_permitted`).
+
 ## 🛠️ Úpravy z otevřených bodů (17. 11. 2026)
 
 Úpravy navazují na body 16–20 v *Otevřených bodech* a na poznatky z lekcí 28 a 29. Na telefonu ještě neběžely. Počet testů vzrostl z 575 na 581.
@@ -227,7 +236,7 @@ Automatické testy nepokryjí mikrofon, přehrávání zvuku ani skutečné vol�
 - **Nové modely Gemini 4** (`gemini-4-carbon` z 10. 11. a `gemini-4-hydrogen` z 12. 11.) jsou v seznamu modelů pro textový chat. Modely, které aplikace používá jinde, se nezměnily a žádný nemá ohlášené vypnutí kromě `gemini-3.1-flash-lite` (7. 5. 2027).
 
 - **Souvislý hovor na telefonu, co se potvrdilo:** server pole `sessionResumption` i `contextWindowCompression` přijal a hned poslal token. Po dvouminutové pauze zavřel spojení pro nečinnost (1008), nové spojení se přihlásilo tokenem a tutor pokračoval v hovoru bez shrnutí. Spotřeba tokenů navázala (11 992 před pauzou, 12 945 po první odpovědi po ní), kontext tedy na serveru zůstal.
-- **Navázání po výpadku sítě:** deset vteřin po vypnutí Wi-Fi server navázání odmítl s kódem 1008 a důvodem „BidiGenerateContent session is already connected to an existing client“. O konci starého spojení ještě nevěděl. Klient token zahodil, hovor dostal shrnutí a tutor po něm navázal na téma. Teď klient při tomhle důvodu token nechá a navázání zkusí znovu, nejvýš čtyřikrát po 2 s (`LiveSessionContinuity.retryWhileStillConnected`). Když server spojení uvolní, log zapíše, za jak dlouho. Jinak přijde shrnutí jako dosud, jen asi o 10 s později.
+- **Navázání po výpadku sítě:** deset vteřin po vypnutí Wi-Fi server navázání odmítl s kódem 1008 a důvodem „BidiGenerateContent session is already connected to an existing client“. O konci starého spojení ještě nevěděl. Klient token zahodil, hovor dostal shrnutí a tutor po něm navázal na téma. Teď klient při tomhle důvodu token nechá a navázání zkusí znovu, nejvýš čtyřikrát po 2 s (`LiveSessionContinuity.retryWhileStillConnected`). Když server spojení uvolní, log zapíše, za jak dlouho. Jinak přijde shrnutí jako dosud, jen asi o 10 s později. Opakování v lekci 33 ani jednou nevyšlo a od 17. 11. ho klient nezkouší (*Úpravy po lekci 33*).
 - **Ukončování lekce:** uložení posledních replik čeká až 8 s na opravný přepis a hovor během toho vypadal jako běžící. Student klepl na Pauzu a Pokračovat, mikrofon se zapnul znovu, spojení se navázalo znovu a obojí zůstalo po konci lekce viset. Hned po klepnutí na Ukončit je teď na displeji „Ukončuji lekci…“ (`TutorState.ending`) a tlačítka jsou neaktivní. Pauza, pokračování, psaný text, změna tématu ani návrat z pozadí během ukončování nic nespustí.
 - **Rozbor při přetížení všech modelů:** rozbor lekce 28 skončil chybou, všech pět modelů vrátilo 503. Takový rozbor se teď zopakuje po návratu do aplikace nebo po jejím spuštění, stejně jako rozbor bez sítě (`GeminiOverloadedException`).
 - **Ověřeno na telefonu z úprav 11.–12. 11.:** souhrn lekce 28 hlásí „user: 15, tutor: 16“, průměrnou délku odpovědi 8,8 slova a prostřední reakční dobu tutora 1 061 ms (nejdelší 1 516 ms). Po spuštění aplikace se sám zopakoval rozbor lekce 27 („Opakuji rozbor lekce 27“).

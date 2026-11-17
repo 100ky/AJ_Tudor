@@ -31,6 +31,9 @@ class GeminiLiveClient {
   // Reconnect logika a stavové proměnné
   int _reconnectAttempts = 0;
   final int _maxReconnectAttempts = 5;
+
+  /// Za jak dlouho se naváže nové spojení, když server odmítl nastavení předchozího.
+  static const Duration _refusedSetupRetryDelay = Duration(milliseconds: 300);
   bool _isManualDisconnect = false;
   bool _isReconnecting = false;
   bool _isSetupComplete = false;
@@ -211,14 +214,11 @@ class GeminiLiveClient {
         if (!_isManualDisconnect) {
           // Server zavřel spojení s kódem ještě před potvrzením nastavení: odmítl ho.
           // Bez kódu jde o síť, a tu souvislý hovor naopak má překlenout.
-          if (!_isSetupComplete && code != null) {
-            // Token je platný, jen server ještě drží předchozí spojení: zkusit to za chvíli
-            // znovu. Server je dosažitelný, proto se to nepočítá mezi pokusy o připojení.
-            if (_continuity.retryWhileStillConnected('$code $reason')) {
-              _reconnectSoon(LiveSessionContinuity.busyRetryDelay);
-              return;
-            }
-            _continuity.degrade('$code $reason');
+          // Když se z nastavení něco ubralo, naváže se hned: server odpovídá, není na co
+          // čekat, a mezi pokusy o připojení se to nepočítá (ubírat jde nejvýš třikrát).
+          if (!_isSetupComplete && code != null && _continuity.degrade('$code $reason')) {
+            _reconnectSoon(_refusedSetupRetryDelay);
+            return;
           }
           _attemptReconnect();
         }
@@ -490,7 +490,6 @@ class GeminiLiveClient {
       if (data.containsKey('setupComplete') || data.containsKey('setup_complete')) {
         L.i('✅ Gemini Live Setup úspěšně dokončen (setupComplete).');
         _isSetupComplete = true;
-        _continuity.onSetupComplete();
         onSetupComplete?.call();
       }
 
