@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:aj_tudor/features/history/history_screen.dart';
+import 'package:aj_tudor/features/progress/widgets/lesson_history_tab.dart';
 import 'package:aj_tudor/features/history/widgets/session_card.dart';
 import 'package:aj_tudor/core/app_theme.dart';
 import 'package:aj_tudor/data/database/app_database.dart';
@@ -67,20 +67,24 @@ void main() {
       ],
       child: MaterialApp(
         theme: AppTheme.darkTheme,
-        home: const HistoryScreen(),
+        // Stejně jako v Pokroku: lekce z databáze, po smazání se seznam překreslí
+        home: Scaffold(
+          body: Consumer(
+            builder: (context, ref, _) =>
+                LessonHistoryTab(sessions: ref.watch(allSessionsProvider).value ?? const []),
+          ),
+        ),
       ),
     );
   }
 
-  group('HistoryScreen Tests', () {
+  group('LessonHistoryTab', () {
     testWidgets('renders empty state when there are no past sessions', (WidgetTester tester) async {
       await tester.pumpWidget(buildTestWidget());
       await tester.pumpAndSettle();
 
-      expect(find.byType(HistoryScreen), findsOneWidget);
-      expect(find.text('Historie konverzací'), findsOneWidget);
-      expect(find.text('Zatím nemáš žádné lekce.'), findsOneWidget);
-      expect(find.byIcon(Icons.history), findsOneWidget);
+      expect(find.text('Zatím nemáš žádné lekce'), findsOneWidget);
+      expect(find.byIcon(Icons.history_rounded), findsOneWidget);
 
       await drainTimers(tester);
     });
@@ -211,7 +215,7 @@ void main() {
       expect(allSessions.any((s) => s.id == sessionId), isFalse);
 
       // History should now show empty state
-      expect(find.text('Zatím nemáš žádné lekce.'), findsOneWidget);
+      expect(find.text('Zatím nemáš žádné lekce'), findsOneWidget);
 
       await drainTimers(tester);
     });

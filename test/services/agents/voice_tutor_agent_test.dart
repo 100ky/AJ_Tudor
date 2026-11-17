@@ -595,6 +595,30 @@ void main() {
       expect(state.messages.last.text, 'Tell me more about the app.');
     });
 
+    test('leaving the app pauses the call and coming back keeps it paused', () async {
+      // Na pozadí Android aplikaci bez služby na popředí ztlumí mikrofon
+      final agent = container.read(voiceTutorAgentProvider.notifier);
+      await agent.startSession();
+      final before = container.read(voiceTutorAgentProvider).status;
+
+      // Stažená lišta oznámení nebo systémový dialog hovor nepozastaví
+      agent.didChangeAppLifecycleState(AppLifecycleState.inactive);
+      await pumpEventQueue();
+      expect(container.read(voiceTutorAgentProvider).status, before);
+
+      agent.didChangeAppLifecycleState(AppLifecycleState.hidden);
+      agent.didChangeAppLifecycleState(AppLifecycleState.paused);
+      await pumpEventQueue();
+      expect(container.read(voiceTutorAgentProvider).status, TutorState.paused);
+      verify(() => mockAudio.stop()).called(1);
+
+      agent.didChangeAppLifecycleState(AppLifecycleState.resumed);
+      await pumpEventQueue();
+      expect(container.read(voiceTutorAgentProvider).status, TutorState.paused);
+      verify(() => mockAudio.start(onAudioChunk: any(named: 'onAudioChunk'))).called(1);
+      verifyNever(() => mockClient.forceReconnect());
+    });
+
     test('a turn transcribed only as "..." is not added to the conversation', () async {
       final agent = container.read(voiceTutorAgentProvider.notifier);
       await agent.startSession();

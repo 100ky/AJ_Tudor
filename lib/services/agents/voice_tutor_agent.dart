@@ -315,6 +315,19 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Odchod na pozadí hovor pozastaví. Aplikace nemá službu na popředí, takže jí Android
+    // na pozadí mikrofon ztlumí: tutor by slyšel jen ticho a server by spojení po chvíli
+    // zavřel. Po návratu hovor zůstane pozastavený a pokračuje se klepnutím na Pokračovat.
+    // Stav inactive (stažená lišta oznámení, systémový dialog) hovor nepozastaví.
+    if (state == AppLifecycleState.hidden || state == AppLifecycleState.paused) {
+      final status = this.state.status;
+      if (!_isStopping && status != TutorState.idle && status != TutorState.error && status != TutorState.paused) {
+        L.i('Aplikace odešla na pozadí, hovor pozastavuji.');
+        unawaited(pauseSession());
+      }
+      return;
+    }
+
     // Pokud se aplikace vrátí z pozadí (resumed) a probíhá hovor, zkontrolujeme stav WebSocketu.
     // Pokud je socket odpojen, přepneme stav na reconnecting a vynutíme reconnect.
     if (state == AppLifecycleState.resumed) {
@@ -1491,7 +1504,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     });
   }
 
-  /// Nové spojení se přihlásilo tokenem předchozího (zkušební souvislý hovor): server hovor
+  /// Nové spojení se přihlásilo tokenem předchozího (souvislý hovor): server hovor
   /// zná, shrnutí se neposílá a tutor pokračuje tam, kde skončil.
   ///
   /// S [answerStudent] tutor hned odpoví na poslední repliku studenta, na kterou staré

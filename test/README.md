@@ -43,11 +43,11 @@ test/
 │   │       ├── tutor_text_tokens_test.dart       # Dělení textu na slova, tučný text, které slovo je česky
 │   │       └── word_translation_sheet_test.dart  # Bottom sheet kontextového překladu a rozšiřování frází
 │   ├── history/
-│   │   ├── history_screen_test.dart              # Historie lekcí po dnech, detail lekce, mazání podržením i z detailu
 │   │   └── session_detail_controller_test.dart   # Chat nad lekcí (kontext posledních 10 replik), nahlášení problému, mazání lekce
 │   ├── agents/
 │   │   └── agents_screen_test.dart               # Multi-agentní přehled, generování scénářů na míru
 │   ├── progress/
+│   │   ├── lesson_history_tab_test.dart          # Historie lekcí v Pokroku po dnech, detail lekce, mazání podržením i z detailu
 │   │   └── progress_screen_test.dart             # Přehled pokroku, co se zlepšuje (víc je líp), na čem pracovat, rozbalovací podrobnosti, souhrn
 │   ├── flashcards/
 │   │   ├── answer_recorder_test.dart             # Mluvená odpověď na kartičku: příliš krátká nahrávka, nahrávka bez řeči
@@ -130,7 +130,7 @@ flutter test test/core/
 ```bash
 # Obrazovky
 flutter test test/features/conversation/voice_tutor_screen_test.dart
-flutter test test/features/history/history_screen_test.dart
+flutter test test/features/progress/lesson_history_tab_test.dart
 flutter test test/features/agents/agents_screen_test.dart
 flutter test test/features/progress/progress_screen_test.dart
 flutter test test/features/flashcards/flashcards_screen_test.dart

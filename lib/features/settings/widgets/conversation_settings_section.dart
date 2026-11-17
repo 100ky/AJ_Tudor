@@ -72,7 +72,7 @@ class ConversationSettingsSection extends ConsumerWidget {
           Divider(color: AppTheme.outlineLightColor(context)),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: Text('Souvislý hovor (zkušební)',
+            title: Text('Souvislý hovor',
                 style: GoogleFonts.hankenGrotesk(
                     fontWeight: FontWeight.w500,
                     color: AppTheme.textColor(context))),

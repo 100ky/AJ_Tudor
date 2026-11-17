@@ -232,19 +232,19 @@ class ImmersiveModeNotifier extends Notifier<bool> {
 /// Globální stav pohlcujícího režimu.
 final immersiveModeProvider = NotifierProvider<ImmersiveModeNotifier, bool>(ImmersiveModeNotifier.new);
 
-/// Správce zkušebního „souvislého hovoru“.
+/// Správce „souvislého hovoru“.
 ///
 /// Zapnutý hovor žádá server Gemini Live o token, kterým nové spojení po výpadku naváže
 /// na stejný hovor (session resumption), a o průběžné zkracování kontextu. Vypnutý hovor
-/// po výpadku dostane jen textové shrnutí od režiséra. Výchozí stav je vypnuto, dokud se
-/// to neověří v lekcích na telefonu.
+/// po výpadku dostane jen textové shrnutí od režiséra. Výchozí stav je zapnuto, ověřilo se
+/// to v lekcích 28, 29 a 33.
 class SessionContinuityNotifier extends Notifier<bool> {
   static const _key = 'live_session_continuity';
 
   @override
   bool build() {
     final prefs = ref.watch(sharedPreferencesProvider);
-    return prefs.getBool(_key) ?? false;
+    return prefs.getBool(_key) ?? true;
   }
 
   /// Zapne nebo vypne souvislý hovor (platí od příští lekce).
@@ -255,7 +255,7 @@ class SessionContinuityNotifier extends Notifier<bool> {
   }
 }
 
-/// Globální stav zkušebního souvislého hovoru.
+/// Globální stav souvislého hovoru.
 final sessionContinuityProvider =
     NotifierProvider<SessionContinuityNotifier, bool>(SessionContinuityNotifier.new);
 
