@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../../core/app_theme.dart';
 import '../../../../core/widgets/grouped_section.dart';
@@ -90,17 +91,26 @@ class TutorHeader extends StatelessWidget {
 
   Widget _active(TutorState status) {
     final speaking = status == TutorState.speaking;
+    final pausedOrEnding = status == TutorState.paused || status == TutorState.ending;
     return Column(
       key: const ValueKey('compact_header'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
-          child: Text(
-            title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTheme.font(fontSize: 16, fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTheme.font(fontSize: 16, fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
+                ),
+              ),
+              const SizedBox(width: 12),
+              _CallDurationBadge(isPaused: pausedOrEnding),
+            ],
           ),
         ),
         Semantics(
@@ -138,6 +148,53 @@ class TutorHeader extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Živá časomíra probíhajícího hovoru (`MM:SS`), pozastavuje se při pauze/ukončování.
+class _CallDurationBadge extends StatefulWidget {
+  final bool isPaused;
+
+  const _CallDurationBadge({required this.isPaused});
+
+  @override
+  State<_CallDurationBadge> createState() => _CallDurationBadgeState();
+}
+
+class _CallDurationBadgeState extends State<_CallDurationBadge> {
+  int _elapsedSeconds = 0;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!widget.isPaused && mounted) {
+        setState(() => _elapsedSeconds++);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final minutes = (_elapsedSeconds ~/ 60).toString().padLeft(2, '0');
+    final seconds = (_elapsedSeconds % 60).toString().padLeft(2, '0');
+    return Text(
+      '$minutes:$seconds',
+      key: const ValueKey('call_duration_timer'),
+      style: AppTheme.font(
+        fontSize: 13.5,
+        fontWeight: FontWeight.w600,
+        color: AppTheme.textSecondary,
+        fontFeatures: const [FontFeature.tabularFigures()],
+      ),
     );
   }
 }

@@ -190,6 +190,7 @@ void main() {
 
       // Tlačítko Začít hovor na ploše není (hovor se spouští z navigace)
       expect(find.text('Začít hovor'), findsNothing);
+      expect(find.byKey(const ValueKey('call_duration_timer')), findsNothing);
 
       await drainTimers(tester);
     });
@@ -355,8 +356,10 @@ void main() {
       await tester.pumpWidget(buildTestWidget(fakeTutorAgent: fakeAgent, smartBubbles: false));
       await tester.pump(const Duration(milliseconds: 300));
 
-      // In active state, wave, stop and pause buttons should be visible
+      // In active state, wave, timer, stop and pause buttons should be visible
       expect(find.byType(FluidVoiceWave), findsOneWidget);
+      expect(find.byKey(const ValueKey('call_duration_timer')), findsOneWidget);
+      expect(find.text('00:00'), findsOneWidget);
       expect(find.byIcon(Icons.stop_rounded), findsOneWidget);
       expect(find.byIcon(Icons.pause_rounded), findsOneWidget);
 
@@ -364,6 +367,31 @@ void main() {
       expect(find.byType(ChatBubble), findsNWidgets(2));
       expect(find.text('Good morning Tudor!'), findsOneWidget);
       expect(find.text('morning!'), findsOneWidget);
+
+      await drainTimers(tester);
+    });
+
+    testWidgets('tracks elapsed call duration in header and pauses on paused status',
+        (WidgetTester tester) async {
+      configureViewport(tester);
+      final fakeAgent = FakeVoiceTutorAgent(
+        VoiceTutorState(status: TutorState.listening),
+      );
+
+      await tester.pumpWidget(buildTestWidget(fakeTutorAgent: fakeAgent));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.byKey(const ValueKey('call_duration_timer')), findsOneWidget);
+      expect(find.text('00:00'), findsOneWidget);
+
+      await tester.pump(const Duration(seconds: 5));
+      expect(find.text('00:05'), findsOneWidget);
+
+      // Pozastavení zastaví přičítání času
+      await tester.tap(find.byIcon(Icons.pause_rounded));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 4));
+      expect(find.text('00:05'), findsOneWidget);
 
       await drainTimers(tester);
     });

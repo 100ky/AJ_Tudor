@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import '../../core/constants/gemini_models.dart';
 import '../../core/utils/logger.dart';
-import '../prompt/system_prompt_builder.dart';
 import 'gemini_rest_core.dart';
 
 /// Požadavek se na server nedostal: telefon je bez sítě, nebo systém aplikaci
@@ -172,17 +171,16 @@ class GeminiBatchClient {
     Map<String, dynamic>? responseSchema,
     String? systemPromptOverride,
   }) async {
-    final effectiveSystemPrompt = systemPromptOverride ??
-        systemPrompt ??
-        SystemPromptBuilder.buildTutorPrompt();
+    final effectiveSystemPrompt = systemPromptOverride ?? systemPrompt;
 
     // Sestavení těla požadavku dle Gemini REST API v1beta
     final body = <String, dynamic>{
-      'system_instruction': {
-        'parts': [
-          {'text': effectiveSystemPrompt}
-        ]
-      },
+      if (effectiveSystemPrompt != null && effectiveSystemPrompt.isNotEmpty)
+        'system_instruction': {
+          'parts': [
+            {'text': effectiveSystemPrompt}
+          ]
+        },
       'contents': [
         {
           'role': 'user',
