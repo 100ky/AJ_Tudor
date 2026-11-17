@@ -456,6 +456,23 @@ void main() {
       expect(afterAnalysis.read(memoryManagerAgentProvider).unfinishedAnalyses, isEmpty);
     });
 
+    test('an analysis that found every model overloaded is tried again later', () async {
+      // Lekce 28 (12. 11.): všech pět modelů vrátilo 503 a lekce zůstala bez rozboru
+      final s = (await repo.startNewSession()).getOrThrow();
+      await repo.addTranscript(sessionId: s, speaker: 'user', content: 'User message 1');
+      await repo.addTranscript(sessionId: s, speaker: 'user', content: 'User message 2');
+      when(() => mockGemini.sendMessage(
+        any(),
+        responseSchema: any(named: 'responseSchema'),
+        systemPrompt: any(named: 'systemPrompt'),
+      )).thenThrow(const GeminiOverloadedException('This model is currently experiencing high demand.'));
+      final agent = container.read(memoryManagerAgentProvider);
+
+      expect(await agent.analyzeSession(s), isFalse);
+
+      expect(agent.unfinishedAnalyses, [s]);
+    });
+
     test('an analysis interrupted by closing the app runs again after the next start', () async {
       // Lekce 27 (11. 11.): aplikace skončila osm vteřin po hovoru, uprostřed rozboru,
       // a lekce zůstala bez rozboru

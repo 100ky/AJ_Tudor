@@ -92,6 +92,7 @@ String stripModelFormatting(String raw) => raw
 /// (např. TTS) neblokuje modely ostatních služeb.
 class ModelCooldownTracker {
   final Map<String, DateTime> _cooldownUntil = {};
+  final Map<String, int> _failures = {};
   String? _preferredModel;
 
   // Denní kvóta platí pro model v celém projektu: když ji vyčerpá jedna služba,
@@ -129,10 +130,23 @@ class ModelCooldownTracker {
     _cooldownUntil[model] = DateTime.now().add(duration);
   }
 
-  /// Model selhal chybou [e]: dostane cooldown podle [cooldownAfter]. Vyčerpaný denní
-  /// limit ho vyřadí ve všech službách až do obnovy kvóty. Vrátí délku cooldownu.
+  /// Model selhal chybou [e]: dostane cooldown podle [cooldownAfter]. Opakované přetížení
+  /// bez úspěchu mezi pokusy prodlužuje čekání (×1, ×5, ×20). Vyčerpaný denní limit model
+  /// vyřadí ve všech službách až do obnovy kvóty. Vrátí délku cooldownu.
   Duration markFailure(String model, DioException e, {required Duration otherwise}) {
-    final cooldown = cooldownAfter(e, otherwise: otherwise);
+    final Duration cooldown;
+    if (e.response?.statusCode == 429) {
+      cooldown = cooldownAfter(e, otherwise: otherwise);
+    } else {
+      final failures = (_failures[model] ?? 0) + 1;
+      _failures[model] = failures;
+      final escalated = failures == 1
+          ? otherwise
+          : failures == 2
+              ? otherwise * 5
+              : otherwise * 20;
+      cooldown = cooldownAfter(e, otherwise: escalated);
+    }
     markOverloaded(model, cooldown);
     if (isDailyQuotaError(e)) _dailyQuotaUntil[model] = DateTime.now().add(cooldown);
     return cooldown;
@@ -141,12 +155,14 @@ class ModelCooldownTracker {
   /// Zruší cooldown modelu, který uspěl; s [remember] si ho zapamatuje jako preferovaný.
   void markSuccess(String model, {bool remember = false}) {
     _cooldownUntil.remove(model);
+    _failures.remove(model);
     if (remember) _preferredModel = model;
   }
 
   /// Vymaže všechny cooldowny i preferovaný model (i sdílenou denní kvótu, pro testy).
   void clear() {
     _cooldownUntil.clear();
+    _failures.clear();
     _dailyQuotaUntil.clear();
     _preferredModel = null;
   }

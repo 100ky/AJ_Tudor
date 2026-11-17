@@ -62,16 +62,13 @@ class BackupService {
         return false;
       }
 
-      // Pro jistotu zkopírujeme databázi do dočasného souboru, abychom neblokovali ostrý soubor
+      // Zkopírujeme databázi zálohovacím API SQLite do dočasného souboru, aby export
+      // fungoval bezpečně i při otevřeném spojení a se soubory WAL
       final tempDir = tempDirOverride ?? await getTemporaryDirectory();
       final tempBackupFile = File(p.join(tempDir.path, 'aj_tudor_backup.sqlite'));
 
-      // Pokud starý dočasný soubor existuje, smažeme ho
-      if (await tempBackupFile.exists()) {
-        await tempBackupFile.delete();
-      }
-
-      await dbFile.copy(tempBackupFile.path);
+      await _deleteDatabaseFile(tempBackupFile);
+      await _copyDatabase(from: dbFile, to: tempBackupFile);
       L.i('Záloha databáze připravena v dočasném souboru: ${tempBackupFile.path}');
 
       // Sdílení souboru pomocí share_plus (v12 API)

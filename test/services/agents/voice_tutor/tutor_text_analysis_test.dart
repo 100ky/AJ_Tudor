@@ -89,23 +89,46 @@ void main() {
   group('repeatedTurnSimilarity', () {
     test('no history or no significant words means no repetition', () {
       expect(repeatedTurnSimilarity('What did you cook today?', const []), isNull);
-      expect(repeatedTurnSimilarity('Ok. Yes.', ['Ok. Yes.']), isNull);
+      expect(repeatedTurnSimilarity('Ok. Yes.', ['Ok. Yes.', 'Ok. Yes.']), isNull);
     });
 
-    test('detects a turn that reuses most significant words', () {
+    test('repeating a question once is not treated as stagnation', () {
+      expect(
+        repeatedTurnSimilarity(
+          'What kind of music do you listen to these days?',
+          ['Tell me, what kind of music do you listen to?'],
+        ),
+        isNull,
+      );
+      expect(
+        repeatedTurnSimilarity(
+          'That reminds me of something you told me last week about your job',
+          ['Earlier: that reminds me of something you told me yesterday, right?'],
+        ),
+        isNull,
+      );
+    });
+
+    test('detects a turn that reuses most significant words across two earlier turns', () {
       final similarity = repeatedTurnSimilarity(
         'What kind of music do you listen to these days?',
-        ['Tell me, what kind of music do you listen to?'],
+        [
+          'Tell me, what kind of music do you listen to?',
+          'So what kind of music do you like to listen to?',
+        ],
       );
       expect(similarity, isNotNull);
       expect(similarity!, greaterThan(0.45));
     });
 
-    test('detects a copied opening even with low word overlap', () {
+    test('detects a copied opening across two earlier turns even with low word overlap', () {
       // Jaccard 4/11 ≈ 0.36 is below the limit, but the first 40 characters repeat
       final similarity = repeatedTurnSimilarity(
         'That reminds me of something you told me last week about your job',
-        ['Earlier: that reminds me of something you told me yesterday, right?'],
+        [
+          'Earlier: that reminds me of something you told me yesterday, right?',
+          'Anyway, that reminds me of something you told me earlier today.',
+        ],
       );
       expect(similarity, closeTo(4 / 11, 1e-9));
     });
@@ -115,7 +138,10 @@ void main() {
       expect(
         repeatedTurnSimilarity(
           'That reminds me of something completely different',
-          ['Earlier: that reminds me of something we discussed'],
+          [
+            'Earlier: that reminds me of something we discussed',
+            'Later: that reminds me of something from school',
+          ],
         ),
         isNull,
       );
@@ -123,7 +149,8 @@ void main() {
 
     test('citace opravené věty není stagnace', () {
       const history = [
-        'Pozor, v angličtině neříkáme was done. Zkus to zopakovat: The presentation went well.'
+        'Pozor, v angličtině neříkáme was done. Zkus to zopakovat: The presentation went well.',
+        'Ano, zkus ještě jednou: The presentation went well.',
       ];
       expect(repeatedTurnSimilarity('The presentation went well. Can you say that?', history), isNull);
     });
@@ -132,7 +159,7 @@ void main() {
       expect(
         repeatedTurnSimilarity(
           'Have you ever travelled abroad by train?',
-          ['What is your favourite breakfast?'],
+          ['What is your favourite breakfast?', 'How was your weekend?'],
         ),
         isNull,
       );

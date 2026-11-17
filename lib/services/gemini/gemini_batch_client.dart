@@ -15,6 +15,18 @@ class GeminiNetworkException implements Exception {
   String toString() => 'Exception: Chyba sítě (bez internetu). Zkontrolujte připojení.';
 }
 
+/// Žádný z modelů v řadě neodpověděl (přetížení, vyčerpaný limit, timeout). Je to dočasný
+/// stav: úloha, která může počkat (rozbor lekce), se má zkusit později znovu.
+class GeminiOverloadedException implements Exception {
+  /// Poslední chyba, kterou server vrátil.
+  final String lastError;
+
+  const GeminiOverloadedException(this.lastError);
+
+  @override
+  String toString() => 'Exception: Všechny modely jsou momentálně přetížené. Poslední chyba: $lastError';
+}
+
 /// Klientská třída pro komunikaci s Gemini API v dávkovém/jednorázovém režimu (non-streaming).
 ///
 /// Používá přímé REST volání na Gemini API (bez deprecated google_generative_ai SDK).
@@ -94,7 +106,8 @@ class GeminiBatchClient {
     // Modely bez odpovědi serveru (spojení spadlo) v tomto volání
     final unanswered = <String>[];
 
-    for (final modelName in _cooldowns.order(allCandidates)) {
+    final preferLast = receiveTimeout == shortTaskTimeout;
+    for (final modelName in _cooldowns.order(allCandidates, preferLastWorking: preferLast)) {
       try {
         L.i('Zkouším model: $modelName...');
 
@@ -105,7 +118,7 @@ class GeminiBatchClient {
           systemPromptOverride: systemPrompt,
         );
 
-        _cooldowns.markSuccess(modelName);
+        _cooldowns.markSuccess(modelName, remember: true);
         if (modelName != primaryModelName) {
           L.w('⚠️ Fallback úspěšný s modelem: $modelName');
         }
@@ -149,7 +162,7 @@ class GeminiBatchClient {
 
     // Pokud selžou všechny modely, namísto vracení textu, který rozbije JSON parser,
     // vyhodíme jasnou výjimku, aby se aktivovaly záložní/retry mechanismy v agentech.
-    throw Exception('Všechny modely jsou momentálně přetížené. Poslední chyba: $lastError');
+    throw GeminiOverloadedException(lastError);
   }
 
   /// Provede přímé REST volání na Gemini generateContent endpoint.

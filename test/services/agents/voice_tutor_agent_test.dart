@@ -63,7 +63,7 @@ class _CapturingDirector extends VoiceDirectorAgent {
 class _FakeLessonJudge extends LessonCardJudge {
   _FakeLessonJudge(this.answer) : super(null);
 
-  final int? answer;
+  int? answer;
   final List<String> asked = [];
 
   @override
@@ -1022,6 +1022,82 @@ void main() {
       await agent.stopSession('test');
     });
 
+    testWidgets('three short replies trigger frustration recalibration even when trailing silence exceeds 3 s',
+        (tester) async {
+      final sentContent = <String>[];
+      when(() => mockClient.sendClientContent(
+            role: any(named: 'role'),
+            text: any(named: 'text'),
+            turnComplete: any(named: 'turnComplete'),
+          )).thenAnswer((invocation) => sentContent.add(invocation.namedArguments[#text] as String));
+
+      final agent = container.read(voiceTutorAgentProvider.notifier);
+      await agent.startSession();
+
+      final tutorReplies = ['Are you busy?', 'What did you do?', 'Do you like it?'];
+      final studentReplies = ['Yes.', 'Nothing.', 'Maybe.'];
+
+      for (var i = 0; i < 3; i++) {
+        mic(noise);
+        speak(); // 700 ms hlasu (< 3 s řeči)
+        for (var q = 0; q < 25; q++) {
+          mic(quiet); // + 2,5 s ticha -> audioMs >= 3000, ale voicedMs == 700
+        }
+        await tester.pump(const Duration(milliseconds: 2100));
+        await tester.pump();
+        userTranscript!(studentReplies[i]);
+        tutorText!(tutorReplies[i]);
+        turnComplete!();
+        await tester.pump();
+      }
+
+      expect(agent.metrics.frustrationDetections, 1);
+      expect(sentContent.where((t) => t.contains(LiveTutorPrompts.frustrationRecalibration)), hasLength(1));
+
+      await agent.stopSession('test');
+    });
+
+    testWidgets('buttons tapped while the lesson is ending do not restart the microphone or the connection',
+        (tester) async {
+      // Lekce 28: opravný přepis poslední repliky nedobíhal, ukončení trvalo 8 s a hovor
+      // vypadal jako běžící. Student klepl na Pauzu a Pokračovat: mikrofon se zapnul znovu,
+      // spojení se navázalo znovu a obojí zůstalo po konci lekce viset.
+      final correction = Completer<String?>();
+      when(() => mockTranscriber.transcribe(any(), previousTutorLine: any(named: 'previousTutorLine')))
+          .thenAnswer((_) => correction.future);
+      final agent = container.read(voiceTutorAgentProvider.notifier);
+      await agent.startSession();
+      await speakAndPause(tester);
+      userTranscript!('I must go.');
+
+      final stop = agent.stopSession('test');
+      await tester.pump(const Duration(seconds: 1));
+      // Na displeji je vidět, že se lekce ukončuje
+      expect(container.read(voiceTutorAgentProvider).status, TutorState.ending);
+      when(() => mockClient.isConnected).thenReturn(false);
+
+      await agent.pauseSession();
+      await agent.resumeSession();
+      agent.sendText('Hello?');
+      agent.forceTopicChange();
+      agent.didChangeAppLifecycleState(AppLifecycleState.resumed);
+      await tester.pump();
+
+      expect(container.read(voiceTutorAgentProvider).status, TutorState.ending);
+      // Mikrofon se zapnul jen jednou, na začátku lekce
+      verify(() => mockAudio.start(onAudioChunk: any(named: 'onAudioChunk'))).called(1);
+      verifyNever(() => mockClient.forceReconnect());
+      verifyNever(() => mockClient.sendText('Hello?'));
+
+      await tester.pump(const Duration(seconds: 8));
+      await stop;
+      expect(container.read(voiceTutorAgentProvider).status, TutorState.idle);
+
+      // Opravný přepis doběhne až po konci lekce (v testu jinak zůstane viset jeho časovač)
+      correction.complete(null);
+      await tester.pump();
+    });
+
     testWidgets('a short reply goes to Tudor only after the check finds speech', (tester) async {
       when(() => mockTranscriber.transcribe(any(), previousTutorLine: any(named: 'previousTutorLine')))
           .thenAnswer((_) async => 'Yes.');
@@ -1523,6 +1599,45 @@ void main() {
         await agent.stopSession('test');
       });
 
+      testWidgets('tutor repeating a question once keeps the topic, repeating a third time changes it',
+          (tester) async {
+        final sentContent = <String>[];
+        when(() => mockClient.sendClientContent(
+              role: any(named: 'role'),
+              text: any(named: 'text'),
+              turnComplete: any(named: 'turnComplete'),
+            )).thenAnswer((invocation) => sentContent.add(invocation.namedArguments[#text] as String));
+
+        final agent = container.read(voiceTutorAgentProvider.notifier);
+        await agent.startSession();
+
+        Future<void> tutorSays(String line) async {
+          tutorText!(line);
+          turnComplete!();
+          await tester.pump();
+        }
+
+        // 1. otázka
+        await tutorSays('What kind of grilling do you enjoy on weekends?');
+        // 1. zopakování (student např. nerozuměl) – téma zůstává
+        await speakAndPause(tester);
+        userTranscript!('Sorry, I did not hear you.');
+        await tutorSays('I was asking what kind of grilling you enjoy on weekends?');
+        expect(sentContent.where((t) => t.contains(LiveTutorPrompts.changeTopicSilently)), isEmpty);
+
+        // 2. zopakování (potřetí totéž) – vynutí se tichá změna tématu a historie se vyčistí
+        await speakAndPause(tester);
+        userTranscript!('I stayed at home.');
+        await tutorSays('So what kind of grilling do you enjoy on weekends?');
+        expect(sentContent.where((t) => t.contains(LiveTutorPrompts.changeTopicSilently)), hasLength(1));
+
+        // Po vyčištění historie další výskyt nespustí změnu tématu podruhé
+        await tutorSays('What kind of grilling do you enjoy on weekends?');
+        expect(sentContent.where((t) => t.contains(LiveTutorPrompts.changeTopicSilently)), hasLength(1));
+
+        await agent.stopSession('test');
+      });
+
       group('director whisper', () {
         late _CapturingDirector director;
         late List<String> sentContent;
@@ -1783,6 +1898,43 @@ void main() {
             );
             // Vpletená kartička se v tomto hovoru znovu nenabídne (a další až za dvě minuty)
             expect(director.cardPools.last, isEmpty);
+
+            await agent.stopSession('test');
+          });
+
+          testWidgets('a single-word card in a conversation is verified by the judge for part of speech',
+              (tester) async {
+            when(() => mockFlashcardRepo.getDueFlashcards()).thenAnswer((_) async => [
+                  _dueCard(10, 'programovat', 'program'),
+                ]);
+            final judge = _FakeLessonJudge(null);
+            container.dispose();
+            container = ProviderContainer(overrides: [
+              ...overrides,
+              voiceDirectorAgentProvider.overrideWith(() => director),
+              lessonCardJudgeProvider.overrideWithValue(judge),
+            ]);
+
+            final agent = container.read(voiceTutorAgentProvider.notifier);
+            await agent.startSession();
+
+            // Podstatné jméno „program“ nesplní sloveso „programovat“ – rozhodčí ho zamítne
+            await exchange(tester, 'Some AI generate program.', 'Interesting!');
+            await tester.pump();
+            expect(judge.asked, ['Some AI generate program.']);
+            expect(container.read(voiceTutorAgentProvider).completedCards, isEmpty);
+            verifyNever(() => mockFlashcardRepo.reviewFlashcard(
+                  flashcardId: any(named: 'flashcardId'),
+                  rating: any(named: 'rating'),
+                ));
+
+            // Správný slovní druh (sloveso) rozhodčí potvrdí
+            judge.answer = 10;
+            await exchange(tester, 'I want to program my own tool.', 'Nice goal!');
+            await tester.pump();
+            expect(judge.asked, ['Some AI generate program.', 'I want to program my own tool.']);
+            expect(container.read(voiceTutorAgentProvider).completedCards.map((c) => c.id), [10]);
+            verify(() => mockFlashcardRepo.reviewFlashcard(flashcardId: 10, rating: 2)).called(1);
 
             await agent.stopSession('test');
           });

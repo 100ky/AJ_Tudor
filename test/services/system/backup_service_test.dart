@@ -65,9 +65,11 @@ void main() {
       expect(result, false);
     });
 
-    test('exportBackup copies database to temporary backup file', () async {
+    test('exportBackup copies database to temporary backup file even while a connection is open', () async {
       final mockDbFile = File('${testDir.path}/db.sqlite');
-      await mockDbFile.writeAsString('SQLite format 3\u0000test_database_content');
+      final db = sqlite3.open(mockDbFile.path);
+      db.execute('CREATE TABLE sessions (id INTEGER PRIMARY KEY, topic TEXT)');
+      db.execute("INSERT INTO sessions (topic) VALUES ('exported lesson')");
       BackupService.dbFileOverride = mockDbFile;
 
       final tempDir = Directory('${testDir.path}/temp');
@@ -76,13 +78,22 @@ void main() {
 
       final service = container.read(backupServiceProvider);
 
-      // Note: SharePlus.instance.share will fail/return dismissed in headless unit tests,
-      // but the file preparation logic (copying to tempBackupFile) should execute successfully.
-      await service.exportBackup();
+      try {
+        // Note: SharePlus.instance.share will fail/return dismissed in headless unit tests,
+        // but the file preparation logic (copying to tempBackupFile) should execute successfully.
+        await service.exportBackup();
+      } finally {
+        db.close();
+      }
 
       final preparedTempFile = File('${tempDir.path}/aj_tudor_backup.sqlite');
       expect(preparedTempFile.existsSync(), true);
-      expect(await preparedTempFile.readAsString(), 'SQLite format 3\u0000test_database_content');
+      final exported = sqlite3.open(preparedTempFile.path, mode: OpenMode.readOnly);
+      try {
+        expect(exported.select('SELECT topic FROM sessions').single['topic'], 'exported lesson');
+      } finally {
+        exported.close();
+      }
     });
   });
 

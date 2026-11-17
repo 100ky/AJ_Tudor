@@ -86,9 +86,6 @@ class GeminiLiveClient {
   /// a spojení přijímá zprávy (po prvním připojení i po každém obnovení).
   void Function()? onSetupComplete;
 
-  /// Vyvoláno, když model zavolá externí nástroj (Function Calling).
-  Function(String name, Map<String, dynamic> args)? onToolCall;
-
   /// Vyvolano, když uživatel přeruší mluvení modelu (interruption).
   Function()? onInterrupted;
 
@@ -214,7 +211,15 @@ class GeminiLiveClient {
         if (!_isManualDisconnect) {
           // Server zavřel spojení s kódem ještě před potvrzením nastavení: odmítl ho.
           // Bez kódu jde o síť, a tu souvislý hovor naopak má překlenout.
-          if (!_isSetupComplete && code != null) _continuity.degrade('$code $reason');
+          if (!_isSetupComplete && code != null) {
+            // Token je platný, jen server ještě drží předchozí spojení: zkusit to za chvíli
+            // znovu. Server je dosažitelný, proto se to nepočítá mezi pokusy o připojení.
+            if (_continuity.retryWhileStillConnected('$code $reason')) {
+              _reconnectSoon(LiveSessionContinuity.busyRetryDelay);
+              return;
+            }
+            _continuity.degrade('$code $reason');
+          }
           _attemptReconnect();
         }
       },
@@ -265,6 +270,21 @@ class GeminiLiveClient {
       L.e('Nepodařilo se obnovit spojení po $_maxReconnectAttempts pokusech.');
       if (onError != null) onError!('Nepodařilo se obnovit spojení po $_maxReconnectAttempts pokusech.');
     }
+  }
+
+  /// Naváže spojení znovu za [delay], aniž by se to počítalo mezi pokusy o připojení.
+  void _reconnectSoon(Duration delay) {
+    _isReconnecting = true;
+    _reconnectTimer?.cancel();
+    _reconnectTimer = Timer(delay, () {
+      if (_isManualDisconnect || _lastModelName == null || _lastSystemPrompt == null) return;
+      connect(
+        modelName: _lastModelName!,
+        systemPrompt: _lastSystemPrompt!,
+        voiceName: _lastVoiceName,
+        isReconnect: true,
+      );
+    });
   }
 
   /// Vyhodnocuje chybové kódy a zprávy z WebSocketu.
@@ -470,6 +490,7 @@ class GeminiLiveClient {
       if (data.containsKey('setupComplete') || data.containsKey('setup_complete')) {
         L.i('✅ Gemini Live Setup úspěšně dokončen (setupComplete).');
         _isSetupComplete = true;
+        _continuity.onSetupComplete();
         onSetupComplete?.call();
       }
 
@@ -595,30 +616,6 @@ class GeminiLiveClient {
         }
       }
 
-      // Zpracování Tool Calls (Function Calling) - může přijít v rootu i pod serverContent
-      final toolCall = data['toolCall'] ?? data['tool_call'] ?? (serverContent is Map ? (serverContent['toolCall'] ?? serverContent['tool_call']) : null);
-      if (toolCall != null) {
-        final functionCalls = toolCall['functionCalls'] ?? toolCall['function_calls'] as List?;
-        if (functionCalls != null) {
-          for (var call in functionCalls) {
-            final name = call['name'];
-            final args = call['args'] as Map<String, dynamic>;
-            final id = call['id'];
-
-            L.i('Model volá funkci: $name s argumenty: $args');
-            if (onToolCall != null) onToolCall!(name, args);
-
-            // Okamžitá automatická odpověď modelu, aby se Live relace nezasekla a mohl pokračovat v řeči
-            _sendToolResponse(id, name, {'status': 'ok'});
-          }
-        }
-      }
-
-      // Detekce zrušení rozpracovaného tool callu (např. při přerušení uživatelem)
-      if (data.containsKey('toolCallCancellation') || data.containsKey('tool_call_cancellation')) {
-        L.w('ToolCall zrušen serverem.');
-      }
-
       // Token pro navázání na hovor (používá se jen se zapnutým souvislým hovorem)
       final resumption = data['sessionResumptionUpdate'] ?? data['session_resumption_update'];
       if (resumption is Map) _continuity.onServerUpdate(resumption);
@@ -632,24 +629,6 @@ class GeminiLiveClient {
     } catch (e, stack) {
       L.e('Chyba zpracování zprávy', e, stack);
     }
-  }
-
-  /// Odešle odpověď na vykonaný tool call zpět do WebSocketu.
-  void _sendToolResponse(String? id, String name, Map<String, dynamic> response) {
-    if (_channel == null) return;
-    
-    final responseMsg = {
-      'toolResponse': {
-        'functionResponses': [
-          {
-            'id': id,
-            'name': name,
-            'response': response,
-          }
-        ]
-      }
-    };
-    _safeSend(jsonEncode(responseMsg));
   }
 
   /// Filtruje ridici tokeny a detekuje pripadne zacykleni modelu.

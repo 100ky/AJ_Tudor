@@ -55,8 +55,9 @@ class MemoryManagerAgent {
   ///
   /// Rozboru buď chyběla síť (9. 11.: displej zhasl pět vteřin po hovoru a systém aplikaci
   /// na pozadí odpojil), nebo se aplikace ukončila uprostřed něj (11. 11.: lekce 27 zůstala
-  /// bez rozboru, protože aplikace skončila osm vteřin po hovoru). Rozbor, který selhal
-  /// z jiného důvodu, se sám neopakuje. Rozbor, který právě běží, v seznamu není.
+  /// bez rozboru, protože aplikace skončila osm vteřin po hovoru), nebo neodpověděl žádný
+  /// model (12. 11.: lekce 28, všech pět modelů vrátilo 503). Rozbor, který selhal z jiného
+  /// důvodu (třeba na nečitelné odpovědi), se sám neopakuje. Rozbor, který právě běží, v seznamu není.
   List<int> get unfinishedAnalyses =>
       List.unmodifiable([for (final id in _unfinished) if (!_running.containsKey(id)) id]);
 
@@ -255,6 +256,12 @@ class MemoryManagerAgent {
     } on GeminiNetworkException {
       retryLater = true;
       L.w('Rozbor lekce $sessionId selhal bez sítě, zopakuje se po návratu do aplikace.');
+      return false;
+    } on GeminiOverloadedException catch (e) {
+      // Lekce 28 (12. 11.): všech pět modelů vrátilo 503 a lekce zůstala bez rozboru
+      retryLater = true;
+      L.w('Rozbor lekce $sessionId selhal, žádný model neodpověděl (${e.lastError}). '
+          'Zopakuje se po návratu do aplikace.');
       return false;
     } catch (e, stack) {
       L.e('Chyba při strukturované analýze session', e, stack);

@@ -3,10 +3,16 @@
 /// Centralizuje názvy modelů pro různé účely (chat, audio, embedding) a poskytuje
 /// lidsky čitelné popisky pro uživatelské rozhraní.
 class GeminiModels {
-  // Aktuální verze modelů Gemini (k listopadu 2026, aistudio.google.com/docs/deprecations).
+  // Aktuální verze modelů Gemini (k 14. 11. 2026, aistudio.google.com/docs/models a /deprecations).
   // gemini-3.7-flash a gemini-3.5-flash jsou zastaralé (API je přesměruje na 3.8 a 3.6 Flash),
   // gemini-2.5-flash se vypíná 1. 12. 2026.
-  static const String argon4 = 'gemini-4-argon';       // Gemini 4 Argon
+  // Řada Gemini 4: Carbon (nejsilnější úvahy), Argon (úsporný) a Hydrogen (pro běžné použití,
+  // podle changelogu dostupný i na bezplatné úrovni). V aplikaci jdou zatím jen vybrat pro
+  // textový chat; do řady modelů pro rozbor lekce a krátké úlohy zařazené nejsou, protože
+  // jejich limity na bezplatné úrovni dokumentace neuvádí a nejsou vyzkoušené.
+  static const String carbon4 = 'gemini-4-carbon';     // vydán 10. 11. 2026
+  static const String argon4 = 'gemini-4-argon';       // vydán 13. 10. 2026
+  static const String hydrogen4 = 'gemini-4-hydrogen'; // vydán 12. 11. 2026
   static const String flash3_8 = 'gemini-3.8-flash';   // vydán 2. 9. 2026
   static const String flash3_6 = 'gemini-3.6-flash';   // vydán 21. 7. 2026
   static const String flashLite3_5 = 'gemini-3.5-flash-lite';
@@ -43,7 +49,9 @@ class GeminiModels {
 
   /// Seznam modelů, které si uživatel může vybrat v nastavení pro textový chat.
   static const List<String> allowedChatModels = [
+    carbon4,
     argon4,
+    hydrogen4,
     flash3_8,
     flash3_6,
     flashLite3_5,
@@ -54,10 +62,14 @@ class GeminiModels {
   /// Vrátí přehledný český název modelu pro zobrazení v UI.
   static String getLabel(String model) {
     switch (model) {
+      case carbon4:
+        return 'Gemini 4 Carbon (Nejsilnější úvahy 🧠)';
       case argon4:
-        return 'Gemini 4 Argon (Vlajková loď 🚀)';
+        return 'Gemini 4 Argon (Úsporný z řady 4 🚀)';
+      case hydrogen4:
+        return 'Gemini 4 Hydrogen (Nový ✨)';
       case flash3_8:
-        return 'Gemini 3.8 Flash (Nejnovější ✨)';
+        return 'Gemini 3.8 Flash (Výchozí)';
       case flash3_6:
         return 'Gemini 3.6 Flash (Stabilní)';
       case flashLite3_5:

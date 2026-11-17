@@ -87,6 +87,29 @@ void main() {
       expect(cards.cards.map((c) => c.id), [2]);
       expect(cards.completeBy("Let's go!"), isEmpty);
     });
+
+    test('single-word cards can be skipped in literal completion and returned for judge verification', () {
+      final program = _card(1, 'to program', 'programovat');
+      final winterize = _card(2, 'winterize', 'zazimovat');
+      final phrase = _card(3, 'take a sick day', 'vzít si volno');
+      expect(program.isSingleWord, isTrue);
+      expect(winterize.isSingleWord, isTrue);
+      expect(phrase.isSingleWord, isFalse);
+
+      final cards = ConversationCards([program, winterize, phrase]);
+      final done = cards.completeBy(
+        'Some AI generate program before I take a sick day.',
+        includeSingleWords: false,
+      );
+      expect(done.map((c) => c.id), [3]);
+      expect(cards.completed.map((c) => c.id), [3]);
+
+      final singleMatches = cards.matchingSingleWords(
+        'Some AI generate program and we winterize the boat.',
+        recentTutorLines: const ['Did you winterize the boat?'],
+      );
+      expect(singleMatches.map((c) => c.id), [1]);
+    });
   });
 
   group('pool for the director', () {

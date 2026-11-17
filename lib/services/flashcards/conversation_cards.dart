@@ -24,10 +24,14 @@ class ConversationCard {
   /// Slovíčko, nebo gramatika (viz [ConversationCards.kindOf]).
   final CardKind kind;
 
+  /// Zda je cílem jednoslovný výraz (v pokecu ho ověřuje rozhodčí kvůli slovnímu druhu).
+  final bool isSingleWord;
+
   /// Vytvoří kartičku pro hovor; vzory a druh se odvodí z [english] a [czech].
   ConversationCard({required this.id, required this.czech, required this.english})
       : patterns = ConversationCards.targetPatterns(english),
-        kind = ConversationCards.kindOf(czech, english);
+        kind = ConversationCards.kindOf(czech, english),
+        isSingleWord = ConversationCards.isSingleWordTarget(english);
 
   /// Zda [normalizedText] (viz [ConversationCards.normalize]) obsahuje cílový výraz.
   bool matches(String normalizedText) => patterns.any((p) => p.hasMatch(normalizedText));
@@ -113,19 +117,50 @@ class ConversationCards {
   ///
   /// [recentTutorLines] jsou poslední repliky tutora před replikou studenta: výraz,
   /// který v nich zazněl, student jen zopakoval a kartičku nesplní.
-  List<ConversationCard> completeBy(String studentText, {Iterable<String> recentTutorLines = const []}) {
+  /// S [includeSingleWords] `false` se jednoslovné kartičky přeskočí (posoudí je
+  /// rozhodčí přes [matchingSingleWords], protože doslovná shoda nepozná slovní druh).
+  List<ConversationCard> completeBy(
+    String studentText, {
+    Iterable<String> recentTutorLines = const [],
+    bool includeSingleWords = true,
+  }) {
+    final done = _matchingUncompleted(
+      studentText,
+      recentTutorLines: recentTutorLines,
+      filter: (card) => includeSingleWords || !card.isSingleWord,
+    );
+    _completed.addAll(done);
+    return done;
+  }
+
+  /// Nesplněné jednoslovné kartičky, jejichž slovo zaznělo ve [studentText] (a ne v [recentTutorLines]).
+  /// V pokecu je pak posoudí rozhodčí, aby podstatné jméno („a program“) nesplnilo sloveso („programovat“).
+  List<ConversationCard> matchingSingleWords(
+    String studentText, {
+    Iterable<String> recentTutorLines = const [],
+  }) =>
+      _matchingUncompleted(
+        studentText,
+        recentTutorLines: recentTutorLines,
+        filter: (card) => card.isSingleWord,
+      );
+
+  List<ConversationCard> _matchingUncompleted(
+    String studentText, {
+    required Iterable<String> recentTutorLines,
+    required bool Function(ConversationCard card) filter,
+  }) {
     final said = normalize(studentText);
     if (said.isEmpty) return const [];
     final tutorSaid = recentTutorLines.map(normalize).toList();
-    final done = <ConversationCard>[];
-    for (final card in _cards) {
-      if (_completed.any((d) => d.id == card.id)) continue;
-      if (!card.matches(said)) continue;
-      if (tutorSaid.any(card.matches)) continue;
-      _completed.add(card);
-      done.add(card);
-    }
-    return done;
+    return [
+      for (final card in _cards)
+        if (filter(card) &&
+            !_completed.any((d) => d.id == card.id) &&
+            card.matches(said) &&
+            !tutorSaid.any(card.matches))
+          card,
+    ];
   }
 
   // Pomocná slovesa, zápor a zájmena: kartička je útržek věty, ne slovíčko. Samotné „have“
@@ -177,13 +212,12 @@ class ConversationCards {
     'sth': '$_word(?: $_word)?',
   };
 
-  /// Vzory cílového výrazu z rubu kartičky. Varianty odděluje `/` nebo `;`, text
-  /// v závorkách je poznámka. Úvodní „to“ u slovesa se vynechá a „be“ smí být
-  /// v jakémkoli tvaru („be created for“ splní i „was created for“). Prázdné, když se
-  /// výraz v hovoru ověřit nedá (moc dlouhý, nebo krátké běžné slovo).
-  static List<RegExp> targetPatterns(String backText) {
+  /// Zda je některá platná varianta rubu [backText] jednoslovná (bez poznámky a úvodního „to“).
+  static bool isSingleWordTarget(String backText) =>
+      _targetVariants(backText).any((words) => words.length == 1);
+
+  static Iterable<List<String>> _targetVariants(String backText) sync* {
     final withoutNotes = backText.replaceAll(RegExp(r'\([^)]*\)'), ' ');
-    final patterns = <RegExp>[];
     for (final variant in withoutNotes.split(RegExp('[/;]'))) {
       var words = normalize(variant).split(' ').where((w) => w.isNotEmpty).toList();
       if (words.length > 1 && words.first == 'to') words = words.sublist(1);
@@ -191,6 +225,17 @@ class ConversationCards {
       final literal = words.where((w) => !_placeholders.containsKey(w)).toList();
       if (literal.isEmpty) continue;
       if (words.length == 1 && words.single.length < minSingleWordLetters) continue;
+      yield words;
+    }
+  }
+
+  /// Vzory cílového výrazu z rubu kartičky. Varianty odděluje `/` nebo `;`, text
+  /// v závorkách je poznámka. Úvodní „to“ u slovesa se vynechá a „be“ smí být
+  /// v jakémkoli tvaru („be created for“ splní i „was created for“). Prázdné, když se
+  /// výraz v hovoru ověřit nedá (moc dlouhý, nebo krátké běžné slovo).
+  static List<RegExp> targetPatterns(String backText) {
+    final patterns = <RegExp>[];
+    for (final words in _targetVariants(backText)) {
       final parts = [
         for (var i = 0; i < words.length; i++)
           if (i == 0 && words[i] == 'be' && words.length > 1)

@@ -53,6 +53,8 @@ enum TutorState {
   speaking,
   /// Konverzace je pozastavena (mikrofon neaktivní, WebSocket zůstává otevřený).
   paused,
+  /// Lekce se ukončuje: ukládají se poslední repliky (na opravný přepis se čeká až 8 s).
+  ending,
   /// Nastala chyba v průběhu lekce.
   error
 }
@@ -318,7 +320,11 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     if (state == AppLifecycleState.resumed) {
       if (this.state.status == TutorState.idle) unawaited(_retryUnfinishedAnalyses());
       final client = ref.read(geminiLiveClientProvider);
-      if (client != null && this.state.status != TutorState.idle && this.state.status != TutorState.error && this.state.status != TutorState.paused) {
+      if (client != null &&
+          !_isStopping &&
+          this.state.status != TutorState.idle &&
+          this.state.status != TutorState.error &&
+          this.state.status != TutorState.paused) {
         if (!client.isConnected) {
           L.w('Detekováno odpojení po resume, zkouším obnovit spojení...');
           this.state = this.state.copyWith(status: TutorState.reconnecting);
@@ -667,32 +673,54 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   /// Zkontroluje, jestli student v replice sám řekl výraz z některé dnešní kartičky.
   /// Splněná kartička dostane hodnocení „Dobré“ a dnes už v kartičkách nebude.
   ///
+  /// Víceslovné výrazy se splní doslova; jednoslovné cíle (např. „programovat → program“)
+  /// posoudí rozhodčí, protože doslovná shoda nerozliší slovní druh.
   /// V lekci, když doslovné porovnání nic nenašlo, posoudí repliku rozhodčí lekce:
   /// gramatiku student splní i vlastními slovy a slovíčko i v jiném tvaru.
   void _checkConversationCards(StudentUtterance utterance, String text) {
     final cards = _conversationCards;
     if (cards == null || utterance.sessionId != _conversationCardsSessionId) return;
-    final done = cards.completeBy(text, recentTutorLines: utterance.recentTutorLines);
+    final done = cards.completeBy(
+      text,
+      recentTutorLines: utterance.recentTutorLines,
+      includeSingleWords: false,
+    );
     _recordCompletedCards(done);
     final lessonIds = {for (final card in state.lessonCards) card.id};
-    if (_lessonRunning && !done.any((card) => lessonIds.contains(card.id))) {
-      _judgeLessonReply(utterance, text);
+    if (_lessonRunning) {
+      if (!done.any((card) => lessonIds.contains(card.id))) {
+        final remaining = [
+          for (final card in state.lessonCards)
+            if (!state.completedCards.any((c) => c.id == card.id)) card,
+        ];
+        _judgeAndCompleteCards(utterance, text, remaining, requireLessonRunning: true);
+      }
+      final extraSingleWords = cards
+          .matchingSingleWords(text, recentTutorLines: utterance.recentTutorLines)
+          .where((card) => !lessonIds.contains(card.id))
+          .toList();
+      _judgeAndCompleteCards(utterance, text, extraSingleWords);
+    } else {
+      final singleWords = cards.matchingSingleWords(text, recentTutorLines: utterance.recentTutorLines);
+      _judgeAndCompleteCards(utterance, text, singleWords);
     }
   }
 
-  /// Rozhodčí lekce posoudí repliku [text] proti kartičkám lekce, které ještě nejsou splněné.
-  Future<void> _judgeLessonReply(StudentUtterance utterance, String text) async {
-    final remaining = [
-      for (final card in state.lessonCards)
-        if (!state.completedCards.any((done) => done.id == card.id)) card,
-    ];
-    if (remaining.isEmpty) return;
+  /// Nechá rozhodčího posoudit kandidátní kartičky [candidates] a splněnou kartičku zapíše.
+  Future<void> _judgeAndCompleteCards(
+    StudentUtterance utterance,
+    String text,
+    List<ConversationCard> candidates, {
+    bool requireLessonRunning = false,
+  }) async {
+    if (candidates.isEmpty) return;
     final card = await ref.read(lessonCardJudgeProvider).judge(
-          remaining: remaining,
+          remaining: candidates,
           recentTutorLines: utterance.recentTutorLines,
           studentText: text,
         );
-    if (card == null || !ref.mounted || !_lessonRunning) return;
+    if (card == null || !ref.mounted) return;
+    if (requireLessonRunning && !_lessonRunning) return;
     if (utterance.sessionId != _conversationCardsSessionId) return;
     if (!(_conversationCards?.markCompleted(card) ?? false)) return;
     _recordCompletedCards([card]);
@@ -821,7 +849,9 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       // Ignorujeme běžná výplňková slova a váhání studenta při přemýšlení (uh, em, um apod.)
       // Živý přepis bývá u delší řeči (zvlášť české) zkomolený na „¿Qué?“ apod. Dlouhá nahrávka
       // nebo přepis v cizím písmu proto není krátká odpověď – student mluvil, jen se špatně přepsal.
-      final spokeAtLength = utterance != null && utterance.audioMs >= 3000;
+      // Délka skutečné řeči (voicedMs), ne celé nahrávky (audioMs obsahuje i 2 s ticha na konci
+      // a úvod z PreRollBuffer, takže mělo skoro vždy přes 3 s a detekce nikdy nezasáhla).
+      final spokeAtLength = utterance != null && utterance.voicedMs >= 3000;
       final wordCount =
           (spokeAtLength || looksLikeForeignTranscription(userText)) ? null : meaningfulWordCount(userText);
 
@@ -1135,7 +1165,6 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     client.onUserTranscriptReceived = _onUserTranscriptReceived;
     client.onAudioReceived = _onAudioReceived;
     client.onTurnComplete = () => _onTurnComplete(client);
-    client.onToolCall = _onToolCall;
     client.onInterrupted = _onInterrupted;
     client.onConnectionStatusChanged =
         (isConnected) => _onConnectionStatusChanged(isConnected, client);
@@ -1371,20 +1400,6 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     });
   }
 
-  /// Zpracování logování chyb přes Function Calling.
-  void _onToolCall(String name, Map<String, dynamic> args) {
-    if (name == 'log_error' && _currentSessionId != null) {
-      _repo.addErrorLog(
-        sessionId: _currentSessionId!,
-        errorType: args['error_type'] ?? 'grammar',
-        userSaid: args['user_said'] ?? '',
-        correctForm: args['correct_form'] ?? '',
-        explanation: args['explanation'] ?? '',
-      );
-      L.i('✅ Chyba zalogována v reálném čase přes Function Calling.');
-    }
-  }
-
   /// Zpracování přerušení mluvení modelu uživatelem.
   void _onInterrupted() {
     _resetWatchdog();
@@ -1554,6 +1569,12 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   Future<void> _stopSession(String reason) async {
     L.i('Ukončování session (Důvod: $reason)');
     _isStopping = true;
+    // Na displeji je hned vidět, že se lekce ukončuje. Uložení posledních replik trvá až
+    // 8 s a hovor do té doby vypadal jako běžící (12. 11.: student mezitím klepl na Pauzu
+    // a Pokračovat, mikrofon i spojení se zapnuly znovu a po konci lekce zůstaly viset).
+    if (ref.mounted && state.status != TutorState.idle && state.status != TutorState.error) {
+      state = state.copyWith(status: TutorState.ending);
+    }
     _sessionGeneration++;
     _reconnectPending = false;
 
@@ -1590,7 +1611,6 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
             liveClient.onTurnComplete = null;
             liveClient.onError = null;
             liveClient.onConnectionStatusChanged = null;
-            liveClient.onToolCall = null;
             liveClient.onInterrupted = null;
             liveClient.onTokenCountUpdate = null;
             liveClient.onActivityEndUnconfirmed = null;
@@ -1737,6 +1757,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   /// Zastaví mikrofon, ale ponechá WebSocket otevřený pro rychlé obnovení.
   /// Wakelock zůstává zapnutý, aby se displej nezhasil.
   Future<void> pauseSession() async {
+    if (_isStopping) return; // lekce se ukončuje, pauza by znovu rozběhla mikrofon
     if (state.status == TutorState.idle || state.status == TutorState.error || state.status == TutorState.paused) return;
 
     L.i('Pozastavuji konverzaci...');
@@ -1769,7 +1790,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   }
 
   Future<void> resumeSession() async {
-    if (state.status != TutorState.paused) return;
+    if (_isStopping || state.status != TutorState.paused) return;
 
     L.i('Obnovuji konverzaci...');
     HapticFeedback.mediumImpact();
@@ -1812,6 +1833,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   /// Slouží pro manuální převzetí slova studentem (např. klepnutím na zvukovou vlnu v UI),
   /// pokud tutor začal mluvit předčasně nebo student chce pokračovat ve své myšlence.
   void interruptPlayback() {
+    if (_isStopping) return;
     if (state.status != TutorState.speaking && !_audio.isPlaying) return;
 
     L.i('Manuální přerušení řeči tutora studentem (barge-in tap).');
@@ -1831,7 +1853,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
 
   /// Odešle manuální textovou zprávu namísto mluvení (podpora chat režimu).
   void sendText(String text) {
-    if (text.trim().isEmpty) return;
+    if (_isStopping || text.trim().isEmpty) return;
 
     _resetWatchdog();
     final client = ref.read(geminiLiveClientProvider);
@@ -1905,6 +1927,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   /// Volá se uživatelským tlačítkem "Změnit téma" ([promptImmediateResponse] = true)
   /// nebo heuristikou detekující nadměrnou sémantickou podobnost posledních tahů ([promptImmediateResponse] = false).
   void forceTopicChange({bool promptImmediateResponse = true}) {
+    if (_isStopping) return;
     HapticFeedback.lightImpact();
 
     if (promptImmediateResponse) {

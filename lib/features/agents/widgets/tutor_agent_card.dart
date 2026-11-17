@@ -39,6 +39,10 @@ class TutorAgentCard extends StatelessWidget {
         statusColor = AppTheme.warning;
         statusText = 'Pozastaven';
         break;
+      case TutorState.ending:
+        statusColor = AppTheme.warning;
+        statusText = 'Ukončuje lekci...';
+        break;
       case TutorState.error:
         statusColor = AppTheme.error;
         statusText = 'Chyba spojení';

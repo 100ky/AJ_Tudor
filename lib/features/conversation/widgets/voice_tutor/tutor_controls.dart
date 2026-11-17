@@ -27,6 +27,8 @@ class TutorControls extends StatelessWidget {
     if (!isActive) return _StartButton(onPressed: onMainPressed);
 
     final isPaused = status == TutorState.paused;
+    // Lekce se ukončuje (ukládají se poslední repliky): tlačítka už nic nedělají
+    final isEnding = status == TutorState.ending;
     final isLiveSession =
         status == TutorState.listening || status == TutorState.speaking || status == TutorState.thinking;
     final canChangeTopic = isLiveSession && status != TutorState.thinking;
@@ -40,23 +42,27 @@ class TutorControls extends StatelessWidget {
             child: _RoundButton(
               icon: isPaused ? Icons.play_arrow_rounded : Icons.pause_rounded,
               label: isPaused ? 'Pokračovat' : 'Pauza',
-              onPressed: () {
-                HapticFeedback.lightImpact();
-                onTogglePause();
-              },
+              onPressed: isEnding
+                  ? null
+                  : () {
+                      HapticFeedback.lightImpact();
+                      onTogglePause();
+                    },
             ),
           ),
           Expanded(
             child: _RoundButton(
               icon: Icons.stop_rounded,
-              label: 'Ukončit',
+              label: isEnding ? 'Ukončuji…' : 'Ukončit',
               size: 72,
-              background: AppTheme.danger,
+              background: isEnding ? AppTheme.surfaceRaised : AppTheme.danger,
               foreground: Colors.white,
-              onPressed: () {
-                HapticFeedback.mediumImpact();
-                onMainPressed();
-              },
+              onPressed: isEnding
+                  ? null
+                  : () {
+                      HapticFeedback.mediumImpact();
+                      onMainPressed();
+                    },
             ),
           ),
           Expanded(

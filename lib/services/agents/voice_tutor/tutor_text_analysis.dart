@@ -112,13 +112,20 @@ String removeIntraTurnRepetition(String text) {
 Set<String> _significantWords(String text) =>
     text.toLowerCase().split(RegExp(r'\W+')).where((w) => w.length > 3).toSet();
 
-/// Zjistí, zda tutor opakuje některou ze svých nedávných promluv [history].
+/// Zjistí, zda tutor opakuje své nedávné promluvy [history].
 ///
-/// Vrátí podobnost (Jaccardův index významných slov) první opakované promluvy –
-/// opakování je podobnost nad 0.45 nebo shodných prvních 40 znaků – jinak null.
-double? repeatedTurnSimilarity(String text, Iterable<String> history) {
+/// Vrátí nejvyšší podobnost (Jaccardův index významných slov), když se [text]
+/// podobá aspoň [minMatches] promluvám v [history] (podobnost nad 0.45 nebo
+/// shodných prvních 40 znaků) – jinak null.
+/// Výchozích `minMatches = 2` znamená, že jedno zopakování otázky (když student
+/// nerozuměl, po výpadku sítě nebo při návratu k otázce po opravě) změnu tématu
+/// nespustí; zasáhne se až tehdy, když se tutor opakuje potřetí.
+double? repeatedTurnSimilarity(String text, Iterable<String> history, {int minMatches = 2}) {
   final currentWords = _significantWords(text);
   if (currentWords.isEmpty) return null;
+
+  var matches = 0;
+  double? maxSimilarity;
 
   for (final historyText in history) {
     final historyWords = _significantWords(historyText);
@@ -135,7 +142,12 @@ double? repeatedTurnSimilarity(String text, Iterable<String> history) {
     final hasExactMatch = text.length > prefixLength &&
         historyText.toLowerCase().contains(text.toLowerCase().substring(0, prefixLength));
 
-    if (similarity > 0.45 || hasExactMatch) return similarity;
+    if (similarity > 0.45 || hasExactMatch) {
+      matches++;
+      if (maxSimilarity == null || similarity > maxSimilarity) {
+        maxSimilarity = similarity;
+      }
+    }
   }
-  return null;
+  return matches >= minMatches ? maxSimilarity : null;
 }

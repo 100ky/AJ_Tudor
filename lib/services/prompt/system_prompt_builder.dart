@@ -720,7 +720,7 @@ GRAMATICKÝ CÍL LEKCE (v posledních lekcích v tom chyboval nejčastěji): $go
   /// Systémová instrukce rozhodčího kartiček v lekci ([LessonCardJudge]).
   static const String lessonJudgeSystem = '''Posuzuješ lekci angličtiny, ve které AI tutor prochází se studentem (Čech, úroveň B1) jeho kartičky.
 Rozhodni, jestli student v poslední replice sám zvládl některou z kartiček:
-- [slovíčko]: řekl anglický výraz z kartičky sám, v jakémkoli tvaru (winterize i winterized, took a sick day i take a sick day). Jiný výraz s podobným významem kartičku nesplní.
+- [slovíčko]: řekl anglický výraz z kartičky sám, v jakémkoli tvaru (winterize i winterized, took a sick day i take a sick day) a ve významu z české strany (sloveso „programovat → program“ nesplní podstatné jméno „generate a program“). Jiný výraz s podobným významem kartičku nesplní.
 - [gramatika]: kartička je útržek jeho dřívější opravené věty, na přesných slovech nezáleží. Splní ji jakákoli jeho správná věta se stejnou gramatikou (u "didn't relax" třeba "I had no time to rest" nebo "I didn't rest at all"). Chyba právě v té gramatice ji nesplní, drobnosti (člen, množné číslo) nevadí.
 - Když tutor výraz nebo hotovou větu řekl v posledních replikách a student ho jen zopakoval, kartičku nezvládl.
 - Přepis řeči studenta může mít drobné chyby, posuzuj smysl.

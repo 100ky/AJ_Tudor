@@ -310,6 +310,58 @@ void main() {
       expect(client.resumedSession, isFalse);
     });
 
+    group('the server still holds the old connection', () {
+      // Lekce 28: deset vteřin po vypnutí Wi-Fi server navázání tokenem odmítl, protože
+      // o konci starého spojení ještě nevěděl
+      const busy = 'BidiGenerateContent session is already connected to an existing client';
+
+      testWidgets('the token is kept and the resume is tried again', (tester) async {
+        client.sessionContinuity = true;
+        await startLesson(tester);
+        await confirmSetupWithToken(tester, channels.single, 'token-1');
+        channels.single.serverCloses();
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 2));
+        expect(channels, hasLength(2));
+
+        channels.last.serverCloses(1008, busy);
+        await tester.pump();
+        await tester.pump(LiveSessionContinuity.busyRetryDelay);
+
+        expect(channels, hasLength(3));
+        expect(channels.last.setup['sessionResumption'], {'handle': 'token-1'});
+
+        // Server mezitím staré spojení uvolnil
+        channels.last.serverSays({'setupComplete': {}});
+        await tester.pump();
+        expect(client.resumedSession, isTrue);
+        expect(client.isConnected, isTrue);
+      });
+
+      testWidgets('after enough refusals the lesson goes on without the token', (tester) async {
+        client.sessionContinuity = true;
+        await startLesson(tester);
+        await confirmSetupWithToken(tester, channels.single, 'token-1');
+        client.forceReconnect();
+        await tester.pump();
+
+        for (var retry = 0; retry < LiveSessionContinuity.maxBusyRetries; retry++) {
+          channels.last.serverCloses(1008, busy);
+          await tester.pump();
+          await tester.pump(LiveSessionContinuity.busyRetryDelay);
+          expect(channels.last.setup['sessionResumption'], {'handle': 'token-1'});
+        }
+        expect(channels, hasLength(2 + LiveSessionContinuity.maxBusyRetries));
+
+        // Čekalo se dost: další spojení jde bez tokenu a hovor dostane shrnutí
+        channels.last.serverCloses(1008, busy);
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 2));
+        expect(channels.last.setup['sessionResumption'], <String, dynamic>{});
+        expect(client.resumedSession, isFalse);
+      });
+    });
+
     testWidgets('a refused setup first drops the compression, then the token request', (tester) async {
       client.sessionContinuity = true;
       await startLesson(tester);

@@ -108,6 +108,19 @@ void main() {
       expect(tracker.preferredModel, isNull);
       expect(tracker.order(['a', 'b'], preferLastWorking: true), ['a', 'b']);
     });
+
+    test('repeated overload failures escalate cooldown and markSuccess resets the streak', () {
+      final overload = _dioError(statusCode: 503);
+      const base = Duration(minutes: 3);
+
+      expect(tracker.markFailure('a', overload, otherwise: base), const Duration(minutes: 3));
+      expect(tracker.markFailure('a', overload, otherwise: base), const Duration(minutes: 15));
+      expect(tracker.markFailure('a', overload, otherwise: base), const Duration(minutes: 60));
+      expect(tracker.markFailure('a', overload, otherwise: base), const Duration(minutes: 60));
+
+      tracker.markSuccess('a');
+      expect(tracker.markFailure('a', overload, otherwise: base), const Duration(minutes: 3));
+    });
   });
 
   group('vyčerpaný denní limit (bezplatná úroveň)', () {

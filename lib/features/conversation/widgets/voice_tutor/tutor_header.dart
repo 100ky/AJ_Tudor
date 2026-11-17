@@ -24,6 +24,8 @@ extension TutorStateLabels on TutorState {
         return 'Tutor mluví';
       case TutorState.paused:
         return 'Pozastaveno';
+      case TutorState.ending:
+        return 'Ukončuji lekci...';
       case TutorState.error:
         return 'Chyba spojení';
       case TutorState.idle:
