@@ -75,15 +75,6 @@ class TutorHeader extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const ScreenTitle('Hovor'),
-        const SizedBox(height: 4),
-        FluidVoiceWave(
-          color: waveColor,
-          stateLabel: status.orbKey,
-          volumeStream: activeVolumeStream,
-          height: 96,
-          isCompact: false,
-          showAmbientGlow: true,
-        ),
         if (status.statusText.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 4),

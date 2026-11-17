@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import '../../../../core/app_theme.dart';
 import '../../../../services/agents/voice_tutor_agent.dart';
 
-/// Spodní ovládání: v klidu tlačítko Začít hovor, během hovoru Pauza, Ukončit a Jiné téma.
+/// Spodní ovládání: během hovoru Pauza, Ukončit a Jiné téma (v klidu se hovor spouští z navigace).
 class TutorControls extends StatelessWidget {
   final TutorState status;
   final bool isIdle;
@@ -24,7 +24,7 @@ class TutorControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!isActive) return _StartButton(onPressed: onMainPressed);
+    if (!isActive) return const SizedBox.shrink();
 
     final isPaused = status == TutorState.paused;
     // Lekce se ukončuje (ukládají se poslední repliky): tlačítka už nic nedělají
@@ -76,49 +76,6 @@ class TutorControls extends StatelessWidget {
                     }
                   : null,
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Tlačítko Začít hovor pod výběrem druhu hovoru.
-class _StartButton extends StatelessWidget {
-  final VoidCallback onPressed;
-
-  const _StartButton({required this.onPressed});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SizedBox(
-            height: 56,
-            child: FilledButton.icon(
-              onPressed: () {
-                HapticFeedback.mediumImpact();
-                onPressed();
-              },
-              style: FilledButton.styleFrom(
-                backgroundColor: AppTheme.surfaceRaised,
-                foregroundColor: AppTheme.textPrimary,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                textStyle: AppTheme.font(fontSize: 16.5, fontWeight: FontWeight.w600),
-              ),
-              icon: const Icon(Icons.mic_rounded, size: 24),
-              label: const Text('Začít hovor'),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'Po hovoru Tudor lekci rozebere a z chyb udělá kartičky.',
-            textAlign: TextAlign.center,
-            style: AppTheme.font(fontSize: 12.5, color: AppTheme.textTertiary),
           ),
         ],
       ),

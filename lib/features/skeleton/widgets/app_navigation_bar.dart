@@ -12,7 +12,7 @@ class _Destination {
   const _Destination(this.index, this.label, this.icon, this.selectedIcon);
 }
 
-/// Spodní navigace s Hovorem jako velkým bílým tlačítkem uprostřed.
+/// Spodní navigace s Hovorem jako velkým tlačítkem uprostřed.
 ///
 /// Pořadí na liště je Dril, Kartičky, Hovor, Pokrok, Profil. Indexy stránek zůstávají
 /// 0 Hovor, 1 Dril, 2 Kartičky, 3 Pokrok, 4 Profil.
@@ -23,7 +23,15 @@ class AppNavigationBar extends StatelessWidget {
   /// Vybere stránku podle indexu.
   final ValueChanged<int> onSelect;
 
-  const AppNavigationBar({super.key, required this.currentIndex, required this.onSelect});
+  /// Spustí hovor při druhém klepnutí na Hovor (když už je vybraná záložka Hovor).
+  final VoidCallback? onStartCall;
+
+  const AppNavigationBar({
+    super.key,
+    required this.currentIndex,
+    required this.onSelect,
+    this.onStartCall,
+  });
 
   /// Výška lišty bez systémového okraje.
   static const double barHeight = 66;
@@ -74,7 +82,13 @@ class AppNavigationBar extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 for (final d in _left) Expanded(child: _NavItem(d, selected: d.index == currentIndex, onTap: _select)),
-                Expanded(child: _TalkButton(selected: currentIndex == 0, onTap: () => _select(0))),
+                Expanded(
+                  child: _TalkButton(
+                    selected: currentIndex == 0,
+                    onTap: () => _select(0),
+                    onStartCall: onStartCall,
+                  ),
+                ),
                 for (final d in _right) Expanded(child: _NavItem(d, selected: d.index == currentIndex, onTap: _select)),
               ],
             ),
@@ -127,33 +141,41 @@ class _NavItem extends StatelessWidget {
   }
 }
 
-/// Bílé kulaté tlačítko Hovor, přečnívá nad lištu.
+/// Kulaté tlačítko Hovor přečnívající nad lištu: mimo Hovor bílé (přepne na Hovor),
+/// na stránce Hovor červené (další klepnutí zahájí hovor).
 class _TalkButton extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
+  final VoidCallback? onStartCall;
 
-  const _TalkButton({required this.selected, required this.onTap});
+  const _TalkButton({required this.selected, required this.onTap, this.onStartCall});
 
   @override
   Widget build(BuildContext context) {
     return Semantics(
       selected: selected,
       button: true,
-      label: 'Hovor',
+      label: selected ? 'Začít hovor' : 'Hovor',
       excludeSemantics: true,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: onTap,
+        onTap: selected
+            ? () {
+                HapticFeedback.mediumImpact();
+                onStartCall?.call();
+              }
+            : onTap,
         child: Column(
           children: [
             const SizedBox(height: 2),
-            Container(
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
               width: 60,
               height: 60,
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: AppTheme.textPrimary,
-                boxShadow: [
+                color: selected ? AppTheme.danger : AppTheme.textPrimary,
+                boxShadow: const [
                   BoxShadow(color: AppTheme.navBar, spreadRadius: 6),
                   BoxShadow(color: Color(0x8C000000), blurRadius: 24, offset: Offset(0, 10)),
                 ],
@@ -161,7 +183,7 @@ class _TalkButton extends StatelessWidget {
               child: Icon(
                 selected ? Icons.mic_rounded : Icons.mic_none_rounded,
                 size: 28,
-                color: AppTheme.background,
+                color: selected ? Colors.white : AppTheme.background,
               ),
             ),
             const SizedBox(height: 4),

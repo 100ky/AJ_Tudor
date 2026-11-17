@@ -96,6 +96,7 @@ class _SkeletonScreenState extends ConsumerState<SkeletonScreen> {
               child: AppNavigationBar(
                 currentIndex: currentIndex,
                 onSelect: (index) => ref.read(mainNavigationIndexProvider.notifier).setIndex(index),
+                onStartCall: () => ref.read(voiceTutorAgentProvider.notifier).startSession(),
               ),
             ),
           ),

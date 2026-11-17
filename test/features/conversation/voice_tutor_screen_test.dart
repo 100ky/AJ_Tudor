@@ -169,18 +169,17 @@ void main() {
   }
 
   group('VoiceTutorScreen Widget Tests', () {
-    testWidgets('renders idle state with hero header, mode tabs and mic button',
+    testWidgets('renders idle state with header and mode tabs, without wave or start button',
         (WidgetTester tester) async {
       configureViewport(tester);
       final fakeAgent = FakeVoiceTutorAgent(VoiceTutorState(status: TutorState.idle));
 
       await tester.pumpWidget(buildTestWidget(fakeTutorAgent: fakeAgent));
-      // FluidVoiceWave & blinking cursor have infinite repeat tickers, use pump() with fixed duration
       await tester.pump(const Duration(milliseconds: 300));
 
-      // Nadpis a klidná vlna
+      // Nadpis bez klidné vlny
       expect(find.text('Hovor'), findsOneWidget);
-      expect(find.byType(FluidVoiceWave), findsOneWidget);
+      expect(find.byType(FluidVoiceWave), findsNothing);
 
       // Seznam druhů hovoru
       expect(find.text('Druh hovoru'), findsOneWidget);
@@ -189,9 +188,8 @@ void main() {
       expect(find.text('Scénář'), findsOneWidget);
       expect(find.text('Volný pokec'), findsOneWidget);
 
-      // Tlačítko Začít hovor
-      expect(find.text('Začít hovor'), findsOneWidget);
-      expect(find.byIcon(Icons.mic_rounded), findsOneWidget);
+      // Tlačítko Začít hovor na ploše není (hovor se spouští z navigace)
+      expect(find.text('Začít hovor'), findsNothing);
 
       await drainTimers(tester);
     });
@@ -331,26 +329,7 @@ void main() {
       await drainTimers(tester);
     });
 
-    testWidgets('taps mic button in idle state and triggers startSession',
-        (WidgetTester tester) async {
-      configureViewport(tester);
-      final fakeAgent = FakeVoiceTutorAgent(VoiceTutorState(status: TutorState.idle));
-
-      await tester.pumpWidget(buildTestWidget(fakeTutorAgent: fakeAgent));
-      await tester.pump(const Duration(milliseconds: 300));
-
-      final micButton = find.byIcon(Icons.mic_rounded);
-      expect(micButton, findsOneWidget);
-
-      await tester.tap(micButton);
-      await tester.pump(const Duration(milliseconds: 300));
-
-      expect(fakeAgent.startSessionCalled, isTrue);
-
-      await drainTimers(tester);
-    });
-
-    testWidgets('displays active call controls and messages in active state',
+    testWidgets('displays active call controls, wave and messages in active state',
         (WidgetTester tester) async {
       configureViewport(tester);
       final activeMessages = [
@@ -376,7 +355,8 @@ void main() {
       await tester.pumpWidget(buildTestWidget(fakeTutorAgent: fakeAgent, smartBubbles: false));
       await tester.pump(const Duration(milliseconds: 300));
 
-      // In active state, stop and pause buttons should be visible
+      // In active state, wave, stop and pause buttons should be visible
+      expect(find.byType(FluidVoiceWave), findsOneWidget);
       expect(find.byIcon(Icons.stop_rounded), findsOneWidget);
       expect(find.byIcon(Icons.pause_rounded), findsOneWidget);
 

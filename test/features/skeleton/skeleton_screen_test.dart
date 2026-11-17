@@ -19,10 +19,16 @@ import 'package:aj_tudor/services/gemini/translation_service.dart';
 
 class MockVoiceTutorAgent extends VoiceTutorAgent {
   final TutorState initialStatus;
+  bool startSessionCalled = false;
   MockVoiceTutorAgent({this.initialStatus = TutorState.idle});
 
   @override
   VoiceTutorState build() => VoiceTutorState(status: initialStatus);
+
+  @override
+  Future<void> startSession() async {
+    startSessionCalled = true;
+  }
 }
 
 class FakeApiKeyNotifier extends ApiKeyNotifier {
@@ -97,6 +103,7 @@ void main() {
     String? apiKey,
     bool isApiKeyLoaded = true,
     TutorState tutorStatus = TutorState.idle,
+    MockVoiceTutorAgent? tutorAgent,
     MockTopicPreparationAgent? topicAgent,
   }) {
     return ProviderScope(
@@ -106,7 +113,7 @@ void main() {
         sharedPreferencesProvider.overrideWithValue(prefs),
         apiKeyProvider.overrideWith(() => FakeApiKeyNotifier(apiKey)),
         isApiKeyLoadedProvider.overrideWith(() => FakeApiKeyLoadedNotifier(isApiKeyLoaded)),
-        voiceTutorAgentProvider.overrideWith(() => MockVoiceTutorAgent(initialStatus: tutorStatus)),
+        voiceTutorAgentProvider.overrideWith(() => tutorAgent ?? MockVoiceTutorAgent(initialStatus: tutorStatus)),
         topicPreparationAgentProvider.overrideWith(() => topicAgent ?? MockTopicPreparationAgent()),
         scenarioPlannerAgentProvider.overrideWithValue(mockScenarioPlanner),
         geminiTtsServiceProvider.overrideWithValue(mockTts),
@@ -269,6 +276,50 @@ void main() {
       await tester.pump();
 
       expect(topicAgent.prepareTopicCalled, isTrue);
+
+      await drainTimers(tester);
+    });
+
+    testWidgets('tapping Hovor switches from another tab without starting, second tap starts the call',
+        (WidgetTester tester) async {
+      final tutorAgent = MockVoiceTutorAgent();
+      await tester.pumpWidget(
+        buildTestWidget(
+          apiKey: 'test-key',
+          tutorAgent: tutorAgent,
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 350));
+
+      Color talkCircleColor() {
+        final container = tester.widget<AnimatedContainer>(
+          find.descendant(of: find.byType(AppNavigationBar), matching: find.byType(AnimatedContainer)),
+        );
+        return (container.decoration as BoxDecoration).color!;
+      }
+
+      final navHovor = find.descendant(of: find.byType(AppNavigationBar), matching: find.text('Hovor'));
+
+      // Na záložce Hovor je středové tlačítko červené
+      expect(talkCircleColor(), AppTheme.danger);
+
+      // Přepnutí na Dril: tlačítko v liště zbělá
+      await tester.tap(find.text('Dril'));
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(tester.widget<AppNavigationBar>(find.byType(AppNavigationBar)).currentIndex, 1);
+      expect(talkCircleColor(), AppTheme.textPrimary);
+
+      // První klepnutí na Hovor přepne na záložku Hovor a hovor ještě nespustí
+      await tester.tap(navHovor);
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(tester.widget<AppNavigationBar>(find.byType(AppNavigationBar)).currentIndex, 0);
+      expect(tutorAgent.startSessionCalled, isFalse);
+      expect(talkCircleColor(), AppTheme.danger);
+
+      // Druhé klepnutí na červené tlačítko Hovor odstartuje hovor
+      await tester.tap(navHovor);
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(tutorAgent.startSessionCalled, isTrue);
 
       await drainTimers(tester);
     });

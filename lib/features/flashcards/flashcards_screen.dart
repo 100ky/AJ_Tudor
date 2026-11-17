@@ -534,7 +534,11 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
             AnswerInputBar(
               key: ValueKey(currentCard.id),
               enabled: !_isRecording && !_isEvaluatingSpeech,
+              isRecording: _isRecording,
+              isEvaluatingSpeech: _isEvaluatingSpeech,
               onSubmit: (text) => _submitTypedAnswer(currentCard, text),
+              onStartRecording: _startRecording,
+              onStopRecording: () => _stopRecording(currentCard),
               onGiveUp: _giveUp,
             ),
           ] else ...[

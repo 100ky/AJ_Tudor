@@ -90,27 +90,29 @@ class FlashcardFront extends StatelessWidget {
                             ),
                     ),
 
-                    // Mluvená odpověď
-                    Column(
-                      children: [
-                        if (isEvaluatingSpeech)
-                          _evaluatingIndicator()
-                        else if (isRecording)
-                          _recordingButton()
-                        else if (lastPronunciation != null) ...[
-                          WordAssessmentPills(lastPronunciation),
-                          if (lastPronunciation.feedback.isNotEmpty) ...[
-                            const SizedBox(height: 8),
-                            Text(
-                              lastPronunciation.feedback,
-                              textAlign: TextAlign.center,
-                              style: AppTheme.font(fontSize: 13, color: AppTheme.textSecondary, height: 1.4),
-                            ),
+                    // Mluvená odpověď (samotné nahrávání se spouští ze spodní lišty pod kartičkou)
+                    if (isEvaluatingSpeech || isRecording || lastPronunciation != null)
+                      Column(
+                        children: [
+                          if (isEvaluatingSpeech)
+                            _evaluatingIndicator()
+                          else if (isRecording)
+                            _recordingButton()
+                          else if (lastPronunciation != null) ...[
+                            WordAssessmentPills(lastPronunciation),
+                            if (lastPronunciation.feedback.isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                lastPronunciation.feedback,
+                                textAlign: TextAlign.center,
+                                style: AppTheme.font(fontSize: 13, color: AppTheme.textSecondary, height: 1.4),
+                              ),
+                            ],
                           ],
-                        ] else
-                          _microphoneButton(),
-                      ],
-                    ),
+                        ],
+                      )
+                    else
+                      const SizedBox.shrink(),
                   ],
                 ),
               ),
@@ -160,32 +162,6 @@ class FlashcardFront extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-
-  /// Výchozí stav: bílé kulaté tlačítko mikrofonu.
-  Widget _microphoneButton() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Semantics(
-          button: true,
-          label: 'Odpovědět hlasem',
-          child: GestureDetector(
-            onTap: onStartRecording,
-            child: Container(
-              width: 64,
-              height: 64,
-              decoration: const BoxDecoration(shape: BoxShape.circle, color: AppTheme.textPrimary),
-              child: const Icon(Icons.mic_rounded, color: AppTheme.background, size: 30),
-            ),
-          ),
-        ),
-        const SizedBox(height: 10),
-        Text('Klepni a odpověz hlasem', style: AppTheme.font(fontSize: 14, fontWeight: FontWeight.w500, color: AppTheme.textPrimary)),
-        const SizedBox(height: 2),
-        Text('nebo napiš odpověď dole', style: AppTheme.font(fontSize: 13, color: AppTheme.textSecondary)),
-      ],
     );
   }
 }

@@ -388,8 +388,12 @@ void main() {
       expect(find.text('Správné řešení'), findsNothing);
       expect(find.text('Znovu'), findsNothing);
 
-      // Prázdnou odpověď nejde odeslat
-      await tester.tap(find.byTooltip('Odeslat odpověď'));
+      // Když je pole prázdné, je v liště mikrofon a potvrzení klávesnicí kartičku neotočí
+      expect(find.byTooltip('Odpovědět hlasem'), findsOneWidget);
+      expect(find.byTooltip('Odeslat odpověď'), findsNothing);
+      await tester.tap(find.byType(TextField));
+      await tester.pump();
+      await tester.testTextInput.receiveAction(TextInputAction.send);
       await tester.pumpAndSettle();
       expect(find.text('Správné řešení'), findsNothing);
 
