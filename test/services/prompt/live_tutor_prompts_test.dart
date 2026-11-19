@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:aj_tudor/services/flashcards/conversation_cards.dart';
 import 'package:aj_tudor/services/prompt/live_tutor_prompts.dart';
 
 void main() {
@@ -65,5 +66,28 @@ void main() {
     expect(whisper, startsWith('[DIRECTOR WHISPER] Ask what he does when he feels ill.'));
     expect(whisper, contains('"take a sick day"'));
     expect(whisper, contains('do not say it first'));
+  });
+
+  test('directorWhisper masks the literal English phrase if leaked inside whisper', () {
+    final whisper = LiveTutorPrompts.directorWhisper(
+      'Ask him to say where it is warm.',
+      cardTarget: 'where it is warm',
+      cardCzech: 'kde je teplo',
+    );
+    expect(whisper, startsWith('[DIRECTOR WHISPER] Ask him to say [expression for "kde je teplo" - DO NOT SAY IT].'));
+    expect(whisper, isNot(contains('Ask him to say where it is warm')));
+  });
+
+  test('changeTopicWithCards avoids profile topics and nudges sampled flashcards safely', () {
+    expect(LiveTutorPrompts.changeTopicWithCards(const []), LiveTutorPrompts.changeTopicNow);
+
+    final prompt = LiveTutorPrompts.changeTopicWithCards([
+      ConversationCard(id: 1, czech: 'stěhovat se', english: 'move out'),
+      ConversationCard(id: 2, czech: 'záloha', english: 'deposit'),
+    ]);
+    expect(prompt, contains(LiveTutorPrompts.changeTopicNow));
+    expect(prompt, contains('"stěhovat se"'));
+    expect(prompt, contains('"záloha"'));
+    expect(prompt, contains('Do NOT say the English expressions ("move out", "deposit") yourself'));
   });
 }

@@ -1,7 +1,9 @@
+import '../flashcards/conversation_cards.dart';
+
 /// Pokyny posílané hlasovému tutorovi během živého hovoru (Gemini Live).
 abstract final class LiveTutorPrompts {
   static const String _casualGreeting =
-      " Start with a casual and warm greeting as a friend (do NOT introduce yourself, say your name or where you are from). Share a small, natural detail about your day or mood (following your system instructions example) and ask an open question to kick off the chat.";
+      " Start with a casual and warm greeting as a friend (do NOT introduce yourself, say your name or where you are from). Share a small, natural detail about your day or mood (following your system instructions example) and ask an open question on a fresh, everyday or unexpected topic to kick off the chat (do NOT ask about the student's work, IT projects, grilling, garden, sailing, or TV series from their profile).";
 
   /// Skrytá úvodní zpráva, kterou tutor po připojení zahájí konverzaci.
   ///
@@ -56,10 +58,15 @@ abstract final class LiveTutorPrompts {
   /// Rada režiséra hovoru (VoiceDirectorAgent) pro tutora.
   ///
   /// [cardTarget] je výraz z kartičky, ke kterému rada vede: student ho má říct sám,
-  /// zopakování po tutorovi kartičku nesplní.
-  static String directorWhisper(String whisper, {String? cardTarget}) {
+  /// zopakování po tutorovi kartičku nesplní. Pokud režisér výraz omylem napsal
+  /// přímo do rady [whisper], zamaskuje se, aby ho tutor nevyslovil první.
+  static String directorWhisper(String whisper, {String? cardTarget, String? cardCzech}) {
     if (cardTarget == null || cardTarget.isEmpty) return '[DIRECTOR WHISPER] $whisper';
-    return '[DIRECTOR WHISPER] $whisper (Flashcard practice: the student is learning to say "$cardTarget". '
+    final maskedWhisper = whisper.replaceAll(
+      RegExp(RegExp.escape(cardTarget), caseSensitive: false),
+      '[expression for "${cardCzech ?? cardTarget}" - DO NOT SAY IT]',
+    );
+    return '[DIRECTOR WHISPER] $maskedWhisper (Flashcard practice: the student is learning to say "$cardTarget". '
         'Let them say it themselves, so do not say it first. If they say it in Czech or ask how to say it, help them as usual.)';
   }
 
@@ -67,14 +74,26 @@ abstract final class LiveTutorPrompts {
   static const String frustrationRecalibration =
       'STUDENT IS GIVING VERY SHORT ANSWERS. They might be frustrated or tired. STOP asking difficult questions. Validate their effort, be extremely encouraging, and switch to a very easy, fun, and relaxing topic immediately.';
 
-  /// Student klepl na „Změnit téma“ – tutor má hned plynule přejít k novému tématu.
+  /// Student klepl na „Změnit téma“ – tutor má hned plynule přejít k novému tématu mimo profil.
   static const String changeTopicNow =
       "CRITICAL INSTRUCTION: The student just tapped 'Next Topic' / 'Change Topic'. "
       "Immediately abandon the previous discussion. "
       "Naturally acknowledge changing the subject in English in one brief, friendly sentence "
       "(for example: \"Sure, let's switch gears!\" or \"Alright, let's move on to something else!\"), "
-      "smoothly introduce a completely fresh and engaging topic suited to the student's level and interests, "
+      "smoothly introduce a completely fresh, unexpected, and engaging topic OUTSIDE the student's profile facts "
+      "(strictly AVOID their work, IT/Power Platform, food/grilling, gardening, sailing/boat, and TV series/Marvel/anime), "
+      "such as an intriguing 'what if' dilemma, travel & hotels, future technology, cultural curiosity, or an everyday life situation, "
       "and ask ONE clear open-ended question to invite the student to speak.";
+
+  /// Změna tématu s nenápadným zapojením 1–2 dnešních kartiček mimo profil studenta.
+  static String changeTopicWithCards(List<ConversationCard> sampleCards) {
+    if (sampleCards.isEmpty) return changeTopicNow;
+    final hints = sampleCards.map((c) => '"${c.czech}" (target: "${c.english}")').join(', ');
+    final forbiddenEn = sampleCards.map((c) => '"${c.english}"').join(', ');
+    return '$changeTopicNow '
+        'If possible, steer the new random topic so the student has a natural opportunity to express one of these concepts: $hints. '
+        'CRITICAL: Do NOT say the English expressions ($forbiddenEn) yourself in your question—let the student use them!';
+  }
 
   /// Po obnovení spojení zůstala poslední replika studenta bez odpovědi – tutor na ni odpoví hned.
   static const String answerAfterReconnect =
@@ -97,6 +116,7 @@ abstract final class LiveTutorPrompts {
   static const String changeTopicSilently =
       "CRITICAL INSTRUCTION: Okamžitě opusti současné téma hovoru, "
       "protože se konverzace zacyklila. Přestaň klást otázky k dosavadnímu okruhu "
-      "a plynule přejdi na absolutně novou oblast zájmů studenta. Použij přirozený "
+      "a plynule přejdi na zcela nové, neotřelé téma mimo ohraná fakta z profilu studenta "
+      "(vyhni se práci v IT, grilování, zahradě, lodi i seriálům). Použij přirozený "
       "oslí můstek. Neupozorňuj nahlas, že měníš téma na příkaz systému.";
 }

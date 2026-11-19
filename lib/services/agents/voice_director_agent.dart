@@ -32,6 +32,9 @@ class VoiceDirectorState {
   /// Dokud je nastavená, režisér mlčí, aby se s tutorem nepral.
   final String? repeatTarget;
 
+  /// Česká strana právě vpletené kartičky (pro nenápadný tip studentovi v UI).
+  final String? activeCardCueCz;
+
   /// Vytvoří stav Voice Directora.
   const VoiceDirectorState({
     this.isAnalyzing = false,
@@ -41,6 +44,7 @@ class VoiceDirectorState {
     this.lastAnalyzedTurnIndex = 0,
     this.lastHealthScore = 10,
     this.repeatTarget,
+    this.activeCardCueCz,
   });
 
   /// Vytvoří kopii stavu s modifikovanými hodnotami.
@@ -54,6 +58,8 @@ class VoiceDirectorState {
     int? lastHealthScore,
     String? repeatTarget,
     bool clearRepeatTarget = false,
+    String? activeCardCueCz,
+    bool clearActiveCardCue = false,
   }) {
     return VoiceDirectorState(
       isAnalyzing: isAnalyzing ?? this.isAnalyzing,
@@ -63,6 +69,7 @@ class VoiceDirectorState {
       lastAnalyzedTurnIndex: lastAnalyzedTurnIndex ?? this.lastAnalyzedTurnIndex,
       lastHealthScore: lastHealthScore ?? this.lastHealthScore,
       repeatTarget: clearRepeatTarget ? null : (repeatTarget ?? this.repeatTarget),
+      activeCardCueCz: clearActiveCardCue ? null : (activeCardCueCz ?? this.activeCardCueCz),
     );
   }
 }
@@ -77,6 +84,7 @@ class VoiceDirectorState {
 class VoiceDirectorAgent extends Notifier<VoiceDirectorState> {
   DateTime? _lastAnalysisTime;
   Timer? _tipDismissTimer;
+  int _analysisGeneration = 0;
 
   // Minimální odstup mezi analýzami (cooldown pro prevenci spamování API)
   static const Duration _minAnalysisCooldown = Duration(seconds: 40);
@@ -94,6 +102,7 @@ class VoiceDirectorAgent extends Notifier<VoiceDirectorState> {
 
   /// Resetuje stav režiséra pro novou session.
   void reset() {
+    _analysisGeneration++;
     _tipDismissTimer?.cancel();
     _lastAnalysisTime = null;
     if (ref.mounted) {
@@ -104,8 +113,29 @@ class VoiceDirectorAgent extends Notifier<VoiceDirectorState> {
   /// Zavře aktivní nápovědu pro studenta.
   void dismissTip() {
     _tipDismissTimer?.cancel();
-    if (ref.mounted && (state.currentTip != null || state.repeatTarget != null)) {
-      state = state.copyWith(clearTip: true, clearRepeatTarget: true);
+    if (ref.mounted && (state.currentTip != null || state.repeatTarget != null || state.activeCardCueCz != null)) {
+      state = state.copyWith(clearTip: true, clearRepeatTarget: true, clearActiveCardCue: true);
+    }
+  }
+
+  /// Zneplatní případnou dobíhající analýzu předchozího tématu a nastaví tip na novou kartičku.
+  void onTopicChanged({String? cardCueCz}) {
+    _analysisGeneration++;
+    _tipDismissTimer?.cancel();
+    if (!ref.mounted) return;
+    state = state.copyWith(
+      isAnalyzing: false,
+      clearTip: true,
+      clearRepeatTarget: true,
+      activeCardCueCz: cardCueCz,
+      clearActiveCardCue: cardCueCz == null,
+    );
+  }
+
+  /// Skryje nápovědu ke vpletené kartičce (např. po jejím splnění).
+  void clearActiveCardCue() {
+    if (ref.mounted && state.activeCardCueCz != null) {
+      state = state.copyWith(clearActiveCardCue: true);
     }
   }
 
@@ -206,6 +236,7 @@ class VoiceDirectorAgent extends Notifier<VoiceDirectorState> {
     // Máme dostatek nových dat a cooldown vypršel -> spouštíme asynchronní analýzu
     state = state.copyWith(isAnalyzing: true);
     _lastAnalysisTime = now;
+    final generation = _analysisGeneration;
 
     try {
       final directorClient = ref.read(geminiDirectorClientProvider);
@@ -240,6 +271,11 @@ class VoiceDirectorAgent extends Notifier<VoiceDirectorState> {
         systemPrompt: prompt,
         responseSchema: SystemPromptBuilder.getDirectorResponseSchema(),
       );
+
+      if (!ref.mounted || generation != _analysisGeneration) {
+        L.d('VoiceDirector: Analýza zastarala (změna tématu nebo reset), výsledek zahazuji.');
+        return;
+      }
 
       final data = decodeModelJson(rawResponse) as Map<String, dynamic>;
 
@@ -334,6 +370,8 @@ class VoiceDirectorAgent extends Notifier<VoiceDirectorState> {
           sessionFacts: updatedSessionFacts,
           currentTip: (tip != null && tip.isNotEmpty) ? tip : null,
           clearTip: tip == null || tip.isEmpty,
+          activeCardCueCz: card?.czech,
+          clearActiveCardCue: card == null,
         );
       }
     } catch (e) {

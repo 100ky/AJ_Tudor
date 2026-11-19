@@ -379,6 +379,54 @@ void main() {
     ));
   });
 
+  test('forceTopicChange clears queued pending guidance before switching topic', () async {
+    void Function()? turnCompleteCallback;
+
+    when(() => mockRepo.startNewSession()).thenAnswer((_) async => Result.success(123));
+    when(() => mockProfileRepo.getUserProfile()).thenAnswer((_) async => null);
+    when(() => mockAudio.start(onAudioChunk: any(named: 'onAudioChunk'))).thenAnswer((_) async {});
+    when(() => mockAudio.stopPlayback()).thenAnswer((_) async {});
+    when(() => mockAudio.isPlaying).thenReturn(false);
+    when(() => mockClient.isConnected).thenReturn(true);
+    when(() => mockClient.connect(
+      modelName: any(named: 'modelName'),
+      systemPrompt: any(named: 'systemPrompt'),
+      voiceName: any(named: 'voiceName'),
+    )).thenAnswer((_) {});
+    when(() => mockClient.currentTokenCount).thenReturn(0);
+    when(() => mockClient.sendClientContent(
+      role: any(named: 'role'),
+      text: any(named: 'text'),
+      turnComplete: any(named: 'turnComplete'),
+    )).thenAnswer((_) {});
+    when(() => mockClient.onTurnComplete = any()).thenAnswer((invocation) =>
+        turnCompleteCallback = invocation.positionalArguments[0] as void Function()?);
+
+    final agent = container.read(voiceTutorAgentProvider.notifier);
+    await agent.startSession();
+
+    // Režisér zařadí našeptání do fronty během předchozího tahu
+    agent.injectMidSessionGuidance('[DIRECTOR WHISPER] Old topic whisper.');
+
+    // Změna tématu vyčistí frontu a ihned pošle instrukci pro nové téma
+    agent.forceTopicChange(promptImmediateResponse: true);
+
+    verify(() => mockClient.sendClientContent(
+      role: 'user',
+      text: any(named: 'text', that: isNot(contains('Old topic whisper.'))),
+      turnComplete: true,
+    )).called(1);
+
+    // Při dalším konci tahu už staré našeptávání nesmí být odesláno
+    expect(turnCompleteCallback, isNotNull);
+    turnCompleteCallback!();
+    verifyNever(() => mockClient.sendClientContent(
+      role: any(named: 'role'),
+      text: any(named: 'text', that: contains('Old topic whisper.')),
+      turnComplete: any(named: 'turnComplete'),
+    ));
+  });
+
   test('interruptPlayback stops audio playback and returns state to listening', () async {
     when(() => mockRepo.startNewSession()).thenAnswer((_) async => Result.success(123));
     when(() => mockProfileRepo.getUserProfile()).thenAnswer((_) async => null);

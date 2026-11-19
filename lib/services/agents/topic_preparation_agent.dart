@@ -1,6 +1,9 @@
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/data_providers.dart';
+import '../flashcards/conversation_cards.dart';
+import '../flashcards/due_conversation_cards.dart';
 import '../gemini/gemini_providers.dart';
 import '../../data/repositories/profile_repository.dart';
 import '../../data/repositories/session_repository.dart';
@@ -15,6 +18,7 @@ class PreparedTopic {
   final String rationale;
   final DateTime preparedAt;
   final bool isRandomTopic;
+  final List<String> targetWordsCz;
 
   PreparedTopic({
     required this.title,
@@ -22,6 +26,7 @@ class PreparedTopic {
     required this.rationale,
     required this.preparedAt,
     this.isRandomTopic = false,
+    this.targetWordsCz = const [],
   });
 
   Map<String, dynamic> toJson() => {
@@ -30,6 +35,7 @@ class PreparedTopic {
         'rationale': rationale,
         'preparedAt': preparedAt.toIso8601String(),
         'isRandomTopic': isRandomTopic,
+        if (targetWordsCz.isNotEmpty) 'targetWordsCz': targetWordsCz,
       };
 
   factory PreparedTopic.fromJson(Map<String, dynamic> json) => PreparedTopic(
@@ -40,6 +46,11 @@ class PreparedTopic {
             ? DateTime.tryParse(json['preparedAt']) ?? DateTime.now()
             : DateTime.now(),
         isRandomTopic: json['isRandomTopic'] as bool? ?? false,
+        targetWordsCz: (json['targetWordsCz'] as List?)
+                ?.map((e) => e.toString())
+                .where((s) => s.isNotEmpty)
+                .toList() ??
+            const [],
       );
 }
 
@@ -161,6 +172,7 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
 
     try {
       final profile = await profileRepo.getUserProfile();
+      final dueCardsSample = await _sampleDueCardsForTopic();
 
       // Shromáždíme témata k vynechání (stávající téma i nedávno navržená témata)
       final currentTitle = state.topic?.title;
@@ -174,6 +186,7 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
         final prompt = SystemPromptBuilder.buildRandomTopicPreparationPrompt(
           targetLevel: profile?.targetLevel ?? 'B1',
           avoidTopics: avoidTopics,
+          dueCardsSample: dueCardsSample,
         );
 
         final userMessage = avoidTopics.isNotEmpty
@@ -195,6 +208,7 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
               'Divoká karta (náhodné téma na přání): odlehčená konverzace mimo dosavadní historii.',
           preparedAt: DateTime.now(),
           isRandomTopic: true,
+          targetWordsCz: _parseTargetWords(data),
         );
 
         _recentlyProposedTitles.add(prepared.title);
@@ -258,11 +272,12 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
         recentTranscriptsSnippet: recentTranscriptsSnippet,
         memoryBriefing: currentProfile?.memoryBriefing,
         avoidTopics: avoidTopics,
+        dueCardsSample: dueCardsSample,
       );
 
       final userMessage = avoidTopics.isNotEmpty
-          ? 'Navrhni 1 nové, svěží konverzační téma a úvodní háček ze života studenta. ZCELA SE VYHNI dříve navrženým tématům: ${avoidTopics.map((t) => '"$t"').join(', ')}.'
-          : 'Navrhni 1 smysluplné, přirozené konverzační téma a úvodní háček, které logicky navazuje na historii a profil studenta.';
+          ? 'Navrhni 1 nové, svěží konverzační téma a úvodní háček (pokud se hodí, postav ho kolem dnešních kartiček). ZCELA SE VYHNI dříve navrženým tématům: ${avoidTopics.map((t) => '"$t"').join(', ')}.'
+          : 'Navrhni 1 smysluplné, svěží konverzační téma a úvodní háček, které se neopakuje a přirozeně zapojí dnešní kartičky nebo novou oblast ze života.';
 
       final result = await gemini.sendMessage(
         userMessage,
@@ -271,6 +286,7 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
       );
 
       final data = jsonDecode(result);
+      final targetWordsCz = _parseTargetWords(data);
       final prepared = PreparedTopic(
         title: data['topicTitle']?.toString() ?? 'Zajímavosti ze života',
         openerEn: data['openerEn']?.toString() ??
@@ -278,6 +294,7 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
         rationale: data['rationale']?.toString() ?? '',
         preparedAt: DateTime.now(),
         isRandomTopic: false,
+        targetWordsCz: targetWordsCz,
       );
 
       _recentlyProposedTitles.add(prepared.title);
@@ -346,6 +363,30 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
     } catch (e) {
       L.w('TopicPreparationAgent: Zpětná extrakce faktů z historie byla přeskočena: $e');
     }
+  }
+
+  /// Vybere různorodý vzorek dnešních kartiček, aby příprava témat nebrala stále jen nejstarší.
+  Future<List<String>> _sampleDueCardsForTopic() async {
+    try {
+      final due = await ref.read(flashcardRepositoryProvider).getDueFlashcards();
+      final cards = conversationCardsFromDue(due).cards;
+      if (cards.isEmpty) return const [];
+      final vocab = cards.where((c) => c.kind == CardKind.vocabulary).toList();
+      final pool = List<ConversationCard>.from(vocab.length >= 6 ? vocab : cards);
+      pool.shuffle(Random());
+      return [for (final c in pool.take(6)) '${c.czech} → ${c.english}'];
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  List<String> _parseTargetWords(dynamic data) {
+    if (data is! Map) return const [];
+    return (data['targetWordsCz'] as List?)
+            ?.map((e) => e.toString().trim())
+            .where((s) => s.isNotEmpty)
+            .toList() ??
+        const <String>[];
   }
 
   /// Označí téma za spotřebované / vymaže ho (např. po proběhlé lekci).

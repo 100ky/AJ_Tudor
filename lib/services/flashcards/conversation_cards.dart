@@ -1,3 +1,5 @@
+import 'dart:math';
+
 /// Kartička, kterou může splnit živý hovor: český výraz a jeho anglický cíl.
 /// Druh kartičky pro lekci.
 enum CardKind {
@@ -64,6 +66,7 @@ class ConversationCards {
   final List<ConversationCard> _cards;
   final DateTime Function() _clock;
   final Set<int> _woven = {};
+  final List<ConversationCard> _recentlyWoven = [];
   final List<ConversationCard> _completed = [];
   DateTime? _lastWovenAt;
 
@@ -78,6 +81,32 @@ class ConversationCards {
 
   /// Kartičky splněné v tomto hovoru.
   List<ConversationCard> get completed => List.unmodifiable(_completed);
+
+  /// Nedávno vpletené kartičky (režisérem nebo změnou tématu), které ještě nebyly splněné.
+  List<ConversationCard> get uncompletedWovenCards => [
+        for (final card in _recentlyWoven)
+          if (!_completed.any((d) => d.id == card.id)) card,
+      ];
+
+  /// Vybere až [count] dosud nevpletených kartiček pro změnu tématu (preferuje slovíčka)
+  /// a posune zásobu dál, aniž by zablokoval další rady režiséra na [cardSpacing].
+  List<ConversationCard> pickSampleForTopicChange({int count = 2, Random? random}) {
+    final available = _cards
+        .where((c) => !_woven.contains(c.id) && !_completed.any((d) => d.id == c.id))
+        .toList();
+    if (available.isEmpty || count <= 0) return const [];
+    final vocab = available.where((c) => c.kind == CardKind.vocabulary).toList();
+    final pool = List<ConversationCard>.from(vocab.length >= count ? vocab : available);
+    pool.shuffle(random ?? Random());
+    final picked = pool.take(count).toList();
+    if (picked.isNotEmpty) {
+      _woven.add(picked.first.id);
+    }
+    for (final card in picked) {
+      _rememberWoven(card);
+    }
+    return picked;
+  }
 
   /// Zásoba pro režiséra: nesplněné a dosud nevpletené kartičky, nejstarší první.
   /// Prázdná, dokud od poslední vpletené kartičky neuplynul [cardSpacing].
@@ -111,6 +140,13 @@ class ConversationCards {
   void markWoven(ConversationCard card) {
     _woven.add(card.id);
     _lastWovenAt = _clock();
+    _rememberWoven(card);
+  }
+
+  void _rememberWoven(ConversationCard card) {
+    _recentlyWoven.removeWhere((c) => c.id == card.id);
+    _recentlyWoven.add(card);
+    if (_recentlyWoven.length > 3) _recentlyWoven.removeAt(0);
   }
 
   /// Označí a vrátí kartičky, které splnila replika studenta [studentText].

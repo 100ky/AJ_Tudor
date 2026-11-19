@@ -8,9 +8,11 @@ import '../../../../services/agents/topic_preparation_agent.dart';
 class HistoryTopicTab extends ConsumerWidget {
   const HistoryTopicTab({super.key});
 
-  void _prepareNewTopic(WidgetRef ref) {
+  void _prepareNewTopic(WidgetRef ref, {bool isRandomTopic = false}) {
     HapticFeedback.lightImpact();
-    ref.read(topicPreparationAgentProvider.notifier).prepareTopic(force: true);
+    ref
+        .read(topicPreparationAgentProvider.notifier)
+        .prepareTopic(force: true, isRandomTopic: isRandomTopic);
   }
 
   @override
@@ -63,6 +65,17 @@ class HistoryTopicTab extends ConsumerWidget {
         ),
         const SizedBox(height: 6),
         Text('„${topic.openerEn}“', style: muted.copyWith(fontStyle: FontStyle.italic)),
+        if (topic.targetWordsCz.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Text(
+            'Kartičky v tématu: ${topic.targetWordsCz.join(', ')}',
+            style: AppTheme.font(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: AppTheme.primary,
+            ),
+          ),
+        ],
         const SizedBox(height: 2),
         if (topicState.isLoading)
           Padding(
@@ -76,11 +89,22 @@ class HistoryTopicTab extends ConsumerWidget {
             ),
           )
         else
-          TextButton.icon(
-            style: TextButton.styleFrom(padding: EdgeInsets.zero),
-            onPressed: () => _prepareNewTopic(ref),
-            icon: const Icon(Icons.refresh_rounded, size: 18),
-            label: const Text('Jiné téma'),
+          Wrap(
+            spacing: 12,
+            children: [
+              TextButton.icon(
+                style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                onPressed: () => _prepareNewTopic(ref),
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: const Text('Jiné téma'),
+              ),
+              TextButton.icon(
+                style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                onPressed: () => _prepareNewTopic(ref, isRandomTopic: true),
+                icon: const Icon(Icons.casino_outlined, size: 18),
+                label: const Text('Náhodné téma'),
+              ),
+            ],
           ),
       ],
     );

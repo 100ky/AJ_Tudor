@@ -272,6 +272,14 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
         messages.isNotEmpty || tutorState.currentTranscript.isNotEmpty;
     final tip = directorState.currentTip;
     final repeatTarget = directorState.repeatTarget;
+    final cardCue = directorState.activeCardCueCz;
+    final combinedTip = [
+      if (tip != null && tip.isNotEmpty) tip,
+      if (cardCue != null && cardCue.isNotEmpty)
+        tip != null && tip.isNotEmpty
+            ? '🃏 Zkus zapojit: „$cardCue“'
+            : '🃏 Zkus v odpovědi použít: „$cardCue“',
+    ].join('\n');
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -316,9 +324,9 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
                     ref.read(voiceDirectorAgentProvider.notifier).dismissTip(),
               )
             // ── Asistivní vizuální nápověda pro studenta (Voice Director) ─────────
-            else if (isActive && tip != null && tip.isNotEmpty)
+            else if (isActive && combinedTip.isNotEmpty)
               DirectorTipBanner(
-                tip: tip,
+                tip: combinedTip,
                 onDismiss: () =>
                     ref.read(voiceDirectorAgentProvider.notifier).dismissTip(),
               ),

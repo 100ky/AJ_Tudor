@@ -172,6 +172,8 @@ class ModelCooldownTracker {
 class GeminiRestCore {
   static const String baseUrl =
       'https://generativelanguage.googleapis.com/v1beta/models';
+  static const String decisionsUrl =
+      'https://generativelanguage.googleapis.com/v1beta/decisions';
 
   final Dio _dio;
 
@@ -201,6 +203,26 @@ class GeminiRestCore {
     // (HttpException „…, uri = …“) a ty končí v logu, který se stahuje z telefonu.
     final response = await _dio.post<Map<String, dynamic>>(
       '$baseUrl/$model:generateContent',
+      data: body,
+      options: Options(
+        headers: {'Content-Type': 'application/json', 'x-goog-api-key': apiKey},
+        sendTimeout: sendTimeout,
+        receiveTimeout: receiveTimeout,
+      ),
+    );
+    return response.data;
+  }
+
+  /// Zavolá Decisions API (`POST /v1beta/decisions`) s modelem `gemini-decision-1`.
+  /// Vrací kalibrované pravděpodobnosti s nulovými výstupními tokeny.
+  Future<Map<String, dynamic>?> createDecision({
+    required String apiKey,
+    required Map<String, dynamic> body,
+    Duration? sendTimeout,
+    Duration? receiveTimeout,
+  }) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      decisionsUrl,
       data: body,
       options: Options(
         headers: {'Content-Type': 'application/json', 'x-goog-api-key': apiKey},

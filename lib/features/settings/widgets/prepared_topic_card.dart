@@ -122,6 +122,18 @@ class PreparedTopicCard extends ConsumerWidget {
                 ),
               ),
               IconButton(
+                tooltip: 'Náhodné téma',
+                icon: const Icon(Icons.casino_outlined, size: 18),
+                color: AppTheme.primary,
+                visualDensity: VisualDensity.compact,
+                onPressed: () {
+                  HapticFeedback.lightImpact();
+                  ref
+                      .read(topicPreparationAgentProvider.notifier)
+                      .prepareTopic(force: true, isRandomTopic: true);
+                },
+              ),
+              IconButton(
                 tooltip: 'Vyměnit téma',
                 icon: const Icon(Icons.refresh_rounded, size: 18),
                 color: AppTheme.primary,
@@ -159,6 +171,17 @@ class PreparedTopicCard extends ConsumerWidget {
               ],
             ),
           ),
+          if (topic.targetWordsCz.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Kartičky v tématu: ${topic.targetWordsCz.join(', ')}',
+              style: GoogleFonts.hankenGrotesk(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w500,
+                color: AppTheme.primary,
+              ),
+            ),
+          ],
           if (topic.rationale.isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(

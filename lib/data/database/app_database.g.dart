@@ -4773,7 +4773,7 @@ class $$SessionsTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$SessionsTable, Session>(table),
                   $$SessionsTableReferences(db, table, e),
                 ),
               )
@@ -4795,10 +4795,11 @@ class $$SessionsTableTableManager
                   getPrefetchedDataCallback: (items) async {
                     return [
                       if (transcriptsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           Session,
                           $SessionsTable,
-                          Transcript
+                          Transcript,
+                          $TranscriptsTable
                         >(
                           currentTable: table,
                           referencedTable: $$SessionsTableReferences
@@ -4809,17 +4810,16 @@ class $$SessionsTableTableManager
                                 table,
                                 p0,
                               ).transcriptsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.sessionId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'session_id',
                           typedResults: items,
                         ),
                       if (errorLogsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           Session,
                           $SessionsTable,
-                          ErrorLog
+                          ErrorLog,
+                          $ErrorLogsTable
                         >(
                           currentTable: table,
                           referencedTable: $$SessionsTableReferences
@@ -4830,17 +4830,16 @@ class $$SessionsTableTableManager
                                 table,
                                 p0,
                               ).errorLogsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.sessionId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'session_id',
                           typedResults: items,
                         ),
                       if (sessionIssuesRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           Session,
                           $SessionsTable,
-                          SessionIssue
+                          SessionIssue,
+                          $SessionIssuesTable
                         >(
                           currentTable: table,
                           referencedTable: $$SessionsTableReferences
@@ -4851,10 +4850,8 @@ class $$SessionsTableTableManager
                                 table,
                                 p0,
                               ).sessionIssuesRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.sessionId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'session_id',
                           typedResults: items,
                         ),
                     ];
@@ -5240,7 +5237,7 @@ class $$TranscriptsTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$TranscriptsTable, Transcript>(table),
                   $$TranscriptsTableReferences(db, table, e),
                 ),
               )
@@ -5289,10 +5286,11 @@ class $$TranscriptsTableTableManager
                   getPrefetchedDataCallback: (items) async {
                     return [
                       if (sessionIssuesRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           Transcript,
                           $TranscriptsTable,
-                          SessionIssue
+                          SessionIssue,
+                          $SessionIssuesTable
                         >(
                           currentTable: table,
                           referencedTable: $$TranscriptsTableReferences
@@ -5303,10 +5301,8 @@ class $$TranscriptsTableTableManager
                                 table,
                                 p0,
                               ).sessionIssuesRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.transcriptId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'transcript_id',
                           typedResults: items,
                         ),
                     ];
@@ -5675,7 +5671,16 @@ class $$UserProfilesTableTableManager
                 preparedTopicAt: preparedTopicAt,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<$UserProfilesTable, UserProfile>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $UserProfilesTable,
+                    UserProfile
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -6096,7 +6101,7 @@ class $$ErrorLogsTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$ErrorLogsTable, ErrorLog>(table),
                   $$ErrorLogsTableReferences(db, table, e),
                 ),
               )
@@ -6140,10 +6145,11 @@ class $$ErrorLogsTableTableManager
               getPrefetchedDataCallback: (items) async {
                 return [
                   if (flashcardsRefs)
-                    await $_getPrefetchedData<
+                    await $_getPrefetchedDataByColumns<
                       ErrorLog,
                       $ErrorLogsTable,
-                      Flashcard
+                      Flashcard,
+                      $FlashcardsTable
                     >(
                       currentTable: table,
                       referencedTable: $$ErrorLogsTableReferences
@@ -6154,8 +6160,8 @@ class $$ErrorLogsTableTableManager
                             table,
                             p0,
                           ).flashcardsRefs,
-                      referencedItemsForCurrentItem: (item, referencedItems) =>
-                          referencedItems.where((e) => e.errorLogId == item.id),
+                      currentColumn: 'id',
+                      referencedColumn: 'error_log_id',
                       typedResults: items,
                     ),
                 ];
@@ -6412,7 +6418,16 @@ class $$ScenariosTableTableManager
                 createdAt: createdAt,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<$ScenariosTable, Scenario>(table),
+                  BaseReferences<_$AppDatabase, $ScenariosTable, Scenario>(
+                    db,
+                    table,
+                    e,
+                  ),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -6825,7 +6840,7 @@ class $$FlashcardsTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$FlashcardsTable, Flashcard>(table),
                   $$FlashcardsTableReferences(db, table, e),
                 ),
               )
@@ -7214,7 +7229,7 @@ class $$SessionIssuesTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$SessionIssuesTable, SessionIssue>(table),
                   $$SessionIssuesTableReferences(db, table, e),
                 ),
               )

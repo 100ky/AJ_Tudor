@@ -528,7 +528,9 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         recurringErrors: userProfile?.recurringErrors,
         vocabulary: userProfile?.vocabulary,
         recentTopics: userProfile?.topicPreferences,
-        memoryBriefing: userProfile?.memoryBriefing,
+        memoryBriefing: state.scenarioContext == '__free_talk__'
+            ? null
+            : userProfile?.memoryBriefing,
         userFacts: userProfile?.userFacts,
         personalFact: personalFact,
         lessonCards: state.lessonCards,
@@ -715,7 +717,12 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       _judgeAndCompleteCards(utterance, text, extraSingleWords);
     } else {
       final singleWords = cards.matchingSingleWords(text, recentTutorLines: utterance.recentTutorLines);
-      _judgeAndCompleteCards(utterance, text, singleWords);
+      final candidates = <ConversationCard>[
+        ...singleWords,
+        for (final c in cards.uncompletedWovenCards)
+          if (!singleWords.any((s) => s.id == c.id)) c,
+      ];
+      _judgeAndCompleteCards(utterance, text, candidates);
     }
   }
 
@@ -751,6 +758,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     if (ref.mounted) {
       state = state.copyWith(completedCards: [...state.completedCards, ...done]);
       _reportLessonProgress(done);
+      _director.clearActiveCardCue();
     }
   }
 
@@ -1383,7 +1391,11 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
           L.i('VoiceDirector: Našeptávám tutorovi: "$whisper"');
           if (card != null) _conversationCards?.markWoven(card);
           injectMidSessionGuidance(
-            LiveTutorPrompts.directorWhisper(whisper, cardTarget: card?.english),
+            LiveTutorPrompts.directorWhisper(
+              whisper,
+              cardTarget: card?.english,
+              cardCzech: card?.czech,
+            ),
             turnComplete: false,
           );
         },
@@ -1976,10 +1988,26 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       _resetThinkingTimer();
       _resetWatchdog();
 
-      // 5. Odešleme systémovou instrukci s turnComplete: true pro okamžité převzetí slova modelem
-      injectMidSessionGuidance(LiveTutorPrompts.changeTopicNow, turnComplete: true);
+      // 5. Vymazání případných čekajících našeptávání ze starého tématu a přepnutí režiséra
+      _pendingGuidance.clear();
+      final sampleCards =
+          _conversationCards?.pickSampleForTopicChange(count: 2) ??
+              const <ConversationCard>[];
+      _director.onTopicChanged(
+        cardCueCz: sampleCards.isNotEmpty
+            ? sampleCards.map((c) => c.czech).join(' • ')
+            : null,
+      );
+
+      // 6. Odešleme systémovou instrukci s turnComplete: true pro okamžité převzetí slova modelem
+      injectMidSessionGuidance(
+        LiveTutorPrompts.changeTopicWithCards(sampleCards),
+        turnComplete: true,
+      );
     } else {
       // Pasivní heuristická změna při detekci stagnace v pozadí (přepne se v příštím tahu studenta)
+      _pendingGuidance.clear();
+      _director.onTopicChanged();
       injectMidSessionGuidance(LiveTutorPrompts.changeTopicSilently, turnComplete: false);
     }
   }

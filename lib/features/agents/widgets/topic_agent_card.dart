@@ -136,27 +136,43 @@ class TopicAgentCard extends ConsumerWidget {
             ),
             const SizedBox(height: 14),
           ],
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: topicState.isLoading
-                  ? null
-                  : () {
-                      HapticFeedback.selectionClick();
-                      ref
-                          .read(topicPreparationAgentProvider.notifier)
-                          .prepareTopic(force: true);
-                    },
-              icon: topicState.isLoading
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.refresh_rounded, size: 18),
-              label: Text(topicState.isLoading
-                  ? 'Připravuji nové téma...'
-                  : 'Přeplánovat téma nyní'),
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: topicState.isLoading
+                      ? null
+                      : () {
+                          HapticFeedback.selectionClick();
+                          ref
+                              .read(topicPreparationAgentProvider.notifier)
+                              .prepareTopic(force: true);
+                        },
+                  icon: topicState.isLoading
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.refresh_rounded, size: 18),
+                  label: Text(topicState.isLoading
+                      ? 'Připravuji nové téma...'
+                      : 'Přeplánovat téma nyní'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton.outlined(
+                tooltip: 'Náhodné téma',
+                onPressed: topicState.isLoading
+                    ? null
+                    : () {
+                        HapticFeedback.selectionClick();
+                        ref
+                            .read(topicPreparationAgentProvider.notifier)
+                            .prepareTopic(force: true, isRandomTopic: true);
+                      },
+                icon: const Icon(Icons.casino_outlined, size: 18),
+              ),
+            ],
           ),
         ],
       ),
