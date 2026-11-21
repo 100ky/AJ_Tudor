@@ -300,6 +300,8 @@ void main() {
       expect(prompt, contains('Nevracej hovor k faktům z profilu'));
       expect(prompt, contains('Gramatiku a opravy neřešíš vůbec'));
       expect(prompt, contains('Když se student loučí'));
+      // Lekce 36: s needsPivot=false radil „steer towards weekend trips“ a hovor skákal mezi tématy
+      expect(prompt, contains('Když je needsPivot=false, whisperToTutor zůstává u aktuálního tématu'));
 
       final schema = SystemPromptBuilder.getDirectorResponseSchema();
       expect(schema['type'], 'object');

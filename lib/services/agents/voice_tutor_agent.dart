@@ -1327,9 +1327,18 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
 
       // V lekci se tahy tutora podobají záměrně (pochvala a další výraz), téma se nemění
       if (similarity != null && !_lessonRunning) {
-         L.w('Detekována stagnace (Tutor se opakuje s podobností ${ (similarity * 100).toInt() }%). Vynucuji změnu tématu.');
-         forceTopicChange(promptImmediateResponse: false);
+         if (isRepairRequest(finalTutorText)) {
+           // Tutor studentovi opakovaně nerozumí: téma je v pořádku, jen se ztratilo
+           // porozumění (lekce 36: student smrkal a nové téma přišlo uprostřed živého)
+           L.w('Tutor potřetí žádá o zopakování (podobnost ${(similarity * 100).toInt()} %). Vracím ho k hovoru, téma neměním.');
+           injectMidSessionGuidance(LiveTutorPrompts.breakRepairLoop);
+         } else {
+           L.w('Detekována stagnace (Tutor se opakuje s podobností ${ (similarity * 100).toInt() }%). Vynucuji změnu tématu.');
+           forceTopicChange(promptImmediateResponse: false);
+         }
          _tutorTextHistory.clear(); // Zabrání okamžitému dalšímu spuštění
+         // Krátké repliky ze zacyklení nejsou nezájem o další hovor
+         _consecutiveShortAnswers = 0;
       } else {
          _tutorTextHistory.add(finalTutorText);
          if (_tutorTextHistory.length > 3) {
@@ -1721,8 +1730,12 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       L.e('Neočekávaná chyba při ukončování session', globalError, stack);
     } finally {
       if (ref.mounted) {
+        // Zprávy se mažou, aby se na stránce Hovor zase ukázal výběr tématu: bez nich
+        // zůstával po hovoru viset chat bez ovládání a pomohl jen restart aplikace.
+        // Přepis hovoru zůstává v historii.
         state = state.copyWith(
           status: TutorState.idle,
+          messages: const [],
           currentTranscript: '',
           clearScenario: true,
           lessonMode: false,

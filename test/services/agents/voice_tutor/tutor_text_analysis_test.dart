@@ -86,6 +86,26 @@ void main() {
     });
   });
 
+  group('isRepairRequest', () {
+    test('tutor asking the student to repeat what they said', () {
+      // Lekce 36: student smrkal, tutor třikrát chtěl zopakovat odpověď
+      expect(isRepairRequest("I'm sorry, I didn't quite catch that. Could you please repeat your last answer in English?"),
+          isTrue);
+      expect(isRepairRequest("I'm sorry, I couldn't understand that. Could you please repeat your answer in English?"),
+          isTrue);
+      expect(isRepairRequest('Sorry, can you say that again?'), isTrue);
+      expect(isRepairRequest('Could you repeat that, please?'), isTrue);
+      expect(isRepairRequest('Promiň, nerozuměl jsem. Můžeš to zopakovat?'), isTrue);
+    });
+
+    test('asking to repeat a corrected sentence is not a repair request', () {
+      expect(isRepairRequest('Řekl jsi "I buy". Zkus to říct: "I bought a new OLED monitor."'), isFalse);
+      expect(isRepairRequest('You could say: "I like to plan my trips." Try repeating that sentence!'), isFalse);
+      expect(isRepairRequest('Repeat that sentence: I want to sail on the Vltava.'), isFalse);
+      expect(isRepairRequest('Did you get a new monitor in the end?'), isFalse);
+    });
+  });
+
   group('repeatedTurnSimilarity', () {
     test('no history or no significant words means no repetition', () {
       expect(repeatedTurnSimilarity('What did you cook today?', const []), isNull);

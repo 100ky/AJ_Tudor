@@ -43,8 +43,17 @@ void main() {
   test('mid-session instructions are clearly marked', () {
     expect(LiveTutorPrompts.systemInstruction('Slow down.'),
         '[SYSTEM INSTRUCTION - NOT FROM STUDENT] Slow down.');
-    expect(LiveTutorPrompts.directorWhisper('Ask about the trip.'),
-        '[DIRECTOR WHISPER] Ask about the trip.');
+    expect(LiveTutorPrompts.directorWhisper('Ask about the trip.'), startsWith('[DIRECTOR WHISPER] Ask about the trip.'));
+  });
+
+  test('a whisper gives way to a topic the student brought up meanwhile', () {
+    // Lekce 36: student začal o monitoru a rada z dřívějška vrátila hovor k výletům
+    for (final whisper in [
+      LiveTutorPrompts.directorWhisper('Ask about the trip.'),
+      LiveTutorPrompts.directorWhisper('Ask what he does when he feels ill.', cardTarget: 'take a sick day'),
+    ]) {
+      expect(whisper, contains('only if it still fits what the student is talking about now'));
+    }
   });
 
   test('a lesson opens with the first expression and keeps the tutor up to date', () {

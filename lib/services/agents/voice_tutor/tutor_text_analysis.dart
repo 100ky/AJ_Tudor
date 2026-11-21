@@ -68,6 +68,22 @@ String? extractRepeatTarget(String tutorText) {
   return rest;
 }
 
+final RegExp _repairRequest = RegExp(
+  r"\b(?:didn['’]?t|did not|couldn['’]?t|could not|can['’]?t|cannot|can not)\s+(?:quite\s+)?(?:catch|hear|understand|get)\b"
+  r"|\brepeat\s+(?:your\s+(?:last\s+)?answer|what you said)\b"
+  r"|\brepeat\s+that\b(?!\s*(?:sentence|phrase|:))"
+  r"|\bsay\s+(?:that|it)\s+again\b"
+  r"|\bwhat did you (?:just\s+)?say\b"
+  r"|\bnerozuměl|\bnezachytil|\bneslyšel",
+  caseSensitive: false,
+);
+
+/// Zda tutor žádá studenta, ať zopakuje, co řekl, protože mu nerozuměl
+/// („I'm sorry, I didn't catch that. Could you repeat your answer?“).
+///
+/// Výzva zopakovat opravenou větu („Zkus to zopakovat: …“) sem nepatří.
+bool isRepairRequest(String tutorText) => _repairRequest.hasMatch(tutorText);
+
 /// Odstraní zjevné zacyklení modelu uvnitř jedné promluvy (zopakovaná věta
 /// nebo její useknutá část).
 String removeIntraTurnRepetition(String text) {

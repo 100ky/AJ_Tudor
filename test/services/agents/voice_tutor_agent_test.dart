@@ -643,6 +643,22 @@ void main() {
       expect(state.messages.last.text, 'Tell me more about the app.');
     });
 
+    test('ending the call clears the chat so the call page shows the topic choice again', () async {
+      // Po hovoru zůstával viset chat bez ovládání, výběr tématu vrátil jen restart aplikace
+      final agent = container.read(voiceTutorAgentProvider.notifier);
+      await agent.startSession();
+
+      textCallback!('Tell me more about the app.');
+      turnCompleteCallback!();
+      expect(container.read(voiceTutorAgentProvider).messages, isNotEmpty);
+
+      await agent.stopSession('test');
+
+      final state = container.read(voiceTutorAgentProvider);
+      expect(state.status, TutorState.idle);
+      expect(state.messages, isEmpty);
+    });
+
     test('leaving the app pauses the call and coming back keeps it paused', () async {
       // Na pozadí Android aplikaci bez služby na popředí ztlumí mikrofon
       final agent = container.read(voiceTutorAgentProvider.notifier);
@@ -1706,6 +1722,45 @@ void main() {
         // Po vyčištění historie další výskyt nespustí změnu tématu podruhé
         await tutorSays('What kind of grilling do you enjoy on weekends?');
         expect(sentContent.where((t) => t.contains(LiveTutorPrompts.changeTopicSilently)), hasLength(1));
+
+        await agent.stopSession('test');
+      });
+
+      testWidgets('a tutor asking for the third time to repeat is brought back to the talk, the topic stays',
+          (tester) async {
+        // Lekce 36: student smrkal, tutor třikrát chtěl zopakovat odpověď. Změna tématu
+        // a hned po ní i detekce frustrace z krátkých replik poslaly hovor jinam.
+        final sentContent = <String>[];
+        when(() => mockClient.sendClientContent(
+              role: any(named: 'role'),
+              text: any(named: 'text'),
+              turnComplete: any(named: 'turnComplete'),
+            )).thenAnswer((invocation) => sentContent.add(invocation.namedArguments[#text] as String));
+
+        final agent = container.read(voiceTutorAgentProvider.notifier);
+        await agent.startSession();
+
+        Future<void> exchange(String student, String tutor) async {
+          await speakAndPause(tester);
+          userTranscript!(student);
+          tutorText!(tutor);
+          turnComplete!();
+          await tester.pump();
+        }
+
+        await exchange('Hm.', "I'm sorry, I didn't quite catch that. Could you please repeat your last answer in English?");
+        await exchange(
+            'Jsem akorát smrkal.', "I'm sorry, I couldn't understand that. Could you please repeat your answer in English?");
+        await exchange(
+            'I am only smrkal.', "I'm sorry, I still didn't catch that. Could you please repeat your answer in English?");
+
+        expect(sentContent.where((t) => t.contains(LiveTutorPrompts.breakRepairLoop)), hasLength(1));
+        expect(sentContent.where((t) => t.contains(LiveTutorPrompts.changeTopicSilently)), isEmpty);
+
+        // Krátké repliky ze zacyklení se do detekce frustrace nepočítají
+        await exchange('No.', 'No worries! So, what was the best part of the film?');
+        expect(agent.metrics.frustrationDetections, 0);
+        expect(sentContent.where((t) => t.contains(LiveTutorPrompts.frustrationRecalibration)), isEmpty);
 
         await agent.stopSession('test');
       });

@@ -60,19 +60,42 @@ abstract final class LiveTutorPrompts {
   /// [cardTarget] je výraz z kartičky, ke kterému rada vede: student ho má říct sám,
   /// zopakování po tutorovi kartičku nesplní. Pokud režisér výraz omylem napsal
   /// přímo do rady [whisper], zamaskuje se, aby ho tutor nevyslovil první.
+  ///
+  /// Rada vzniká z hovoru před poslední replikou studenta. Když student mezitím začal
+  /// o něčem jiném, tutor má zůstat u studenta (lekce 36: student začal o prodeji
+  /// monitoru a rada z dřívějška vrátila hovor k výletům).
   static String directorWhisper(String whisper, {String? cardTarget, String? cardCzech}) {
-    if (cardTarget == null || cardTarget.isEmpty) return '[DIRECTOR WHISPER] $whisper';
+    if (cardTarget == null || cardTarget.isEmpty) return '[DIRECTOR WHISPER] $whisper$_followStudent';
     final maskedWhisper = whisper.replaceAll(
       RegExp(RegExp.escape(cardTarget), caseSensitive: false),
       '[expression for "${cardCzech ?? cardTarget}" - DO NOT SAY IT]',
     );
-    return '[DIRECTOR WHISPER] $maskedWhisper (Flashcard practice: the student is learning to say "$cardTarget". '
+    return '[DIRECTOR WHISPER] $maskedWhisper$_followStudent (Flashcard practice: the student is learning to say "$cardTarget". '
         'Let them say it themselves, so do not say it first. If they say it in Czech or ask how to say it, help them as usual.)';
   }
 
+  static const String _followStudent =
+      ' (Use this only if it still fits what the student is talking about now. '
+      'If they have moved on to something else, stay with what they brought up.)';
+
   /// Student odpovídá opakovaně jen pár slovy – zmírnit a odlehčit.
+  ///
+  /// Téma se kvůli tomu hned nemění: krátké odpovědi bývají i z jiných důvodů
+  /// (lekce 36: student smrkal) a tutor pak skočil na nové téma uprostřed živého.
   static const String frustrationRecalibration =
-      'STUDENT IS GIVING VERY SHORT ANSWERS. They might be frustrated or tired. STOP asking difficult questions. Validate their effort, be extremely encouraging, and switch to a very easy, fun, and relaxing topic immediately.';
+      'STUDENT IS GIVING VERY SHORT ANSWERS. They might be tired or unsure. Validate their effort and be encouraging. '
+      'Ask an easier question about the same topic (yes/no or this-or-that). '
+      'Move to a new, light topic only if they clearly do not want to talk about this one.';
+
+  /// Tutor několikrát za sebou žádal studenta, ať zopakuje, co řekl.
+  ///
+  /// Lekce 36: student smrkal a pak česky vysvětloval „Jsem akorát smrkal“, tutor
+  /// třikrát chtěl „repeat your answer in English“ a změna tématu to jen zakryla.
+  static const String breakRepairLoop =
+      'You have asked the student several times to repeat what they said. Do NOT ask them to repeat again. '
+      'Respond to what they actually said, even if it was in Czech or about something else '
+      '(they may have coughed, sneezed or been interrupted). '
+      'If you still do not know what they meant, re-ask YOUR last question in simpler words and continue the same topic.';
 
   /// Student klepl na „Změnit téma“ – tutor má hned plynule přejít k novému tématu mimo profil.
   static const String changeTopicNow =

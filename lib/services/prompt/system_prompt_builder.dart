@@ -650,6 +650,8 @@ Vrať výhradně strukturovaná data podle definovaného JSON schématu.
 
 VOLBA TÉMATU:
 - Drž se toho, o čem student v tomto hovoru mluví. Dokud téma žije, rozvíjej ho z nového úhlu. Když dochází, navrhni téma z toho, co student v tomto hovoru zmínil, nebo úplně nové téma.
+- Když je needsPivot=false, whisperToTutor zůstává u aktuálního tématu: nový úhel, detail nebo zážitek studenta k tomu, o čem se mluví. Nenavrhuj v ní přechod jinam („steer towards…“, „move on to…“). Jiné téma patří jen k needsPivot=true.
+- Když student sám začal o něčem novém, aktuální téma je to jeho nové, ne to předchozí.
 - Nevracej hovor k faktům z profilu (jídlo, vaření, bylinky, zahrada, koníčky, seriály, narozeniny), pokud o nich v tomto hovoru není řeč. Student je od tutora slyší pořád dokola.
 - Fakta z profilu jsou z minulých lekcí, nejsou to dnešní události. Nikdy z nich nedělej „dnes“ nebo „teď“ (např. „dnes má narozeniny“).
 
