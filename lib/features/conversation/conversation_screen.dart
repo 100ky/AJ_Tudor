@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/app_theme.dart';
 import '../../core/config/config_providers.dart';
+import '../../core/widgets/grouped_section.dart';
 import '../../data/data_providers.dart';
 import '../../data/models/chat_message.dart';
 import 'grammar_drill_controller.dart';
@@ -92,64 +93,72 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        titleSpacing: 20,
-        toolbarHeight: 64,
-        title: Row(
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
+      body: SafeArea(
+        bottom: false,
+        child: Column(
           children: [
-            Text(
+            ScreenTitle(
               'Gramatický dril',
-              style: AppTheme.font(fontSize: 28, fontWeight: FontWeight.w600, color: AppTheme.textPrimary, letterSpacing: -0.6),
-            ),
-            const SizedBox(width: 10),
-            Text(level, style: AppTheme.font(fontSize: 15, fontWeight: FontWeight.w500, color: AppTheme.textSecondary)),
-          ],
-        ),
-        actions: [
-          if (drill.messages.isNotEmpty)
-            IconButton(
-              onPressed: _resetDrill,
-              tooltip: 'Restartovat dril',
-              icon: Icon(
-                Icons.refresh_rounded,
-                color: AppTheme.mutedTextColor(context),
-                size: 20,
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppTheme.surfaceRaised,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      level,
+                      style: AppTheme.font(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.textSecondary,
+                      ),
+                    ),
+                  ),
+                  if (drill.messages.isNotEmpty)
+                    IconButton(
+                      onPressed: _resetDrill,
+                      tooltip: 'Restartovat dril',
+                      icon: const Icon(
+                        Icons.refresh_rounded,
+                        color: AppTheme.textSecondary,
+                        size: 20,
+                      ),
+                    ),
+                ],
               ),
             ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // ── Scrollable obsah (Prázdný stav nebo Zprávy + Loader) ───────────
-          Expanded(
-            child: (drill.messages.isEmpty && !drill.isLoading)
-                ? DrillEmptyState(
-                    errors: drillFocusErrors(profile?.recurringErrors),
-                    level: level,
-                    isLoading: drill.isLoading,
-                    onStart: () => _startDrill(),
-                    onStartTopic: _startDrill,
-                  )
-                : ListView(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                    children: [
-                      ...drill.messages.map(_buildChatBubble),
-                      if (drill.isLoading) const DrillThinkingBubble(),
-                    ],
-                  ),
-          ),
+            const SizedBox(height: 8),
+            // ── Scrollable obsah (Prázdný stav nebo Zprávy + Loader) ───────────
+            Expanded(
+              child: (drill.messages.isEmpty && !drill.isLoading)
+                  ? DrillEmptyState(
+                      errors: drillFocusErrors(profile?.recurringErrors),
+                      level: level,
+                      isLoading: drill.isLoading,
+                      onStart: () => _startDrill(),
+                      onStartTopic: _startDrill,
+                    )
+                  : ListView(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                      children: [
+                        ...drill.messages.map(_buildChatBubble),
+                        if (drill.isLoading) const DrillThinkingBubble(),
+                      ],
+                    ),
+            ),
 
-          // ── Vstupní pole ─────────────────────────────────────────────────
-          DrillInputBar(
-            controller: _textController,
-            isLoading: drill.isLoading,
-            onSend: _sendMessage,
-          ),
-        ],
+            // ── Vstupní pole ─────────────────────────────────────────────────
+            DrillInputBar(
+              controller: _textController,
+              isLoading: drill.isLoading,
+              onSend: _sendMessage,
+            ),
+          ],
+        ),
       ),
     );
   }

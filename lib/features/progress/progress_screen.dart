@@ -96,6 +96,7 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen> {
   ) {
     final cards = <Widget>[
       MasteryOverviewCard(
+        grouped: true,
         stats: stats,
         expanded: _isOpen('cards'),
         onToggle: () => _toggle('cards'),
@@ -103,28 +104,33 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen> {
       ),
       if (sessions.isNotEmpty)
         FluencyChartCard(
+          grouped: true,
           sessions: sessions,
           expanded: _isOpen('fluency'),
           onToggle: () => _toggle('fluency'),
         ),
       if (errors.isNotEmpty)
         ErrorDistributionCard(
+          grouped: true,
           errors: errors,
           expanded: _isOpen('distribution'),
           onToggle: () => _toggle('distribution'),
         ),
       if (profile?.memoryBriefing != null && profile!.memoryBriefing!.isNotEmpty)
         MemoryCard(
+          grouped: true,
           briefing: profile.memoryBriefing!,
           expanded: _isOpen('memory'),
           onToggle: () => _toggle('memory'),
         ),
       VocabularyCard(
+        grouped: true,
         vocabulary: profile?.vocabularyList ?? const [],
         expanded: _isOpen('vocabulary'),
         onToggle: () => _toggle('vocabulary'),
       ),
       RecentErrorsCard(
+        grouped: true,
         errors: errors,
         expanded: _isOpen('recent'),
         onToggle: () => _toggle('recent'),
@@ -132,10 +138,8 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen> {
       ),
     ];
     return [
-      for (var i = 0; i < cards.length; i++) ...[
-        if (i > 0) const SizedBox(height: 8),
-        cards[i],
-      ],
+      const SectionHeader('Podrobnosti'),
+      GroupedSection(children: cards),
     ];
   }
 }

@@ -13,6 +13,8 @@ class ReviewCompletedView extends StatelessWidget {
   final bool isGenerating;
   final VoidCallback onPracticeMore;
   final VoidCallback onGenerateFromErrors;
+  final VoidCallback? onGoToCall;
+  final VoidCallback? onBrowseAll;
 
   const ReviewCompletedView({
     super.key,
@@ -22,6 +24,8 @@ class ReviewCompletedView extends StatelessWidget {
     required this.isGenerating,
     required this.onPracticeMore,
     required this.onGenerateFromErrors,
+    this.onGoToCall,
+    this.onBrowseAll,
   });
 
   @override
@@ -121,6 +125,22 @@ class ReviewCompletedView extends StatelessWidget {
                   label: 'Zkontrolovat chyby z rozhovorů',
                   fontSize: 13,
                 ),
+                if (onGoToCall != null) ...[
+                  const SizedBox(height: 10),
+                  FilledButton.icon(
+                    onPressed: onGoToCall,
+                    icon: const Icon(Icons.mic_rounded, size: 18),
+                    label: const Text('Přejít na Hovor'),
+                  ),
+                ],
+              ],
+              if (onBrowseAll != null) ...[
+                const SizedBox(height: 8),
+                TextButton.icon(
+                  onPressed: onBrowseAll,
+                  icon: const Icon(Icons.list_alt_rounded, size: 18),
+                  label: const Text('Všechny kartičky'),
+                ),
               ],
             ],
           ),
@@ -135,12 +155,16 @@ class FlashcardsEmptyState extends StatelessWidget {
   final bool hasCards;
   final bool isGenerating;
   final VoidCallback onGenerateFromErrors;
+  final VoidCallback? onGoToCall;
+  final VoidCallback? onBrowseAll;
 
   const FlashcardsEmptyState({
     super.key,
     required this.hasCards,
     required this.isGenerating,
     required this.onGenerateFromErrors,
+    this.onGoToCall,
+    this.onBrowseAll,
   });
 
   @override
@@ -194,6 +218,22 @@ class FlashcardsEmptyState extends StatelessWidget {
                 label: 'Zkontrolovat nové chyby z konverzací',
                 fontSize: 13.5,
               ),
+              if (onGoToCall != null) ...[
+                const SizedBox(height: 10),
+                FilledButton.icon(
+                  onPressed: onGoToCall,
+                  icon: const Icon(Icons.mic_rounded, size: 18),
+                  label: const Text('Přejít na Hovor'),
+                ),
+              ],
+              if (hasCards && onBrowseAll != null) ...[
+                const SizedBox(height: 8),
+                TextButton.icon(
+                  onPressed: onBrowseAll,
+                  icon: const Icon(Icons.list_alt_rounded, size: 18),
+                  label: const Text('Všechny kartičky'),
+                ),
+              ],
             ],
           ),
         ),

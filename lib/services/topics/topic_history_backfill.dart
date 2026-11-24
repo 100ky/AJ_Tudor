@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../core/config/config_providers.dart';
 import '../../core/utils/logger.dart';
 import '../../data/data_providers.dart';
+import '../gemini/gemini_batch_client.dart';
 import '../gemini/gemini_providers.dart';
 import '../prompt/system_prompt_builder.dart';
 import 'lesson_topics.dart';
@@ -15,10 +16,12 @@ import 'lesson_topics.dart';
 /// Evidence vznikla 21. 11. 2026. Bez doplnění by plánovač v prvních dnech považoval
 /// za nové i oblasti, o kterých se mluvilo pořád (práce a IT), a nabízel by je.
 class TopicHistoryBackfill {
-  TopicHistoryBackfill(this._ref);
+  TopicHistoryBackfill(this._ref, {DateTime Function()? clock}) : _clock = clock ?? DateTime.now;
 
   final Ref _ref;
+  final DateTime Function() _clock;
   Future<void>? _running;
+  DateTime? _failedAt;
 
   /// Klíč v nastavení: doplnění proběhlo (nebo evidence už měla témata).
   static const String doneKey = 'topic_history_backfill_done';
@@ -26,9 +29,18 @@ class TopicHistoryBackfill {
   /// Kolik nejnovějších lekcí se zařadí.
   static const int sessionLimit = 40;
 
+  /// Jak dlouho po neúspěšném doplnění se nezkouší znovu. Při přetížení Gemini hledalo
+  /// doplnění funkční model skoro půl minuty a 24. 11. se zkoušelo před každým klepnutím
+  /// na „Náhodné téma“, takže každé nové téma čekalo.
+  static const Duration retryPause = Duration(minutes: 30);
+
   /// Doplní evidenci, pokud je prázdná a ještě se nedoplňovala. Souběžná volání
-  /// počkají na jedno doplnění.
-  Future<void> ensure() => _running ??= _run().whenComplete(() => _running = null);
+  /// počkají na jedno doplnění. Po neúspěchu se [retryPause] nezkouší.
+  Future<void> ensure() {
+    final failedAt = _failedAt;
+    if (failedAt != null && _clock().difference(failedAt) < retryPause) return Future.value();
+    return _running ??= _run().whenComplete(() => _running = null);
+  }
 
   Future<void> _run() async {
     try {
@@ -79,11 +91,16 @@ class TopicHistoryBackfill {
         L.i('🗂️ Evidence témat doplněna: $saved témat z ${sessions.length} lekcí.');
         await prefs.setBool(doneKey, true);
       } else {
-        L.w('🗂️ Doplnění evidence témat vrátilo 0 témat, zkusím to příště znovu.');
+        _failedAt = _clock();
+        L.w('🗂️ Doplnění evidence témat vrátilo 0 témat, zkusím to znovu za ${retryPause.inMinutes} min.');
       }
-    } catch (e) {
-      // Zkusí se znovu při dalším spuštění, plánovač zatím bere evidenci, jaká je
+    } on GeminiNetworkException catch (e) {
+      // Bez sítě selže hned a nic nestojí: zkusí se při dalším volání, až bude síť zpátky
       L.w('🗂️ Doplnění evidence témat se nepovedlo: $e');
+    } catch (e) {
+      // Plánovač zatím bere evidenci, jaká je (prázdnou: témata bez nabídky oblastí)
+      _failedAt = _clock();
+      L.w('🗂️ Doplnění evidence témat se nepovedlo, zkusím to znovu za ${retryPause.inMinutes} min: $e');
     }
   }
 }

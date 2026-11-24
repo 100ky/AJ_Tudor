@@ -204,6 +204,52 @@ void main() {
       expect(find.text('V kartičkách'), findsOneWidget);
       expect(find.text('Uloženo do Smart Flashcards! 🃏'), findsOneWidget);
     });
+
+    testWidgets('expands and saves multiple corrections independently',
+        (WidgetTester tester) async {
+      when(() => mockBatchClient.sendMessage(any())).thenAnswer(
+        (_) async => 'Včera jsem šel.',
+      );
+      when(() => mockRepo.addFlashcard(
+            frontText: any(named: 'frontText'),
+            backText: any(named: 'backText'),
+            explanation: any(named: 'explanation'),
+            errorType: any(named: 'errorType'),
+            sourceSentence: any(named: 'sourceSentence'),
+          )).thenAnswer((_) async => const Result.success(1));
+
+      final msg = ChatMessage(
+        'Yesterday I go to the school.',
+        isUser: true,
+        timestamp: DateTime.now(),
+        corrections: [
+          const ChatMessageCorrection(
+            userSaid: 'I go',
+            correctForm: 'I went',
+            explanation: 'První vysvětlení.',
+          ),
+          const ChatMessageCorrection(
+            userSaid: 'the school',
+            correctForm: 'school',
+            explanation: 'Druhé vysvětlení.',
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(buildTestWidget(message: msg));
+
+      // Rozbalíme jen první opravu
+      await tester.tap(find.text('Proč? Zobrazit pravidlo...').first);
+      await tester.pumpAndSettle();
+      expect(find.text('První vysvětlení.'), findsOneWidget);
+      expect(find.text('Druhé vysvětlení.'), findsNothing);
+
+      // Uložíme jen první opravu; druhá má stále tlačítko „Do kartiček“
+      await tester.tap(find.text('Do kartiček').first);
+      await tester.pumpAndSettle();
+      expect(find.text('V kartičkách'), findsOneWidget);
+      expect(find.text('Do kartiček'), findsOneWidget);
+    });
   });
 }
 

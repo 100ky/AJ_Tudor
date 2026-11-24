@@ -140,7 +140,7 @@ class TutorHeader extends StatelessWidget {
                 style: AppTheme.font(fontSize: 14, fontWeight: FontWeight.w600, color: AppTheme.stateTextColor(status.orbKey)),
               ),
               Text(
-                speaking ? 'Klepnutím na vlnu ho ztišíš' : '',
+                _hintForState(status),
                 textAlign: TextAlign.center,
                 style: AppTheme.font(fontSize: 12.5, color: AppTheme.textTertiary),
               ),
@@ -150,6 +150,14 @@ class TutorHeader extends StatelessWidget {
       ],
     );
   }
+
+  static String _hintForState(TutorState status) => switch (status) {
+        TutorState.speaking => 'Klepnutím na vlnu ho ztišíš',
+        TutorState.listening => 'Mluv přirozeně',
+        TutorState.paused => 'Klepni na Pokračovat',
+        TutorState.thinking => 'Připravuje odpověď…',
+        _ => '',
+      };
 }
 
 /// Živá časomíra probíhajícího hovoru (`MM:SS`), pozastavuje se při pauze/ukončování.

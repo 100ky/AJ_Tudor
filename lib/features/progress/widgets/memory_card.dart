@@ -8,17 +8,20 @@ class MemoryCard extends StatelessWidget {
   final String briefing;
   final bool expanded;
   final VoidCallback onToggle;
+  final bool grouped;
 
   const MemoryCard({
     super.key,
     required this.briefing,
     required this.expanded,
     required this.onToggle,
+    this.grouped = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return CollapsibleCard(
+      grouped: grouped,
       title: 'Co si o tobě Tudor pamatuje',
       expanded: expanded,
       onToggle: onToggle,

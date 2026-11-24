@@ -41,6 +41,13 @@ class _SessionDetailSheetState extends ConsumerState<SessionDetailSheet> {
   SessionDetailController get _controller => ref.read(sessionDetailControllerProvider);
 
   @override
+  void initState() {
+    super.initState();
+    // Nerozebraná lekce rovnou ukáže tlačítko Analyzovat
+    _isHeaderExpanded = !SessionDetailHeader.isAnalyzed(widget.session);
+  }
+
+  @override
   void dispose() {
     _messageController.dispose();
     super.dispose();

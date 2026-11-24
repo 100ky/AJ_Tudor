@@ -12,6 +12,7 @@ import '../../services/agents/topic_preparation_agent.dart';
 import '../../services/agents/voice_director_agent.dart';
 import '../../services/agents/voice_tutor_agent.dart';
 import '../../services/audio/audio_session_controller.dart';
+import '../../services/flashcards/due_conversation_cards.dart';
 import 'widgets/chat_bubble.dart';
 import 'widgets/smart_chat_bubble.dart';
 import 'widgets/voice_tutor/free_talk_tab.dart';
@@ -179,11 +180,12 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
   }
 
   void _interruptTutor() {
+    HapticFeedback.lightImpact();
     _tutor.interruptPlayback();
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Tutor ztišen – pokračuj v mluvení 🎤'),
+        content: Text('Tutor ztišen – můžeš mluvit'),
         duration: Duration(seconds: 2),
       ),
     );
@@ -229,13 +231,15 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      }
+      if (!_scrollController.hasClients) return;
+      final pos = _scrollController.position;
+      final nearBottom = (pos.maxScrollExtent - pos.pixels) < 140;
+      if (!nearBottom && ref.read(voiceTutorAgentProvider).messages.length > 2) return;
+      _scrollController.animateTo(
+        pos.maxScrollExtent,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
     });
   }
 
@@ -413,10 +417,14 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
         tabContent = const LessonTab(key: ValueKey('lesson_card'));
     }
 
+    final dueCards = ref.watch(dueFlashcardsProvider).value ?? const <Flashcard>[];
+    final lessonCardsCount = conversationCardsFromDue(dueCards).cards.take(VoiceTutorAgent.lessonCardCount).length;
+
     return SessionSetupView(
       activeMode: activeMode,
       onModeChanged: (mode) => _onModeChanged(mode, tutorState),
       tabContent: tabContent,
+      lessonCardsCount: lessonCardsCount,
     );
   }
 
@@ -424,6 +432,7 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
     final messages = tutorState.messages;
     final itemCount =
         messages.length + (tutorState.currentTranscript.isNotEmpty ? 1 : 0);
+    final isPaused = tutorState.status == TutorState.paused;
 
     return ShaderMask(
       shaderCallback: (Rect bounds) {
@@ -454,10 +463,11 @@ class _VoiceTutorScreenState extends ConsumerState<VoiceTutorScreen>
 
           final msg = messages[index];
 
-          // Dynamická opacity pro vizuální hloubku
+          // Dynamická opacity pro vizuální hloubku (při pauze plně čitelné)
           final distanceFromEnd = messages.length - index;
-          final double opacity =
-              (1.0 - (distanceFromEnd * 0.08)).clamp(0.15, 1.0);
+          final double opacity = isPaused
+              ? 1.0
+              : (1.0 - (distanceFromEnd * 0.06)).clamp(0.55, 1.0);
 
           return AnimatedOpacity(
             duration: const Duration(milliseconds: 400),

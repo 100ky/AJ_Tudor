@@ -64,23 +64,48 @@ class _AnswerInputBarState extends State<AnswerInputBar> {
         Row(
           children: [
             Expanded(
-              child: TextField(
-                controller: _textController,
-                enabled: canInput,
-                textInputAction: TextInputAction.send,
-                textCapitalization: TextCapitalization.none,
-                autocorrect: false,
-                onSubmitted: (_) => _submit(),
-                style: GoogleFonts.hankenGrotesk(fontSize: 15),
-                decoration: const InputDecoration(
-                  hintText: 'Napiš nebo řekni anglicky…',
-                  isDense: true,
-                  contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                ),
-              ),
+              child: widget.isRecording
+                  ? Container(
+                      height: 52,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: AppTheme.surface,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.graphic_eq_rounded, color: AppTheme.danger, size: 20),
+                          const SizedBox(width: 10),
+                          Text(
+                            'Nahrávám odpověď…',
+                            style: GoogleFonts.hankenGrotesk(
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.w500,
+                              color: AppTheme.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : TextField(
+                      controller: _textController,
+                      enabled: canInput,
+                      textInputAction: TextInputAction.send,
+                      textCapitalization: TextCapitalization.none,
+                      autocorrect: false,
+                      onSubmitted: (_) => _submit(),
+                      style: GoogleFonts.hankenGrotesk(fontSize: 15),
+                      decoration: const InputDecoration(
+                        hintText: 'Napiš nebo řekni anglicky…',
+                        isDense: true,
+                        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                      ),
+                    ),
             ),
-            const SizedBox(width: 8),
-            _actionButton(canInput: canInput, hasText: hasText),
+            if (!widget.isRecording) ...[
+              const SizedBox(width: 8),
+              _actionButton(canInput: canInput, hasText: hasText),
+            ],
           ],
         ),
         TextButton.icon(

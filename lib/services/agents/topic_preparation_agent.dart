@@ -101,6 +101,8 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
   final List<String> _recentlyProposedTitles = [];
   final List<String> _recentlyProposedAreaIds = [];
   int _refreshCounter = 0;
+  final Random _random = Random();
+  String? _lastWildcardInspiration;
 
   /// Dokončí se po načtení uloženého tématu z databáze (viz [build]).
   late Future<void> _storedTopicLoaded;
@@ -152,6 +154,9 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
   }) async {
     // Bez uloženého tématu by kontrola čerstvosti níže zbytečně generovala nové
     await _storedTopicLoaded;
+    // Od této kontroly po nastavení isLoading níže nesmí být žádné await: jinak se další
+    // klepnutí dostane přes kontrolu a požadavky poběží souběžně (24. 11. při přetížení
+    // Gemini vyrazily tři naráz a dvakrát vrátily stejné téma).
     if (state.isLoading) return;
 
     if (resetCounter) {
@@ -167,8 +172,9 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
       return;
     }
 
-    // Evidence témat ze starších lekcí (jednou, dokud je prázdná)
-    await ref.read(topicHistoryBackfillProvider).ensure();
+    // Evidence témat ze starších lekcí (jednou, dokud je prázdná). Spustí se i tehdy,
+    // když je téma čerstvé, aby byla hotová, až ji plánovač bude potřebovat.
+    final backfill = ref.read(topicHistoryBackfillProvider).ensure();
 
     // Pokud nevynucujeme obnovu, zkontrolujeme existenci a čerstvost tématu
     if (!force && state.topic != null) {
@@ -182,13 +188,17 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
     if (force) {
       _refreshCounter++;
     }
+    final attempt = _refreshCounter;
 
-    final bool generateRandom = isRandomTopic ?? (_refreshCounter > 0 && _refreshCounter % 3 == 0);
+    final bool generateRandom = isRandomTopic ?? (attempt > 0 && attempt % 3 == 0);
 
     state = state.copyWith(isLoading: true, errorMessage: null);
-    L.i('TopicPreparationAgent: Začínám připravovat nové konverzační téma (obnovení #$_refreshCounter, náhodné téma: $generateRandom)...');
+    L.i('TopicPreparationAgent: Začínám připravovat nové konverzační téma (obnovení #$attempt, náhodné téma: $generateRandom)...');
 
     try {
+      // Doplnění evidence může při přetížení Gemini trvat desítky sekund, proto čeká
+      // až pod isLoading: tlačítka se schovají a další klepnutí nic nepřidá
+      await backfill;
       final profile = await profileRepo.getUserProfile();
       final dueCardsSample = await _sampleDueCardsForTopic();
 
@@ -205,6 +215,7 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
           targetLevel: profile?.targetLevel ?? 'B1',
           avoidTopics: avoidTopics,
           dueCardsSample: dueCardsSample,
+          inspiration: _pickWildcardInspiration(),
         );
 
         final userMessage = avoidTopics.isNotEmpty
@@ -240,7 +251,7 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
           topic: prepared,
           refreshCount: _refreshCounter,
         );
-        L.i('TopicPreparationAgent: Nové NÁHODNÉ téma připraveno (#$_refreshCounter): "${prepared.title}" (důvod: ${prepared.rationale})');
+        L.i('TopicPreparationAgent: Nové NÁHODNÉ téma připraveno (#$attempt): "${prepared.title}" (důvod: ${prepared.rationale})');
         
         // ─── STRUKTUROVANÝ VÝPIS NÁHODNÉHO TÉMATU ───
         final topicLines = StringBuffer();
@@ -248,7 +259,7 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
         topicLines.writeln('Opener: ${prepared.openerEn}');
         topicLines.writeln('Důvod: ${prepared.rationale}');
         topicLines.writeln('Typ: Divoká karta (random) 🎲');
-        L.block('TOPIC', 'Připravené NÁHODNÉ téma (#$_refreshCounter)', topicLines.toString());
+        L.block('TOPIC', 'Připravené NÁHODNÉ téma (#$attempt)', topicLines.toString());
         return;
       }
 
@@ -361,15 +372,34 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
       topicLines.writeln('Typ: ${prepared.isRandomTopic ? 'Divoká karta (random)' : 'Navazující na historii'}');
       final area = TopicCatalog.byId(prepared.areaId ?? '');
       if (area != null) topicLines.writeln('Oblast: ${area.label}');
-      L.block('TOPIC', 'Připravené konverzační téma (#$_refreshCounter)', topicLines.toString());
+      L.block('TOPIC', 'Připravené konverzační téma (#$attempt)', topicLines.toString());
     } catch (e, stack) {
       L.e('Chyba při přípravě konverzačního tématu', e, stack);
       state = state.copyWith(
         isLoading: false,
-        errorMessage: 'Nepodařilo se připravit téma: $e',
+        errorMessage: _failureMessage(e),
         refreshCount: _refreshCounter,
       );
     }
+  }
+
+  /// Krátká hláška pro obrazovku: dosavadní téma zůstává, nové se nepřipravilo.
+  static String _failureMessage(Object error) => switch (error) {
+        GeminiOverloadedException() => 'Nové téma se nepřipravilo, Gemini je teď přetížené. Zkus to za chvíli.',
+        GeminiNetworkException() => 'Nové téma se nepřipravilo, chybí připojení k internetu.',
+        _ => 'Nové téma se nepodařilo připravit.',
+      };
+
+  /// Vylosuje okruh pro divokou kartu, jiný než minule. Model si sám volil pořád
+  /// stejné okruhy a 24. 11. navrhl kolonizaci Marsu dvakrát za sebou.
+  String _pickWildcardInspiration() {
+    final options = [
+      for (final o in SystemPromptBuilder.wildcardInspirations)
+        if (o != _lastWildcardInspiration) o,
+    ];
+    final picked = options[_random.nextInt(options.length)];
+    _lastWildcardInspiration = picked;
+    return picked;
   }
 
   /// Zpětně projde zprávy studenta ze všech dosavadních konverzací

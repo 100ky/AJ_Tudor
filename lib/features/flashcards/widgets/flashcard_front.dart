@@ -15,6 +15,7 @@ class FlashcardFront extends StatelessWidget {
   final bool isEvaluatingSpeech;
   final bool isRecording;
   final double recordingVolume;
+  final bool showFlipHint;
   final VoidCallback onStartRecording;
   final VoidCallback onStopRecording;
 
@@ -26,6 +27,7 @@ class FlashcardFront extends StatelessWidget {
     required this.isEvaluatingSpeech,
     required this.isRecording,
     required this.recordingVolume,
+    this.showFlipHint = false,
     required this.onStartRecording,
     required this.onStopRecording,
   });
@@ -110,6 +112,12 @@ class FlashcardFront extends StatelessWidget {
                             ],
                           ],
                         ],
+                      )
+                    else if (showFlipHint)
+                      Text(
+                        'Nejdřív odpověz hlasem, napiš, nebo klepni na Nevím',
+                        textAlign: TextAlign.center,
+                        style: AppTheme.font(fontSize: 13, color: AppTheme.textSecondary),
                       )
                     else
                       const SizedBox.shrink(),

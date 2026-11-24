@@ -10,12 +10,14 @@ class FluencyChartCard extends StatelessWidget {
   final List<Session> sessions;
   final bool expanded;
   final VoidCallback onToggle;
+  final bool grouped;
 
   const FluencyChartCard({
     super.key,
     required this.sessions,
     required this.expanded,
     required this.onToggle,
+    this.grouped = false,
   });
 
   @override
@@ -39,6 +41,7 @@ class FluencyChartCard extends StatelessWidget {
     final latestScore = (recentSessions.last.fluencyScore! * 100).toInt();
 
     return CollapsibleCard(
+      grouped: grouped,
       title: 'Vývoj plynulosti',
       trailing: [CardBadge('$latestScore % naposledy')],
       expanded: expanded,

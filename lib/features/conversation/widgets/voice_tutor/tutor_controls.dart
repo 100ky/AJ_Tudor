@@ -33,8 +33,9 @@ class TutorControls extends StatelessWidget {
         status == TutorState.listening || status == TutorState.speaking || status == TutorState.thinking;
     final canChangeTopic = isLiveSession && status != TutorState.thinking;
 
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 12, 28, 24),
+      padding: EdgeInsets.fromLTRB(28, 12, 28, 24 + bottomInset),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

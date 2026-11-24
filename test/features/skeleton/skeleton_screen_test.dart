@@ -141,12 +141,12 @@ void main() {
       expect(find.byType(SkeletonScreen), findsOneWidget);
       expect(find.byType(AppNavigationBar), findsOneWidget);
 
-      // Pořadí na liště: Dril, Kartičky, Hovor uprostřed, Pokrok, Profil
+      // Pořadí na liště: Dril, Kartičky, Začít (Hovor) uprostřed, Pokrok, Profil
       Finder inBar(String label) => find.descendant(of: find.byType(AppNavigationBar), matching: find.text(label));
-      for (final label in ['Dril', 'Kartičky', 'Hovor', 'Pokrok', 'Profil']) {
+      for (final label in ['Dril', 'Kartičky', 'Začít', 'Pokrok', 'Profil']) {
         expect(inBar(label), findsOneWidget);
       }
-      final xs = [for (final label in ['Dril', 'Kartičky', 'Hovor', 'Pokrok', 'Profil']) tester.getCenter(inBar(label)).dx];
+      final xs = [for (final label in ['Dril', 'Kartičky', 'Začít', 'Pokrok', 'Profil']) tester.getCenter(inBar(label)).dx];
       expect(xs, orderedEquals([...xs]..sort()));
 
       // Warning banner should NOT be present when API key exists
@@ -299,27 +299,55 @@ void main() {
       }
 
       final navHovor = find.descendant(of: find.byType(AppNavigationBar), matching: find.text('Hovor'));
+      final navZacit = find.descendant(of: find.byType(AppNavigationBar), matching: find.text('Začít'));
 
-      // Na záložce Hovor je středové tlačítko červené
-      expect(talkCircleColor(), AppTheme.danger);
+      // Na záložce Hovor je středové tlačítko zelené s popiskem Začít
+      expect(talkCircleColor(), AppTheme.success);
+      expect(navZacit, findsOneWidget);
 
-      // Přepnutí na Dril: tlačítko v liště zbělá
+      // Přepnutí na Dril: tlačítko v liště zbělá a zobrazí Hovor
       await tester.tap(find.text('Dril'));
       await tester.pump(const Duration(milliseconds: 350));
       expect(tester.widget<AppNavigationBar>(find.byType(AppNavigationBar)).currentIndex, 1);
       expect(talkCircleColor(), AppTheme.textPrimary);
+      expect(navHovor, findsOneWidget);
 
       // První klepnutí na Hovor přepne na záložku Hovor a hovor ještě nespustí
       await tester.tap(navHovor);
       await tester.pump(const Duration(milliseconds: 350));
       expect(tester.widget<AppNavigationBar>(find.byType(AppNavigationBar)).currentIndex, 0);
       expect(tutorAgent.startSessionCalled, isFalse);
-      expect(talkCircleColor(), AppTheme.danger);
+      expect(talkCircleColor(), AppTheme.success);
+      expect(navZacit, findsOneWidget);
 
-      // Druhé klepnutí na červené tlačítko Hovor odstartuje hovor
-      await tester.tap(navHovor);
+      // Druhé klepnutí na zelené tlačítko Začít odstartuje hovor
+      await tester.tap(navZacit);
       await tester.pump(const Duration(milliseconds: 350));
       expect(tutorAgent.startSessionCalled, isTrue);
+
+      await drainTimers(tester);
+    });
+
+    testWidgets('shows due flashcards badge on Kartičky tab when due cards exist',
+        (WidgetTester tester) async {
+      final now = DateTime.now();
+      for (var i = 0; i < 3; i++) {
+        await db.into(db.flashcards).insert(
+              FlashcardsCompanion.insert(
+                frontText: 'Otázka $i',
+                backText: 'Answer $i',
+                explanation: '',
+                nextReviewAt: now.subtract(const Duration(hours: 1)),
+                createdAt: now.subtract(const Duration(days: 1)),
+              ),
+            );
+      }
+
+      await tester.pumpWidget(buildTestWidget(apiKey: 'test-key'));
+      await tester.pump(const Duration(milliseconds: 350));
+
+      final badgeInNav = find.descendant(of: find.byType(AppNavigationBar), matching: find.text('3'));
+      expect(badgeInNav, findsOneWidget);
 
       await drainTimers(tester);
     });

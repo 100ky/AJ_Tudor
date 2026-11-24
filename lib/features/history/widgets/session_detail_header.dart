@@ -32,8 +32,6 @@ class SessionDetailHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = AppTheme.isDark(context);
-
     return InkWell(
       onTap: () {
         HapticFeedback.selectionClick();
@@ -43,15 +41,9 @@ class SessionDetailHeader extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: isDark
-              ? Colors.white.withValues(alpha: 0.05)
-              : Colors.black.withValues(alpha: 0.04),
+          color: AppTheme.surface,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isDark
-                ? Colors.white.withValues(alpha: 0.1)
-                : Colors.black.withValues(alpha: 0.06),
-          ),
+          border: Border.all(color: AppTheme.hairline),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

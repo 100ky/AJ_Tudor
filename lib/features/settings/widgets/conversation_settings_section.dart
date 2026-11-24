@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../../core/app_theme.dart';
 import '../../../core/config/config_providers.dart';
 import '../../../core/widgets/glass_container.dart';
@@ -18,74 +17,52 @@ class ConversationSettingsSection extends ConsumerWidget {
         children: [
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: Wrap(
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 8,
-              runSpacing: 4,
-              children: [
-                Text('Chytré bubliny chatu',
-                    style: GoogleFonts.hankenGrotesk(
-                        fontWeight: FontWeight.w500,
-                        color: AppTheme.textColor(context))),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primary.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    'Nové',
-                    style: GoogleFonts.hankenGrotesk(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.primary,
-                    ),
-                  ),
-                ),
-              ],
+            title: Text(
+              'Chytré bubliny chatu',
+              style: AppTheme.font(fontWeight: FontWeight.w500, color: AppTheme.textPrimary),
             ),
             subtitle: Text(
-                'Zobrazuje interaktivní opravy chyb, vysvětlení gramatiky, poslech výslovnosti a tlačítko pro uložení do kartiček.',
-                style: GoogleFonts.hankenGrotesk(
-                    fontSize: 13, color: AppTheme.mutedTextColor(context))),
+              'Zobrazuje interaktivní opravy chyb, vysvětlení gramatiky, poslech výslovnosti a tlačítko pro uložení do kartiček.',
+              style: AppTheme.font(fontSize: 13, color: AppTheme.textSecondary),
+            ),
             value: ref.watch(smartBubblesEnabledProvider),
             onChanged: (value) {
               ref.read(smartBubblesEnabledProvider.notifier).toggle(value);
             },
           ),
-          Divider(color: AppTheme.outlineLightColor(context)),
+          const Divider(color: AppTheme.hairline),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: Text('Pohlcující režim (Immersive Mode)',
-                style: GoogleFonts.hankenGrotesk(
-                    fontWeight: FontWeight.w500,
-                    color: AppTheme.textColor(context))),
+            title: Text(
+              'Pohlcující režim (Immersive Mode)',
+              style: AppTheme.font(fontWeight: FontWeight.w500, color: AppTheme.textPrimary),
+            ),
             subtitle: Text(
-                'Učitel bude mluvit 100% anglicky a nebude opravovat chyby nahlas.',
-                style: GoogleFonts.hankenGrotesk(
-                    fontSize: 13, color: AppTheme.mutedTextColor(context))),
+              'Učitel bude mluvit 100% anglicky a nebude opravovat chyby nahlas.',
+              style: AppTheme.font(fontSize: 13, color: AppTheme.textSecondary),
+            ),
             value: ref.watch(immersiveModeProvider),
             onChanged: (value) {
               ref.read(immersiveModeProvider.notifier).toggle(value);
             },
           ),
-          Divider(color: AppTheme.outlineLightColor(context)),
+          const Divider(color: AppTheme.hairline),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: Text('Souvislý hovor',
-                style: GoogleFonts.hankenGrotesk(
-                    fontWeight: FontWeight.w500,
-                    color: AppTheme.textColor(context))),
+            title: Text(
+              'Souvislý hovor',
+              style: AppTheme.font(fontWeight: FontWeight.w500, color: AppTheme.textPrimary),
+            ),
             subtitle: Text(
-                'Po výpadku spojení tutor naváže přesně tam, kde hovor skončil. Když to server odmítne, hovor poběží jako dosud. Platí od příští lekce.',
-                style: GoogleFonts.hankenGrotesk(
-                    fontSize: 13, color: AppTheme.mutedTextColor(context))),
+              'Po výpadku spojení tutor naváže přesně tam, kde hovor skončil. Když to server odmítne, hovor poběží jako dosud. Platí od příští lekce.',
+              style: AppTheme.font(fontSize: 13, color: AppTheme.textSecondary),
+            ),
             value: ref.watch(sessionContinuityProvider),
             onChanged: (value) {
               ref.read(sessionContinuityProvider.notifier).toggle(value);
             },
           ),
-          Divider(color: AppTheme.outlineLightColor(context)),
+          const Divider(color: AppTheme.hairline),
           _DropdownSetting<String>(
             icon: Icons.record_voice_over,
             color: AppTheme.speaking,
@@ -97,7 +74,7 @@ class ConversationSettingsSection extends ConsumerWidget {
                 ref.read(voiceProvider.notifier).saveVoice(newVoice);
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('Hlas učitele změněn na: $newVoice 🗣️'),
+                    content: Text('Hlas učitele změněn na: $newVoice'),
                   ),
                 );
               }
@@ -110,7 +87,7 @@ class ConversationSettingsSection extends ConsumerWidget {
               DropdownMenuItem(value: 'Aoede', child: Text('Aoede (Female)')),
             ],
           ),
-          Divider(color: AppTheme.outlineLightColor(context)),
+          const Divider(color: AppTheme.hairline),
           _DropdownSetting<int>(
             icon: Icons.hourglass_top_rounded,
             color: AppTheme.primary,
@@ -122,8 +99,7 @@ class ConversationSettingsSection extends ConsumerWidget {
                 ref.read(speechPatienceProvider.notifier).savePatience(newPatience);
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text(
-                        'Doba čekání na odpověď nastavena na: $newPatience ms ⏱️'),
+                    content: Text('Doba čekání na odpověď nastavena na: $newPatience ms'),
                   ),
                 );
               }
@@ -135,7 +111,7 @@ class ConversationSettingsSection extends ConsumerWidget {
               DropdownMenuItem(value: 2000, child: Text('Extra trpělivá (2 000 ms)')),
             ],
           ),
-          Divider(color: AppTheme.outlineLightColor(context)),
+          const Divider(color: AppTheme.hairline),
           _DropdownSetting<int>(
             icon: Icons.history_rounded,
             color: AppTheme.primary,
@@ -199,16 +175,16 @@ class _DropdownSetting<T> extends StatelessWidget {
                   children: [
                     Text(
                       title,
-                      style: GoogleFonts.hankenGrotesk(
+                      style: AppTheme.font(
                         fontWeight: FontWeight.w500,
-                        color: AppTheme.textColor(context),
+                        color: AppTheme.textPrimary,
                       ),
                     ),
                     Text(
                       subtitle,
-                      style: GoogleFonts.hankenGrotesk(
+                      style: AppTheme.font(
                         fontSize: 12,
-                        color: AppTheme.mutedTextColor(context),
+                        color: AppTheme.textSecondary,
                       ),
                     ),
                   ],
@@ -220,26 +196,21 @@ class _DropdownSetting<T> extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
             decoration: BoxDecoration(
-              color: AppTheme.glassLightColor(context),
+              color: AppTheme.surfaceRaised,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: AppTheme.outlineLightColor(context),
-              ),
+              border: Border.all(color: AppTheme.hairline),
             ),
             child: DropdownButtonHideUnderline(
               child: DropdownButton<T>(
                 isExpanded: true,
                 value: value,
-                icon: Icon(Icons.keyboard_arrow_down_rounded,
-                    color: AppTheme.mutedTextColor(context)),
-                style: GoogleFonts.hankenGrotesk(
+                icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.textSecondary),
+                style: AppTheme.font(
                   fontWeight: FontWeight.w600,
-                  color: AppTheme.primary,
+                  color: AppTheme.textPrimary,
                   fontSize: 14,
                 ),
-                dropdownColor: AppTheme.isDark(context)
-                    ? AppTheme.backgroundSecondaryDark
-                    : Colors.white,
+                dropdownColor: AppTheme.surface,
                 borderRadius: BorderRadius.circular(14),
                 onChanged: onChanged,
                 items: items,

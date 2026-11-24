@@ -548,10 +548,28 @@ PRAVIDLA:
 
   /// Sestaví systémový prompt pro vygenerování ZCELA NÁHODNÉHO konverzačního tématu (Divoká karta / Wildcard),
   /// které NENÍ odvozeno z dosavadní historie ani osobních faktů studenta.
+  /// Okruhy pro divokou kartu. Záměrně bez konkrétních příkladů: flash-lite je přebíral
+  /// doslova (24. 11. kolonizace Marsu dvakrát za sebou, pak mimozemšťané).
+  static const List<String> wildcardInspirations = [
+    'zábavná dilemata a hypotetické otázky („Would you rather…“, „Co bys dělal, kdyby…“)',
+    'neobvyklá místa a nezvyklé způsoby cestování',
+    'věda, vynálezy a život v budoucnosti',
+    'odvážné výzvy, extrémní zážitky a splněné sny',
+    'filmy, seriály, hudba a popkultura',
+    'záhady, legendy a nevysvětlené jevy',
+    'jídlo, zvyky a svátky různých kultur',
+    'myšlenkové experimenty a odlehčená filozofie',
+    'historie a „co by bylo, kdyby“',
+    'kuriozity ze světa zvířat a přírody',
+    'každodenní drobnosti: malé radosti, zlozvyky a věci, které lidi štvou',
+    'umění, design a móda',
+  ];
+
   static String buildRandomTopicPreparationPrompt({
     required String targetLevel,
     List<String>? avoidTopics,
     List<String>? dueCardsSample,
+    String? inspiration,
   }) {
     final avoidBlock = avoidTopics != null && avoidTopics.isNotEmpty
         ? '''
@@ -563,19 +581,20 @@ PŘÍSNÝ ZÁKAZ: Za žádných okolností nenavrhuj téma z tohoto seznamu ani 
 
     final cardsBlock = _topicCardsBlock(dueCardsSample);
 
+    final inspirationBlock = inspiration != null
+        ? '''
+OKRUH PRO TOTO TÉMA (vylosovaný): $inspiration
+Uvnitř okruhu zvol konkrétní a nečekaný úhel. Vyhni se tomu, co se v tomto okruhu navrhuje nejčastěji: první nápad, který tě napadne, nejspíš dostal student už minule.
+'''
+        : '''
+ZDROJE INSPIRACE PRO NÁHODNÁ TÉMATA:
+${wildcardInspirations.map((o) => '- $o').join('\n')}
+''';
+
     return '''Jsi AJ Tudor – rodilý mluvčí z Anglie žijící v Praze a osobní kamarád studenta.
 Student si vyžádal ZCELA NÁHODNÉ, NEOTŘELÉ KONVERZAČNÍ TÉMA (tzv. Divokou kartu / Wildcard).
 Toto téma ZCELA ZÁMĚRNĚ NENAVAZUJE na dosavadní historii ani na fakta o studentovi. Účelem je totální změna atmosféry a originální, zábavný pokec!
-$avoidBlock$cardsBlock
-ZDROJE INSPIRACE PRO NÁHODNÁ TÉMATA:
-- Zábavná a provokativní dilemata (např. "Would you rather...", "Co bys dělal, kdyby...")
-- Cestování na netradiční místa světa (spaní v ledovém hotelu, road trip po Route 66, opuštěné ostrovy, safari)
-- Technologie budoucnosti a sci-fi úvahy (létající auta, kolonizace Marsu, teleportace vs cestování v čase, humanoidní roboti)
-- Neobvyklé dovednosti, extrémní zážitky či splněné sny (seskok padákem, potápění se žraloky, kurz přežití)
-- Filmové a popkulturní fenomény, záhady světa, městské legendy
-- Kulinářské speciality světa, bizarní pochoutky a zvláštní zvyky různých kultur
-- Odlehčené filozofické či myšlenkové experimenty
-
+$avoidBlock$cardsBlock$inspirationBlock
 KRITICKÁ PRAVIDLA:
 1. ABSOLUTNÍ IGNOROVÁNÍ HISTORIE:
    - ZCELA ignoruj dosavadní rozhovory studenta. Nenavrhuj nic o jeho práci, IT/programování, zahradě, grilování, lodi ani seriálech z profilu.
@@ -587,7 +606,7 @@ KRITICKÁ PRAVIDLA:
    - Přirozená anglická promluva Tudora (max 2 věty + 1 jasná otevřená otázka na studenta).
    - Začni uvolněně jako kamarád, žádné "Hello, my name is Tudor" – znáte se! Úroveň angličtiny: $targetLevel.
 4. FORMÁT VÝSTUPU:
-   - topicTitle: chytlavý název v češtině (např. "Cestování v čase: Kterou éru bys navštívil?")
+   - topicTitle: chytlavý název v češtině, klidně s otázkou za dvojtečkou
    - openerEn: anglická úvodní promluva zakončená otevřenou otázkou
    - rationale: stručné vysvětlení v češtině (uveď, že jde o Divokou kartu / náhodné téma pro osvěžení konverzace)
    - targetWordsCz: české strany 1–3 kartiček z dnešního výběru (pokud byly kartičky zadané a hodí se k tématu)

@@ -83,19 +83,18 @@ final geminiDirectorClientProvider = Provider<GeminiBatchClient?>((ref) {
 
 /// Klient pro jednorázové zpětné zařazení starších lekcí do oblastí témat ([TopicHistoryBackfill]).
 ///
-/// Jde o jednoduchou klasifikaci jednořádkových souhrnů, proto začíná na flash-lite,
-/// aby se vyhnul přetížení 503 a 20 RPD limitu na 3.8 / 3.6 Flash.
+/// Jde o jednoduchou klasifikaci jednořádkových souhrnů, proto běží jen na flash-lite
+/// (500 RPD). 3.8 a 3.6 Flash (20 RPD) nechává rozboru po lekci: krátká úloha zkouší
+/// jako první naposledy funkční model, takže 24. 11. zápis začal na 3.6 Flash, který
+/// zrovna připravil téma, a večer už na rozbor lekce 39 nezbyl. Když oba flash-lite
+/// selžou, zápis se zkusí znovu za 30 min (`TopicHistoryBackfill.retryPause`).
 final geminiTopicBackfillClientProvider = Provider<GeminiBatchClient?>((ref) {
   final apiKey = ref.watch(apiKeyProvider);
   if (apiKey == null || apiKey.isEmpty) return null;
   return GeminiBatchClient(
     apiKey,
     GeminiModels.flashLite3_5,
-    fallbackModels: const [
-      GeminiModels.flashLite3_1,
-      GeminiModels.flash3_6,
-      GeminiModels.flash3_8,
-    ],
+    fallbackModels: const [GeminiModels.flashLite3_1],
     receiveTimeout: GeminiBatchClient.shortTaskTimeout,
   );
 });

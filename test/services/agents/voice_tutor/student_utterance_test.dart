@@ -35,6 +35,25 @@ void main() {
       expect(missed.finalText, 'I need more practice.');
     });
 
+    test('a correction cut down to one word of a long recording loses to the live transcript', () {
+      // Lekce 39: flash-lite z 12 s zvuku vrátil jen „he“ a nahradil jím celou větu
+      StudentUtterance long(String corrected) => StudentUtterance(sessionId: 1)
+        ..addAudio(List.filled(12 * 32000, 0))
+        ..liveText = 'He will help us with redesign Power BI reports.'
+        ..correctedText = corrected
+        ..correctionDone = true;
+      final short = StudentUtterance(sessionId: 1)
+        ..addAudio(List.filled(2 * 32000, 0))
+        ..liveText = 'Yes, I do.'
+        ..correctedText = 'Yes.'
+        ..correctionDone = true;
+
+      expect(long('he').finalText, 'He will help us with redesign Power BI reports.');
+      expect(long('He will help us with redesigning Power BI reports.').finalText,
+          'He will help us with redesigning Power BI reports.');
+      expect(short.finalText, 'Yes.');
+    });
+
     test('is ready to save only with both transcripts and only once', () {
       final utterance = StudentUtterance(sessionId: 1);
       expect(utterance.readyToSave, isFalse);

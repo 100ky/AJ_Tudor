@@ -14,6 +14,7 @@ class MasteryOverviewCard extends StatelessWidget {
 
   /// Otevře záložku Kartičky.
   final VoidCallback onOpenFlashcards;
+  final bool grouped;
 
   const MasteryOverviewCard({
     super.key,
@@ -21,11 +22,13 @@ class MasteryOverviewCard extends StatelessWidget {
     required this.expanded,
     required this.onToggle,
     required this.onOpenFlashcards,
+    this.grouped = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return CollapsibleCard(
+      grouped: grouped,
       title: 'Kartičky',
       subtitle: stats.totalCards > 0
           ? '${stats.masteredCards} z ${stats.totalCards} umíš'

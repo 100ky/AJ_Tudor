@@ -35,6 +35,12 @@ class HistoryTopicTab extends ConsumerWidget {
       );
     }
 
+    // Bez hlášky to vypadalo, že klepnutí nic neudělalo (24. 11. při přetížení Gemini)
+    final error = topicState.errorMessage;
+    final errorText = error == null
+        ? null
+        : Text(error, key: const ValueKey('topic_error'), style: AppTheme.font(fontSize: 13, color: AppTheme.textSecondary, height: 1.4));
+
     if (topic == null) {
       return Column(
         key: const ValueKey('topic_empty'),
@@ -47,6 +53,7 @@ class HistoryTopicTab extends ConsumerWidget {
             icon: const Icon(Icons.auto_awesome_rounded, size: 18),
             label: const Text('Připravit téma z historie'),
           ),
+          ?errorText,
         ],
       );
     }
@@ -93,7 +100,7 @@ class HistoryTopicTab extends ConsumerWidget {
               ],
             ),
           )
-        else
+        else ...[
           Wrap(
             spacing: 12,
             children: [
@@ -111,6 +118,8 @@ class HistoryTopicTab extends ConsumerWidget {
               ),
             ],
           ),
+          ?errorText,
+        ],
       ],
     );
   }

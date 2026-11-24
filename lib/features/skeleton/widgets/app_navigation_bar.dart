@@ -26,11 +26,15 @@ class AppNavigationBar extends StatelessWidget {
   /// Spustí hovor při druhém klepnutí na Hovor (když už je vybraná záložka Hovor).
   final VoidCallback? onStartCall;
 
+  /// Počet kartiček připravených k dnešnímu opakování (odznak na Kartičkách).
+  final int dueFlashcardsCount;
+
   const AppNavigationBar({
     super.key,
     required this.currentIndex,
     required this.onSelect,
     this.onStartCall,
+    this.dueFlashcardsCount = 0,
   });
 
   /// Výška lišty bez systémového okraje.
@@ -81,7 +85,15 @@ class AppNavigationBar extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                for (final d in _left) Expanded(child: _NavItem(d, selected: d.index == currentIndex, onTap: _select)),
+                for (final d in _left)
+                  Expanded(
+                    child: _NavItem(
+                      d,
+                      selected: d.index == currentIndex,
+                      badgeCount: d.index == 2 ? dueFlashcardsCount : 0,
+                      onTap: _select,
+                    ),
+                  ),
                 Expanded(
                   child: _TalkButton(
                     selected: currentIndex == 0,
@@ -102,17 +114,19 @@ class AppNavigationBar extends StatelessWidget {
 class _NavItem extends StatelessWidget {
   final _Destination destination;
   final bool selected;
+  final int badgeCount;
   final ValueChanged<int> onTap;
 
-  const _NavItem(this.destination, {required this.selected, required this.onTap});
+  const _NavItem(this.destination, {required this.selected, this.badgeCount = 0, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final color = selected ? AppTheme.textPrimary : AppTheme.textSecondary;
+    final badgeText = badgeCount > 99 ? '99+' : '$badgeCount';
     return Semantics(
       selected: selected,
       button: true,
-      label: destination.label,
+      label: badgeCount > 0 ? '${destination.label}, $badgeCount k opakování' : destination.label,
       excludeSemantics: true,
       child: InkResponse(
         onTap: () => onTap(destination.index),
@@ -122,7 +136,37 @@ class _NavItem extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(selected ? destination.selectedIcon : destination.icon, size: 24, color: color),
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Icon(selected ? destination.selectedIcon : destination.icon, size: 24, color: color),
+                  if (badgeCount > 0)
+                    Positioned(
+                      right: -10,
+                      top: -5,
+                      child: Container(
+                        constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: AppTheme.accent,
+                          borderRadius: BorderRadius.circular(9),
+                          border: Border.all(color: AppTheme.navBar, width: 1.5),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          badgeText,
+                          style: AppTheme.font(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.background,
+                            height: 1.1,
+                            fontFeatures: AppTheme.tabularFigures,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
               const SizedBox(height: 4),
               Text(
                 destination.label,
@@ -142,7 +186,7 @@ class _NavItem extends StatelessWidget {
 }
 
 /// Kulaté tlačítko Hovor přečnívající nad lištu: mimo Hovor bílé (přepne na Hovor),
-/// na stránce Hovor červené (další klepnutí zahájí hovor).
+/// na stránce Hovor zelené s popiskem „Začít“ (další klepnutí zahájí hovor).
 class _TalkButton extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
@@ -174,7 +218,7 @@ class _TalkButton extends StatelessWidget {
               height: 60,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: selected ? AppTheme.danger : AppTheme.textPrimary,
+                color: selected ? AppTheme.success : AppTheme.textPrimary,
                 boxShadow: const [
                   BoxShadow(color: AppTheme.navBar, spreadRadius: 6),
                   BoxShadow(color: Color(0x8C000000), blurRadius: 24, offset: Offset(0, 10)),
@@ -189,7 +233,7 @@ class _TalkButton extends StatelessWidget {
             const SizedBox(height: 4),
             Flexible(
               child: Text(
-                'Hovor',
+                selected ? 'Začít' : 'Hovor',
                 maxLines: 1,
                 overflow: TextOverflow.clip,
                 style: AppTheme.font(

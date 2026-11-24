@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../../core/app_theme.dart';
 
 /// Hlavička karty agenta: ikona, název, popis a stavový odznak.
@@ -26,10 +25,10 @@ class AgentCardHeader extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.08),
+            color: AppTheme.surfaceRaised,
             borderRadius: BorderRadius.circular(10),
           ),
-          child: Icon(icon, color: color, size: 22),
+          child: Icon(icon, color: AppTheme.textSecondary, size: 22),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -38,15 +37,15 @@ class AgentCardHeader extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: GoogleFonts.hankenGrotesk(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.textColor(context)),
+                style: AppTheme.font(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.textPrimary,
+                ),
               ),
               Text(
                 subtitle,
-                style: GoogleFonts.hankenGrotesk(
-                    fontSize: 11, color: AppTheme.mutedTextColor(context)),
+                style: AppTheme.font(fontSize: 12, color: AppTheme.textSecondary),
               ),
             ],
           ),
@@ -70,7 +69,7 @@ class AgentStatusBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: color.withValues(alpha: 0.30)),
       ),
@@ -90,10 +89,10 @@ class AgentStatusBadge extends StatelessWidget {
           ],
           Text(
             text,
-            style: GoogleFonts.hankenGrotesk(
+            style: AppTheme.font(
               color: color,
-              fontSize: 9,
-              fontWeight: FontWeight.w700,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
               letterSpacing: 0,
             ),
           ),

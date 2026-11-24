@@ -8,6 +8,7 @@ import '../flashcards/flashcards_screen.dart';
 import '../progress/progress_screen.dart';
 import '../settings/settings_screen.dart';
 import '../../core/config/config_providers.dart';
+import '../../data/data_providers.dart';
 import '../../services/agents/voice_tutor_agent.dart';
 import '../../services/agents/topic_preparation_agent.dart';
 import '../../core/app_theme.dart';
@@ -59,6 +60,7 @@ class _SkeletonScreenState extends ConsumerState<SkeletonScreen> {
     final apiKey = ref.watch(apiKeyProvider);
     final isLoaded = ref.watch(isApiKeyLoadedProvider);
     final tutorState = ref.watch(voiceTutorAgentProvider);
+    final dueCount = ref.watch(dueFlashcardsProvider).value?.length ?? 0;
 
     final isMissingKey = isLoaded && (apiKey == null || apiKey.isEmpty);
     // Během hovoru se navigace schová, aby nic nerušilo
@@ -95,6 +97,7 @@ class _SkeletonScreenState extends ConsumerState<SkeletonScreen> {
               offset: isVoiceActive ? const Offset(0, 1) : Offset.zero,
               child: AppNavigationBar(
                 currentIndex: currentIndex,
+                dueFlashcardsCount: dueCount,
                 onSelect: (index) => ref.read(mainNavigationIndexProvider.notifier).setIndex(index),
                 onStartCall: () => ref.read(voiceTutorAgentProvider.notifier).startSession(),
               ),

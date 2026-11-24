@@ -38,9 +38,9 @@ class SmartChatBubble extends ConsumerStatefulWidget {
 }
 
 class _SmartChatBubbleState extends ConsumerState<SmartChatBubble> {
-  bool _isExpanded = false;
+  final Set<int> _expandedIndices = {};
   bool _isPlayingTts = false;
-  bool _isSavedToFlashcards = false;
+  final Set<int> _savedIndices = {};
 
   void _copyToClipboard(BuildContext context, String text) {
     HapticFeedback.lightImpact();
@@ -84,8 +84,8 @@ class _SmartChatBubbleState extends ConsumerState<SmartChatBubble> {
     }
   }
 
-  Future<void> _saveToFlashcards(ChatMessageCorrection correction) async {
-    if (_isSavedToFlashcards) return;
+  Future<void> _saveToFlashcards(ChatMessageCorrection correction, int index) async {
+    if (_savedIndices.contains(index)) return;
 
     HapticFeedback.mediumImpact();
     final result = await ref.read(flashcardGenerationServiceProvider).saveCorrection(
@@ -98,7 +98,7 @@ class _SmartChatBubbleState extends ConsumerState<SmartChatBubble> {
 
     if (mounted) {
       if (result.isSuccess) {
-        setState(() => _isSavedToFlashcards = true);
+        setState(() => _savedIndices.add(index));
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
@@ -108,7 +108,7 @@ class _SmartChatBubbleState extends ConsumerState<SmartChatBubble> {
                 Expanded(
                   child: Text(
                     'Uloženo do Smart Flashcards! 🃏',
-                    style: GoogleFonts.hankenGrotesk(
+                    style: AppTheme.font(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
                     ),
@@ -227,7 +227,12 @@ class _SmartChatBubbleState extends ConsumerState<SmartChatBubble> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            for (var correction in msg.corrections!) ...[
+                            for (var i = 0; i < msg.corrections!.length; i++) ...[
+                              if (i > 0)
+                                const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 10),
+                                  child: Divider(color: AppTheme.hairline, height: 1),
+                                ),
                               // Hlavička s porovnáním: [Chyba ❌ -> Správně ✅]
                               Row(
                                 children: [
@@ -239,8 +244,8 @@ class _SmartChatBubbleState extends ConsumerState<SmartChatBubble> {
                                       borderRadius: BorderRadius.circular(6),
                                     ),
                                     child: Text(
-                                      correction.userSaid,
-                                      style: GoogleFonts.hankenGrotesk(
+                                      msg.corrections![i].userSaid,
+                                      style: AppTheme.font(
                                         fontSize: 12,
                                         fontWeight: FontWeight.w700,
                                         color: const Color(0xFFFFB4AB),
@@ -261,8 +266,8 @@ class _SmartChatBubbleState extends ConsumerState<SmartChatBubble> {
                                         borderRadius: BorderRadius.circular(6),
                                       ),
                                       child: Text(
-                                        correction.correctForm,
-                                        style: GoogleFonts.hankenGrotesk(
+                                        msg.corrections![i].correctForm,
+                                        style: AppTheme.font(
                                           fontSize: 12,
                                           fontWeight: FontWeight.w700,
                                           color: const Color(0xFFB4F5BE),
@@ -278,7 +283,11 @@ class _SmartChatBubbleState extends ConsumerState<SmartChatBubble> {
 
                               // Vysvětlení (kliknutím na nápis nebo ikonu)
                               InkWell(
-                                onTap: () => setState(() => _isExpanded = !_isExpanded),
+                                onTap: () => setState(() {
+                                  if (!_expandedIndices.add(i)) {
+                                    _expandedIndices.remove(i);
+                                  }
+                                }),
                                 borderRadius: BorderRadius.circular(8),
                                 child: Padding(
                                   padding: const EdgeInsets.symmetric(vertical: 2.0),
@@ -292,21 +301,21 @@ class _SmartChatBubbleState extends ConsumerState<SmartChatBubble> {
                                       const SizedBox(width: 6),
                                       Expanded(
                                         child: Text(
-                                          _isExpanded
-                                              ? correction.explanation
+                                          _expandedIndices.contains(i)
+                                              ? msg.corrections![i].explanation
                                               : 'Proč? Zobrazit pravidlo...',
-                                          style: GoogleFonts.hankenGrotesk(
-                                            fontSize: 12,
+                                          style: AppTheme.font(
+                                            fontSize: 12.5,
                                             color: Colors.white.withValues(alpha: 0.9),
                                             height: 1.35,
-                                            fontStyle: _isExpanded
+                                            fontStyle: _expandedIndices.contains(i)
                                                 ? FontStyle.normal
                                                 : FontStyle.italic,
                                           ),
                                         ),
                                       ),
                                       Icon(
-                                        _isExpanded
+                                        _expandedIndices.contains(i)
                                             ? Icons.keyboard_arrow_up_rounded
                                             : Icons.keyboard_arrow_down_rounded,
                                         size: 16,
@@ -328,7 +337,7 @@ class _SmartChatBubbleState extends ConsumerState<SmartChatBubble> {
                                     onTap: _isPlayingTts
                                         ? null
                                         : () => _playTts(msg.correctedSentence ??
-                                            correction.correctForm),
+                                            msg.corrections![i].correctForm),
                                     borderRadius: BorderRadius.circular(8),
                                     child: Container(
                                       padding: const EdgeInsets.symmetric(
@@ -340,18 +349,26 @@ class _SmartChatBubbleState extends ConsumerState<SmartChatBubble> {
                                       child: Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          Icon(
-                                            _isPlayingTts
-                                                ? Icons.volume_up_rounded
-                                                : Icons.volume_mute_rounded,
-                                            size: 14,
-                                            color: Colors.white,
-                                          ),
+                                          if (_isPlayingTts)
+                                            const SizedBox(
+                                              width: 14,
+                                              height: 14,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 1.8,
+                                                color: Colors.white,
+                                              ),
+                                            )
+                                          else
+                                            const Icon(
+                                              Icons.volume_up_rounded,
+                                              size: 14,
+                                              color: Colors.white,
+                                            ),
                                           const SizedBox(width: 4),
                                           Text(
                                             'Výslovnost',
-                                            style: GoogleFonts.hankenGrotesk(
-                                              fontSize: 11,
+                                            style: AppTheme.font(
+                                              fontSize: 12,
                                               fontWeight: FontWeight.w600,
                                               color: Colors.white,
                                             ),
@@ -365,15 +382,15 @@ class _SmartChatBubbleState extends ConsumerState<SmartChatBubble> {
 
                                   // Tlačítko přidání do Smart Flashcards
                                   InkWell(
-                                    onTap: _isSavedToFlashcards
+                                    onTap: _savedIndices.contains(i)
                                         ? null
-                                        : () => _saveToFlashcards(correction),
+                                        : () => _saveToFlashcards(msg.corrections![i], i),
                                     borderRadius: BorderRadius.circular(8),
                                     child: Container(
                                       padding: const EdgeInsets.symmetric(
                                           horizontal: 8, vertical: 4),
                                       decoration: BoxDecoration(
-                                        color: _isSavedToFlashcards
+                                        color: _savedIndices.contains(i)
                                             ? AppTheme.success.withValues(alpha: 0.3)
                                             : Colors.white.withValues(alpha: 0.18),
                                         borderRadius: BorderRadius.circular(8),
@@ -382,7 +399,7 @@ class _SmartChatBubbleState extends ConsumerState<SmartChatBubble> {
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
                                           Icon(
-                                            _isSavedToFlashcards
+                                            _savedIndices.contains(i)
                                                 ? Icons.check_rounded
                                                 : Icons.add_circle_outline_rounded,
                                             size: 14,
@@ -390,11 +407,11 @@ class _SmartChatBubbleState extends ConsumerState<SmartChatBubble> {
                                           ),
                                           const SizedBox(width: 4),
                                           Text(
-                                            _isSavedToFlashcards
+                                            _savedIndices.contains(i)
                                                 ? 'V kartičkách'
                                                 : 'Do kartiček',
-                                            style: GoogleFonts.hankenGrotesk(
-                                              fontSize: 11,
+                                            style: AppTheme.font(
+                                              fontSize: 12,
                                               fontWeight: FontWeight.w600,
                                               color: Colors.white,
                                             ),
@@ -419,13 +436,20 @@ class _SmartChatBubbleState extends ConsumerState<SmartChatBubble> {
                           mainAxisAlignment: MainAxisAlignment.end,
                           children: [
                             IconButton(
-                              icon: Icon(
-                                _isPlayingTts
-                                    ? Icons.volume_up_rounded
-                                    : Icons.volume_mute_rounded,
-                                size: 16,
-                                color: tutorStrongColor,
-                              ),
+                              icon: _isPlayingTts
+                                  ? const SizedBox(
+                                      width: 14,
+                                      height: 14,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 1.8,
+                                        color: AppTheme.textSecondary,
+                                      ),
+                                    )
+                                  : const Icon(
+                                      Icons.volume_up_rounded,
+                                      size: 17,
+                                      color: AppTheme.textSecondary,
+                                    ),
                               padding: EdgeInsets.zero,
                               constraints: const BoxConstraints(),
                               tooltip: 'Přehrát zprávu',

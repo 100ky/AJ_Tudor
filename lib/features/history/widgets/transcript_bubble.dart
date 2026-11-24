@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/app_theme.dart';
 import '../../../data/database/app_database.dart';
+import '../../../services/gemini/gemini_tts_service.dart';
+import '../../conversation/widgets/interactive_tutor_text.dart';
 
 /// Jedna replika přepisu lekce, u studenta případně s opravou chyby
 /// a tlačítkem pro přidání do kartiček. Dlouhý stisk nahlásí problém u repliky.
-class TranscriptBubble extends StatelessWidget {
+class TranscriptBubble extends ConsumerStatefulWidget {
   final Transcript transcript;
 
   /// Chyba, kterou tutor v této replice opravil (párováno podle `userSaid`).
@@ -30,10 +33,36 @@ class TranscriptBubble extends StatelessWidget {
   });
 
   @override
+  ConsumerState<TranscriptBubble> createState() => _TranscriptBubbleState();
+}
+
+class _TranscriptBubbleState extends ConsumerState<TranscriptBubble> {
+  bool _isPlayingTts = false;
+
+  Future<void> _playTts() async {
+    if (_isPlayingTts) return;
+    HapticFeedback.selectionClick();
+    setState(() => _isPlayingTts = true);
+    try {
+      final success = await ref.read(geminiTtsServiceProvider).speak(widget.transcript.content);
+      if (mounted && !success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Nepodařilo se přehrát výslovnost. Zkontrolujte připojení.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isPlayingTts = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final isDark = AppTheme.isDark(context);
+    final transcript = widget.transcript;
+    final error = widget.error;
     final isUser = transcript.speaker == 'user';
-    final error = this.error;
     final hasCard = transcript.inFlashcard || (error != null && error.inFlashcard);
     final maxWidth = MediaQuery.of(context).size.width * 0.78;
 
@@ -44,66 +73,118 @@ class TranscriptBubble extends StatelessWidget {
             isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
           GestureDetector(
-            onLongPress: onLongPress,
+            onLongPress: widget.onLongPress,
             child: Container(
-            margin: const EdgeInsets.only(bottom: 4, top: 12),
-            padding: const EdgeInsets.all(14),
-            constraints: BoxConstraints(maxWidth: maxWidth),
-            decoration: BoxDecoration(
-              color: isUser ? AppTheme.surfaceHigh : AppTheme.surface,
-              borderRadius: BorderRadius.only(
-                topLeft: const Radius.circular(20),
-                topRight: const Radius.circular(20),
-                bottomLeft: Radius.circular(isUser ? 20 : 4),
-                bottomRight: Radius.circular(isUser ? 4 : 20),
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  transcript.content,
-                  style: GoogleFonts.hankenGrotesk(
-                    color: isUser ? Colors.white : AppTheme.textColor(context),
-                    fontSize: 14,
-                    height: 1.45,
-                    fontWeight: FontWeight.w500,
-                  ),
+              margin: const EdgeInsets.only(bottom: 4, top: 12),
+              padding: const EdgeInsets.all(14),
+              constraints: BoxConstraints(maxWidth: maxWidth),
+              decoration: BoxDecoration(
+                color: isUser ? AppTheme.surfaceHigh : AppTheme.surface,
+                borderRadius: BorderRadius.only(
+                  topLeft: const Radius.circular(20),
+                  topRight: const Radius.circular(20),
+                  bottomLeft: Radius.circular(isUser ? 20 : 4),
+                  bottomRight: Radius.circular(isUser ? 4 : 20),
                 ),
-                if (isUser && hasCard) ...[
-                  const SizedBox(height: 6),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.style_rounded,
-                        size: 11,
-                        color: Colors.white70,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (isUser)
+                    Text(
+                      transcript.content,
+                      style: AppTheme.font(
+                        color: AppTheme.textPrimary,
+                        fontSize: 14.5,
+                        height: 1.45,
+                        fontWeight: FontWeight.w500,
                       ),
-                      const SizedBox(width: 4),
-                      Text(
-                        'V kartičkách',
-                        style: GoogleFonts.hankenGrotesk(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
+                    )
+                  else
+                    InteractiveTutorText(
+                      text: transcript.content,
+                      style: AppTheme.font(
+                        color: AppTheme.textPrimary,
+                        fontSize: 14.5,
+                        height: 1.45,
+                      ),
+                    ),
+                  if (!isUser) ...[
+                    const SizedBox(height: 6),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          tooltip: 'Přehrát zprávu',
+                          onPressed: _isPlayingTts ? null : _playTts,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          icon: _isPlayingTts
+                              ? const SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 1.8,
+                                    color: AppTheme.textSecondary,
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.volume_up_rounded,
+                                  size: 16,
+                                  color: AppTheme.textSecondary,
+                                ),
+                        ),
+                        if (widget.onLongPress != null) ...[
+                          const SizedBox(width: 12),
+                          IconButton(
+                            tooltip: 'Nahlásit problém',
+                            onPressed: widget.onLongPress,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            icon: const Icon(
+                              Icons.flag_outlined,
+                              size: 16,
+                              color: AppTheme.textTertiary,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                  if (isUser && hasCard) ...[
+                    const SizedBox(height: 6),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.style_rounded,
+                          size: 12,
                           color: Colors.white70,
                         ),
-                      ),
-                    ],
-                  ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'V kartičkách',
+                          style: AppTheme.font(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white70,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
-          ),
-          for (final issue in issues) _issueNote(context, issue, maxWidth),
+          for (final issue in widget.issues) _issueNote(context, issue, maxWidth),
           if (error != null)
             Container(
               margin: const EdgeInsets.only(bottom: 8),
               padding: const EdgeInsets.all(12),
               constraints: BoxConstraints(maxWidth: maxWidth),
               decoration: BoxDecoration(
-                color: AppTheme.success.withValues(alpha: isDark ? 0.12 : 0.08),
+                color: AppTheme.success.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(color: AppTheme.success.withValues(alpha: 0.25)),
               ),
@@ -113,16 +194,16 @@ class TranscriptBubble extends StatelessWidget {
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.check_circle_rounded,
+                      const Icon(Icons.check_circle_rounded,
                           size: 14, color: AppTheme.success),
                       const SizedBox(width: 6),
                       Flexible(
                         child: Text(
                           error.correctForm,
-                          style: GoogleFonts.hankenGrotesk(
+                          style: AppTheme.font(
                             color: AppTheme.success,
                             fontWeight: FontWeight.w700,
-                            fontSize: 13,
+                            fontSize: 13.5,
                           ),
                         ),
                       ),
@@ -131,9 +212,9 @@ class TranscriptBubble extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     error.explanation,
-                    style: GoogleFonts.hankenGrotesk(
-                      fontSize: 12,
-                      color: AppTheme.mutedTextColor(context),
+                    style: AppTheme.font(
+                      fontSize: 12.5,
+                      color: AppTheme.textSecondary,
                       height: 1.35,
                     ),
                   ),
@@ -165,8 +246,8 @@ class TranscriptBubble extends StatelessWidget {
           Flexible(
             child: Text(
               issue.note,
-              style: GoogleFonts.hankenGrotesk(
-                fontSize: 11,
+              style: AppTheme.font(
+                fontSize: 12,
                 fontWeight: FontWeight.w600,
                 color: AppTheme.warning,
               ),
@@ -197,9 +278,9 @@ class TranscriptBubble extends StatelessWidget {
           ),
           const SizedBox(width: 4),
           Text(
-            'V kartičkách 🃏',
-            style: GoogleFonts.hankenGrotesk(
-              fontSize: 11,
+            'V kartičkách',
+            style: AppTheme.font(
+              fontSize: 12,
               fontWeight: FontWeight.w700,
               color: AppTheme.success,
             ),
@@ -211,7 +292,7 @@ class TranscriptBubble extends StatelessWidget {
 
   Widget _addButton() {
     return InkWell(
-      onTap: onAddToFlashcards,
+      onTap: widget.onAddToFlashcards,
       borderRadius: BorderRadius.circular(8),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
@@ -233,9 +314,9 @@ class TranscriptBubble extends StatelessWidget {
             const SizedBox(width: 4),
             Text(
               'Přidat do kartiček',
-              style: GoogleFonts.hankenGrotesk(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
+              style: AppTheme.font(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
                 color: AppTheme.textPrimary,
               ),
             ),

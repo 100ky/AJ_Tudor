@@ -27,11 +27,15 @@ class SessionSetupView extends StatelessWidget {
   /// Podrobnosti vybraného druhu (téma, kartičky, scénáře); null = bez podrobností.
   final Widget? tabContent;
 
+  /// Počet kartiček pro dnešní lekci (zobrazí se nenápadně na neaktivním řádku).
+  final int lessonCardsCount;
+
   const SessionSetupView({
     super.key,
     required this.activeMode,
     required this.onModeChanged,
     required this.tabContent,
+    this.lessonCardsCount = 0,
   });
 
   static const _modes = [
@@ -61,6 +65,9 @@ class SessionSetupView extends StatelessWidget {
                 subtitle: subtitle,
                 icon: icon,
                 selected: mode == activeMode,
+                badgeText: mode == TopicMode.lesson && mode != activeMode && lessonCardsCount > 0
+                    ? '$lessonCardsCount dnes'
+                    : null,
                 onTap: () {
                   if (mode == activeMode) return;
                   HapticFeedback.selectionClick();
@@ -80,6 +87,7 @@ class _ModeRow extends StatelessWidget {
   final String subtitle;
   final IconData icon;
   final bool selected;
+  final String? badgeText;
   final VoidCallback onTap;
   final Widget? detail;
 
@@ -88,6 +96,7 @@ class _ModeRow extends StatelessWidget {
     required this.subtitle,
     required this.icon,
     required this.selected,
+    this.badgeText,
     required this.onTap,
     this.detail,
   });
@@ -121,6 +130,19 @@ class _ModeRow extends StatelessWidget {
                         ],
                       ),
                     ),
+                    if (badgeText != null)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8),
+                        child: Text(
+                          badgeText!,
+                          style: AppTheme.font(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.accent,
+                            fontFeatures: AppTheme.tabularFigures,
+                          ),
+                        ),
+                      ),
                     if (selected) const Icon(Icons.check_rounded, size: 22, color: AppTheme.textPrimary),
                   ],
                 ),

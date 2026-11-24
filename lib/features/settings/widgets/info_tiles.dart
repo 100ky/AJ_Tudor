@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../../core/app_theme.dart';
 import '../../../core/widgets/glass_container.dart';
 import '../../agents/agents_screen.dart';
@@ -15,16 +14,16 @@ class AgentsLinkTile extends StatelessWidget {
     return GlassContainer(
       child: ListTile(
         contentPadding: EdgeInsets.zero,
-        leading: SettingsIcon(Icons.smart_toy_rounded, AppTheme.primary,
-            backgroundAlpha: 0.1),
-        title: Text('Správa a přehled AI agentů',
-            style: GoogleFonts.hankenGrotesk(
-                fontWeight: FontWeight.w600,
-                color: AppTheme.textColor(context))),
-        subtitle: Text('Tutor, Analytik skóre a Plánovač témat na míru',
-            style: GoogleFonts.hankenGrotesk(
-                fontSize: 12, color: AppTheme.mutedTextColor(context))),
-        trailing: const Icon(Icons.chevron_right_rounded, color: AppTheme.primary),
+        leading: const SettingsIcon(Icons.smart_toy_rounded, AppTheme.textSecondary),
+        title: Text(
+          'Správa a přehled AI agentů',
+          style: AppTheme.font(fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
+        ),
+        subtitle: Text(
+          'Tutor, Analytik skóre a Plánovač témat na míru',
+          style: AppTheme.font(fontSize: 12.5, color: AppTheme.textSecondary),
+        ),
+        trailing: const Icon(Icons.chevron_right_rounded, color: AppTheme.textTertiary),
         onTap: () {
           HapticFeedback.lightImpact();
           Navigator.push(
@@ -47,14 +46,14 @@ class AppInfoCard extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: [
-          Icon(Icons.info_outline, color: AppTheme.mutedTextColor(context), size: 20),
+          const Icon(Icons.info_outline, color: AppTheme.textSecondary, size: 20),
           const SizedBox(width: 12),
-          Text('Verze',
-              style: GoogleFonts.hankenGrotesk(color: AppTheme.textColor(context))),
+          Text('Verze', style: AppTheme.font(color: AppTheme.textPrimary)),
           const Spacer(),
-          Text('0.1.0 - Dev Preview',
-              style: GoogleFonts.hankenGrotesk(
-                  color: AppTheme.mutedTextColor(context), fontSize: 13)),
+          Text(
+            '0.1.0 - Dev Preview',
+            style: AppTheme.font(color: AppTheme.textSecondary, fontSize: 13),
+          ),
         ],
       ),
     );

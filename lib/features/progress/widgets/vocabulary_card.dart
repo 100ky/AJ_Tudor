@@ -8,17 +8,20 @@ class VocabularyCard extends StatelessWidget {
   final List<String> vocabulary;
   final bool expanded;
   final VoidCallback onToggle;
+  final bool grouped;
 
   const VocabularyCard({
     super.key,
     required this.vocabulary,
     required this.expanded,
     required this.onToggle,
+    this.grouped = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return CollapsibleCard(
+      grouped: grouped,
       title: 'Slovní zásoba',
       trailing: [CardBadge('${vocabulary.length} slov')],
       expanded: expanded,

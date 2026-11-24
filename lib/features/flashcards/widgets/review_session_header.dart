@@ -6,12 +6,14 @@ class ReviewSessionHeader extends StatelessWidget {
   final int currentIndex;
   final int totalCards;
   final int masteredCount;
+  final VoidCallback? onBrowseAll;
 
   const ReviewSessionHeader({
     super.key,
     required this.currentIndex,
     required this.totalCards,
     required this.masteredCount,
+    this.onBrowseAll,
   });
 
   @override
@@ -43,6 +45,15 @@ class ReviewSessionHeader extends StatelessWidget {
                   'umíš $masteredCount',
                   style: AppTheme.font(fontSize: 13.5, color: AppTheme.success, fontFeatures: AppTheme.tabularFigures),
                 ),
+              if (onBrowseAll != null) ...[
+                const SizedBox(width: 4),
+                IconButton(
+                  tooltip: 'Všechny kartičky',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: onBrowseAll,
+                  icon: const Icon(Icons.list_alt_rounded, size: 22, color: AppTheme.textSecondary),
+                ),
+              ],
             ],
           ),
           const SizedBox(height: 10),

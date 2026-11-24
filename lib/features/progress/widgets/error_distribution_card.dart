@@ -10,12 +10,14 @@ class ErrorDistributionCard extends StatelessWidget {
   final List<ErrorLog> errors;
   final bool expanded;
   final VoidCallback onToggle;
+  final bool grouped;
 
   const ErrorDistributionCard({
     super.key,
     required this.errors,
     required this.expanded,
     required this.onToggle,
+    this.grouped = false,
   });
 
   @override
@@ -37,6 +39,7 @@ class ErrorDistributionCard extends StatelessWidget {
     final total = errors.length;
 
     return CollapsibleCard(
+      grouped: grouped,
       title: 'Rozložení chyb',
       trailing: [CardBadge('celkem $total')],
       expanded: expanded,

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 import '../../../data/models/chat_message.dart';
+import '../../gemini/speech_transcription_service.dart';
 
 /// Jedna replika studenta mezi `activityStart` a `activityEnd`.
 ///
@@ -124,15 +125,24 @@ class StudentUtterance {
   /// Když opravný přepis v nahrávce řeč neslyšel, krátký živý přepis se zahodí –
   /// živý přepis si na ruch (nádech, klepnutí) vymýšlí „¿Qué?“. Delší živý přepis
   /// zůstane, tam se spíš spletl opravný přepis.
+  ///
+  /// Podezřele krátký opravný přepis dlouhé nahrávky (viz
+  /// [SpeechTranscriptionService.isSuspiciouslyShort]) prohraje s delším živým přepisem.
+  /// Služba ho vrátí, když ho žádný jiný model nepřekoná, a 24. 11. (lekce 39) tak
+  /// „He will help us with redesign Power BI reports.“ z 12 s zvuku nahradilo jen „he“.
   String get finalText {
     final corrected = correctedText?.trim();
     final live = liveText.trim();
     if (correctionDone && corrected != null) {
-      if (corrected.isNotEmpty) return corrected;
-      if (_wordCount(live) <= 2) return '';
+      if (corrected.isEmpty) return _wordCount(live) <= 2 ? '' : live;
+      final cutShort = SpeechTranscriptionService.isSuspiciouslyShort(corrected, _audioLength) &&
+          SpeechTranscriptionService.wordCount(live) > SpeechTranscriptionService.wordCount(corrected);
+      return cutShort ? live : corrected;
     }
     return live;
   }
+
+  int get _audioLength => _audioTooLong ? maxAudioBytes : _audio.length;
 
   static int _wordCount(String text) => text.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length;
 

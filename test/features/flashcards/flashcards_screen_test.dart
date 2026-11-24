@@ -381,12 +381,13 @@ void main() {
       await tester.pumpWidget(buildTestWidget());
       await tester.pumpAndSettle();
 
-      // Klepnutí na kartičku bez odpovědi ji neotočí
+      // Klepnutí na kartičku bez odpovědi ji neotočí a ukáže nápovědu
       await tester.tap(find.text('Mám hlad.'));
       await tester.pumpAndSettle();
 
       expect(find.text('Správné řešení'), findsNothing);
       expect(find.text('Znovu'), findsNothing);
+      expect(find.text('Nejdřív odpověz hlasem, napiš, nebo klepni na Nevím'), findsOneWidget);
 
       // Když je pole prázdné, je v liště mikrofon a potvrzení klávesnicí kartičku neotočí
       expect(find.byTooltip('Odpovědět hlasem'), findsOneWidget);
@@ -432,6 +433,48 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Kartička 2 z 2'), findsOneWidget);
       expect(find.text('Uniknout'), findsOneWidget);
+
+      await drainTimers(tester);
+    });
+
+    testWidgets('opens all flashcards browser sheet and filters cards by query',
+        (WidgetTester tester) async {
+      configureViewport(tester);
+      final now = DateTime.now();
+      await db.into(db.flashcards).insert(
+            FlashcardsCompanion.insert(
+              frontText: 'jablko',
+              backText: 'apple',
+              explanation: '',
+              nextReviewAt: now.subtract(const Duration(hours: 1)),
+              createdAt: now,
+            ),
+          );
+      await db.into(db.flashcards).insert(
+            FlashcardsCompanion.insert(
+              frontText: 'letadlo',
+              backText: 'airplane',
+              explanation: '',
+              nextReviewAt: now.add(const Duration(days: 3)),
+              createdAt: now,
+            ),
+          );
+
+      await tester.pumpWidget(buildTestWidget());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Všechny kartičky'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Všechny kartičky (2)'), findsOneWidget);
+      expect(find.text('apple'), findsOneWidget);
+      expect(find.text('airplane'), findsOneWidget);
+
+      // Filtrujeme jen „let“ -> zůstane jen airplane
+      await tester.enterText(find.byType(TextField).last, 'let');
+      await tester.pumpAndSettle();
+      expect(find.text('airplane'), findsOneWidget);
+      expect(find.text('apple'), findsNothing);
 
       await drainTimers(tester);
     });

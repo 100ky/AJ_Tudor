@@ -86,6 +86,11 @@ final dueFlashcardsProvider = StreamProvider<List<Flashcard>>((ref) {
   return ref.watch(flashcardRepositoryProvider).watchDueFlashcards();
 });
 
+/// Všechny uložené kartičky od nejnovější (pro prohlížeč kartiček).
+final allFlashcardsProvider = StreamProvider<List<Flashcard>>((ref) {
+  return ref.watch(flashcardRepositoryProvider).watchAllFlashcards();
+});
+
 /// Agregované statistiky kartiček (zvládnuté, v procesu, k opakování).
 final flashcardStatsProvider = StreamProvider<FlashcardStats>((ref) {
   return ref.watch(flashcardRepositoryProvider).watchFlashcardStats();

@@ -330,6 +330,31 @@ void main() {
       await drainTimers(tester);
     });
 
+    testWidgets('a failed topic preparation shows a note under the current topic',
+        (WidgetTester tester) async {
+      // 24. 11. při přetížení Gemini zmizelo načítání a nic neříkalo, že nové téma nevzniklo
+      configureViewport(tester);
+      final fakeAgent = FakeVoiceTutorAgent(VoiceTutorState(status: TutorState.idle));
+      final topic = PreparedTopic(
+        title: 'Pěstování bylinek',
+        openerEn: 'How are your herbs doing?',
+        rationale: '',
+        preparedAt: DateTime(2026, 11, 1),
+      );
+
+      await tester.pumpWidget(buildTestWidget(
+        fakeTutorAgent: fakeAgent,
+        topicState: TopicPreparationState(topic: topic, errorMessage: 'Nové téma se nepřipravilo.'),
+      ));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('Pěstování bylinek'), findsOneWidget);
+      expect(find.text('Jiné téma'), findsOneWidget);
+      expect(find.text('Nové téma se nepřipravilo.'), findsOneWidget);
+
+      await drainTimers(tester);
+    });
+
     testWidgets('displays active call controls, wave and messages in active state',
         (WidgetTester tester) async {
       configureViewport(tester);

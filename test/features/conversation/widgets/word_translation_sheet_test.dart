@@ -161,7 +161,7 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      final ttsButton = find.byIcon(Icons.volume_mute_rounded);
+      final ttsButton = find.byIcon(Icons.volume_up_rounded);
       expect(ttsButton, findsOneWidget);
 
       await tester.tap(ttsButton);

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../core/app_theme.dart';
 import '../../data/data_providers.dart';
 import '../../data/database/app_database.dart';
@@ -106,13 +105,13 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
         backgroundColor: Colors.transparent,
         title: Text(
           'Moji AI Agenti',
-          style: GoogleFonts.hankenGrotesk(
-            fontSize: 18,
+          style: AppTheme.font(
+            fontSize: 20,
             fontWeight: FontWeight.w600,
-            color: AppTheme.textColor(context),
+            color: AppTheme.textPrimary,
           ),
         ),
-        centerTitle: true,
+        centerTitle: false,
       ),
       body: ListView(
         padding: const EdgeInsets.all(16.0),

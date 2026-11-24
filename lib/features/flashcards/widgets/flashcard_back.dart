@@ -92,6 +92,17 @@ class FlashcardBack extends StatelessWidget {
                             PronunciationBadge(lastPronunciation),
                             const SizedBox(height: 8),
                             WordAssessmentPills(lastPronunciation),
+                            if (lastPronunciation.feedback.isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                lastPronunciation.feedback,
+                                style: AppTheme.font(
+                                  fontSize: 13.5,
+                                  color: AppTheme.textSecondary,
+                                  height: 1.45,
+                                ),
+                              ),
+                            ],
                           ],
                           if (typedAnswer != null) ...[
                             const SizedBox(height: 18),

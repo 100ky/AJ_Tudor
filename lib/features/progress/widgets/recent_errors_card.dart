@@ -13,6 +13,7 @@ class RecentErrorsCard extends StatelessWidget {
 
   /// Přepne přehled na záložku Historie lekcí.
   final VoidCallback onShowHistory;
+  final bool grouped;
 
   const RecentErrorsCard({
     super.key,
@@ -20,11 +21,13 @@ class RecentErrorsCard extends StatelessWidget {
     required this.expanded,
     required this.onToggle,
     required this.onShowHistory,
+    this.grouped = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return CollapsibleCard(
+      grouped: grouped,
       title: 'Nedávné chyby',
       trailing: [
         if (errors.isNotEmpty) ...[

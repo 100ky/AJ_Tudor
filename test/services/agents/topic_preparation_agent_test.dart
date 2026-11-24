@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -167,6 +168,82 @@ void main() {
 
       // Verify prompt was the wildcard random topic prompt
       expect(capturedPrompt?.contains('Divokou kartu / Wildcard'), true);
+    });
+
+    test('a wildcard prompt gets a drawn inspiration area instead of fixed examples', () async {
+      // Pevné příklady v promptu („kolonizace Marsu“) model přebíral doslova
+      await profileRepo.updateUserMemory('Notes');
+      final prompts = <String>[];
+      when(() => mockGemini.sendMessage(
+        any(),
+        responseSchema: any(named: 'responseSchema'),
+        systemPrompt: any(named: 'systemPrompt'),
+      )).thenAnswer((invocation) async {
+        prompts.add(invocation.namedArguments[const Symbol('systemPrompt')] as String);
+        return jsonEncode({'topicTitle': 'Téma ${prompts.length}', 'openerEn': 'Opener?', 'rationale': 'Divoká karta.'});
+      });
+
+      final notifier = container.read(topicPreparationAgentProvider.notifier);
+      await notifier.prepareTopic(force: true, isRandomTopic: true);
+      await notifier.prepareTopic(force: true, isRandomTopic: true);
+
+      String drawn(String prompt) => RegExp(r'OKRUH PRO TOTO TÉMA \(vylosovaný\): (.+)').firstMatch(prompt)!.group(1)!;
+      expect(prompts, hasLength(2));
+      expect(prompts.every((p) => !p.contains('Marsu')), isTrue);
+      expect(drawn(prompts[1]), isNot(drawn(prompts[0])));
+      expect(prompts[1], contains('"Téma 1"'));
+    });
+
+    test('taps while a topic is being prepared do not start another request', () async {
+      // 24. 11. se kontrola isLoading dala obejít během doplňování evidence a tři
+      // požadavky běžely naráz (dvakrát stejné téma, téma se měnilo samo)
+      await profileRepo.updateUserMemory('Notes');
+      final answer = Completer<String>();
+      when(() => mockGemini.sendMessage(
+        any(),
+        responseSchema: any(named: 'responseSchema'),
+        systemPrompt: any(named: 'systemPrompt'),
+      )).thenAnswer((_) => answer.future);
+
+      final notifier = container.read(topicPreparationAgentProvider.notifier);
+      final first = notifier.prepareTopic(force: true, isRandomTopic: true);
+      final second = notifier.prepareTopic(force: true, isRandomTopic: true);
+      await second;
+      expect(container.read(topicPreparationAgentProvider).isLoading, isTrue);
+
+      answer.complete(jsonEncode({'topicTitle': 'Jediné téma', 'openerEn': 'Opener?', 'rationale': 'Divoká karta.'}));
+      await first;
+
+      verify(() => mockGemini.sendMessage(
+        any(),
+        responseSchema: any(named: 'responseSchema'),
+        systemPrompt: any(named: 'systemPrompt'),
+      )).called(1);
+      expect(notifier.refreshCount, 1);
+      expect(container.read(topicPreparationAgentProvider).topic?.title, 'Jediné téma');
+    });
+
+    test('an overloaded Gemini keeps the current topic and leaves a short note', () async {
+      final current = PreparedTopic(
+        title: 'Kavárny v Praze',
+        openerEn: 'What is your favorite cafe in Prague?',
+        rationale: 'Káva',
+        preparedAt: DateTime.now(),
+      );
+      await profileRepo.updateUserMemory('Init');
+      await profileRepo.savePreparedTopic(jsonEncode(current.toJson()));
+      when(() => mockGemini.sendMessage(
+        any(),
+        responseSchema: any(named: 'responseSchema'),
+        systemPrompt: any(named: 'systemPrompt'),
+      )).thenThrow(const GeminiOverloadedException('503'));
+
+      await container.read(topicPreparationAgentProvider.notifier).prepareTopic(force: true, isRandomTopic: true);
+
+      final state = container.read(topicPreparationAgentProvider);
+      expect(state.isLoading, isFalse);
+      expect(state.topic?.title, 'Kavárny v Praze');
+      expect(state.errorMessage, 'Nové téma se nepřipravilo, Gemini je teď přetížené. Zkus to za chvíli.');
     });
 
     test('prepareTopic automatically triggers wildcard on every 3rd forced refresh', () async {

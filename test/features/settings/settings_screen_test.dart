@@ -80,8 +80,10 @@ void main() {
       await tester.pumpWidget(buildTestWidget());
       await tester.pumpAndSettle();
 
-      // App bar title
+      // App bar / screen title and PillTabs
+      expect(find.text('Profil'), findsOneWidget);
       expect(find.text('Nastavení'), findsOneWidget);
+      expect(find.text('Můj profil'), findsOneWidget);
 
       // Section labels
       expect(find.text('Konfigurace umělé inteligence'), findsOneWidget);
@@ -177,6 +179,22 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(prefs.getBool('smart_bubbles_enabled'), isTrue);
+
+      await drainTimers(tester);
+    });
+
+    testWidgets('switches to Můj profil tab and displays profile and agents sections',
+        (WidgetTester tester) async {
+      configureViewport(tester);
+      await tester.pumpWidget(buildTestWidget());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Můj profil'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Můj profil a paměť tutora'), findsOneWidget);
+      expect(find.text('Multi-agentní systém'), findsOneWidget);
+      expect(find.text('Správa a přehled AI agentů'), findsOneWidget);
 
       await drainTimers(tester);
     });

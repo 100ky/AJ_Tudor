@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:aj_tudor/core/config/config_providers.dart';
+import 'package:aj_tudor/core/constants/gemini_models.dart';
 import 'package:aj_tudor/data/data_providers.dart';
 import 'package:aj_tudor/data/database/app_database.dart';
 import 'package:aj_tudor/data/repositories/session_repository.dart';
@@ -15,6 +16,11 @@ import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _MockGemini extends Mock implements GeminiBatchClient {}
+
+class _FakeApiKeyNotifier extends ApiKeyNotifier {
+  @override
+  String? build() => 'test-key';
+}
 
 void main() {
   late AppDatabase db;
@@ -119,6 +125,58 @@ void main() {
 
     expect(prefs.getBool(TopicHistoryBackfill.doneKey), isNull);
     expect(await TopicHistoryRepository(db).isEmpty(), isTrue);
+  });
+
+  test('after a failure the backfill pauses instead of retrying on every topic request', () async {
+    // 24. 11. při přetížení Gemini čekalo na neúspěšné doplnění každé klepnutí na „Náhodné téma“
+    await lesson('Grilování na zahradě');
+    var now = DateTime(2026, 11, 24, 19, 41);
+    final clockContainer = ProviderContainer(overrides: [
+      databaseProvider.overrideWithValue(db),
+      sharedPreferencesProvider.overrideWithValue(prefs),
+      geminiTopicBackfillClientProvider.overrideWithValue(gemini),
+      topicHistoryBackfillProvider.overrideWith((ref) => TopicHistoryBackfill(ref, clock: () => now)),
+    ]);
+    addTearDown(clockContainer.dispose);
+    when(() => gemini.sendMessage(any(),
+        systemPrompt: any(named: 'systemPrompt'),
+        responseSchema: any(named: 'responseSchema'))).thenThrow(const GeminiOverloadedException('503'));
+    final backfill = clockContainer.read(topicHistoryBackfillProvider);
+
+    await backfill.ensure();
+    now = now.add(const Duration(minutes: 5));
+    await backfill.ensure();
+    verify(() => gemini.sendMessage(any(),
+        systemPrompt: any(named: 'systemPrompt'), responseSchema: any(named: 'responseSchema'))).called(1);
+
+    now = now.add(TopicHistoryBackfill.retryPause);
+    await backfill.ensure();
+    verify(() => gemini.sendMessage(any(),
+        systemPrompt: any(named: 'systemPrompt'), responseSchema: any(named: 'responseSchema'))).called(1);
+  });
+
+  test('without network the backfill is tried again on the next request', () async {
+    await lesson('Grilování na zahradě');
+    when(() => gemini.sendMessage(any(),
+        systemPrompt: any(named: 'systemPrompt'),
+        responseSchema: any(named: 'responseSchema'))).thenThrow(const GeminiNetworkException());
+    final backfill = container.read(topicHistoryBackfillProvider);
+
+    await backfill.ensure();
+    await backfill.ensure();
+
+    verify(() => gemini.sendMessage(any(),
+        systemPrompt: any(named: 'systemPrompt'), responseSchema: any(named: 'responseSchema'))).called(2);
+  });
+
+  test('the backfill runs only on flash-lite and leaves 3.8 / 3.6 Flash to the lesson analysis', () {
+    // 24. 11. začal zápis na 3.6 Flash (naposledy funkční model) a na rozbor lekce 39 nezbyl limit
+    final keyContainer = ProviderContainer(overrides: [apiKeyProvider.overrideWith(_FakeApiKeyNotifier.new)]);
+    addTearDown(keyContainer.dispose);
+
+    final client = keyContainer.read(geminiTopicBackfillClientProvider)!;
+
+    expect({client.primaryModelName, ...?client.fallbackModels}, {GeminiModels.flashLite3_5, GeminiModels.flashLite3_1});
   });
 
   test('backfill with zero saved topics does not mark doneKey so it retries next time', () async {

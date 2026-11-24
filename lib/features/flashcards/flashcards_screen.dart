@@ -16,6 +16,8 @@ import 'card_front_resolver.dart';
 import 'flashcards_controller.dart';
 import 'review_session.dart';
 import 'typed_answer.dart';
+import '../skeleton/navigation_provider.dart';
+import 'widgets/all_flashcards_sheet.dart';
 import 'widgets/answer_input_bar.dart';
 import 'widgets/deck_status_views.dart';
 import 'widgets/flashcard_back.dart';
@@ -57,6 +59,7 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
   // Písemná odpověď nebo „Nevím“ místo mluvené odpovědi
   TypedAnswer? _typedAnswer;
   bool _gaveUp = false;
+  bool _showFlipHint = false;
 
   /// Student se pokusil odpovědět; teprve pak jde kartičku otočit a ohodnotit.
   bool get _hasAnswered => _lastPronunciation != null || _typedAnswer != null || _gaveUp;
@@ -115,7 +118,11 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
 
   void _flipCard() {
     // Na řešení se nejde podívat bez pokusu o odpověď
-    if (!_flipController.isCompleted && !_hasAnswered) return;
+    if (!_flipController.isCompleted && !_hasAnswered) {
+      HapticFeedback.lightImpact();
+      setState(() => _showFlipHint = true);
+      return;
+    }
     HapticFeedback.selectionClick();
     if (_flipController.isCompleted) {
       _flipController.reverse();
@@ -135,6 +142,7 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
     _lastPronunciation = null;
     _typedAnswer = null;
     _gaveUp = false;
+    _showFlipHint = false;
     _recorder.clear();
     _isRecording = false;
     _isEvaluatingSpeech = false;
@@ -294,8 +302,8 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
 
         if (result != null) {
           HapticFeedback.heavyImpact();
-          // Automaticky po 1.5 sekundy otočíme kartičku s 3D animací, aby student viděl správné řešení a poslech
-          Future.delayed(const Duration(milliseconds: 1500), () {
+          // Automaticky po 1.8 sekundy otočíme kartičku s 3D animací, aby student viděl správné řešení a poslech
+          Future.delayed(const Duration(milliseconds: 1800), () {
             if (mounted && !_isBackVisible) {
               _flipCard();
             }
@@ -445,6 +453,8 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
                 hasCards: stats.totalCards > 0,
                 isGenerating: _isGenerating,
                 onGenerateFromErrors: _generateFromErrors,
+                onGoToCall: () => ref.read(mainNavigationIndexProvider.notifier).setIndex(0),
+                onBrowseAll: () => AllFlashcardsSheet.show(context),
               );
             }
 
@@ -457,6 +467,8 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
                 isGenerating: _isGenerating,
                 onPracticeMore: () => setState(() => _session = ReviewSession(dueCards)),
                 onGenerateFromErrors: _generateFromErrors,
+                onGoToCall: () => ref.read(mainNavigationIndexProvider.notifier).setIndex(0),
+                onBrowseAll: () => AllFlashcardsSheet.show(context),
               );
             }
 
@@ -479,6 +491,7 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
             currentIndex: session.index,
             totalCards: session.total,
             masteredCount: session.masteredCount,
+            onBrowseAll: () => AllFlashcardsSheet.show(context),
           ),
 
           const SizedBox(height: 8),
@@ -573,6 +586,7 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
       isEvaluatingSpeech: _isEvaluatingSpeech,
       isRecording: _isRecording,
       recordingVolume: _recordingVolume,
+      showFlipHint: _showFlipHint,
       onStartRecording: _startRecording,
       onStopRecording: () => _stopRecording(card),
     );

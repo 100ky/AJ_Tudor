@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/app_theme.dart';
 import '../../../../core/widgets/glass_container.dart';
 
@@ -18,19 +17,12 @@ class DrillInputBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = AppTheme.isDark(context);
-
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xE6100C22) : const Color(0xE6FFFFFF),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+      decoration: const BoxDecoration(
+        color: AppTheme.navBar,
         border: Border(
-          top: BorderSide(
-            color: isDark
-                ? Colors.white.withValues(alpha: 0.12)
-                : Colors.white.withValues(alpha: 0.8),
-            width: 0.8,
-          ),
+          top: BorderSide(color: AppTheme.hairline, width: 1),
         ),
       ),
       child: Row(
@@ -38,14 +30,14 @@ class DrillInputBar extends StatelessWidget {
           Expanded(
             child: TextField(
               controller: controller,
-              style: GoogleFonts.hankenGrotesk(
-                color: AppTheme.textColor(context),
+              style: AppTheme.font(
+                color: AppTheme.textPrimary,
                 fontSize: 15,
               ),
               decoration: InputDecoration(
                 hintText: 'Napiš překlad nebo se zeptej na gramatiku...',
-                hintStyle: GoogleFonts.hankenGrotesk(
-                  color: AppTheme.mutedTextColor(context),
+                hintStyle: AppTheme.font(
+                  color: AppTheme.textTertiary,
                   fontSize: 14,
                 ),
               ),
@@ -53,22 +45,17 @@ class DrillInputBar extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          GestureDetector(
-            onTap: isLoading ? null : onSend,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: isLoading ? AppTheme.surfaceRaised : AppTheme.textPrimary,
-              ),
-              child: const Icon(
-                Icons.arrow_upward_rounded,
-                color: AppTheme.background,
-                size: 20,
-              ),
+          IconButton.filled(
+            onPressed: isLoading ? null : onSend,
+            tooltip: 'Odeslat',
+            style: IconButton.styleFrom(
+              backgroundColor: AppTheme.textPrimary,
+              foregroundColor: AppTheme.background,
+              disabledBackgroundColor: AppTheme.surfaceRaised,
+              minimumSize: const Size(46, 46),
+              shape: const CircleBorder(),
             ),
+            icon: const Icon(Icons.arrow_upward_rounded, size: 20),
           ),
         ],
       ),
@@ -94,16 +81,15 @@ class DrillThinkingBubble extends StatelessWidget {
             bottomLeft: Radius.circular(20),
             bottomRight: Radius.circular(20),
           ),
-          shadows: AppTheme.glassShadowLight,
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              SizedBox(
+              const SizedBox(
                 width: 14,
                 height: 14,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: AppTheme.primary,
+                  color: AppTheme.textPrimary,
                 ),
               ),
               const SizedBox(width: 10),
@@ -111,9 +97,9 @@ class DrillThinkingBubble extends StatelessWidget {
               Flexible(
                 child: Text(
                   'Tutor vyhodnocuje a připravuje cvičení...',
-                  style: GoogleFonts.hankenGrotesk(
+                  style: AppTheme.font(
                     fontSize: 13,
-                    color: AppTheme.mutedTextColor(context),
+                    color: AppTheme.textSecondary,
                   ),
                 ),
               ),
