@@ -12,6 +12,7 @@ import '../flashcards/conversation_cards.dart';
 import '../prompt/system_prompt_builder.dart';
 import 'scenario_planner_agent.dart';
 import 'topic_preparation_agent.dart';
+import '../topics/lesson_topics.dart';
 
 /// Agent zodpovědný za správu dlouhodobé paměti a analýzu ukončených lekcí.
 /// 
@@ -323,6 +324,10 @@ class MemoryManagerAgent {
     if (data['newLearnedUserFacts'] != null && (data['newLearnedUserFacts'] as List).isNotEmpty) {
       analysisLines.writeln('🧑 Nové fakty o studentovi: ${(data['newLearnedUserFacts'] as List).join(', ')}');
     }
+    final topics = parseLessonTopics(data['topics']);
+    if (topics.isNotEmpty) {
+      analysisLines.writeln('🗂️ Témata: ${topics.map((t) => '${t.areaId}: ${t.title} (${t.startedBy})').join('; ')}');
+    }
     L.block('ANALYSIS', 'Výsledky Gemini analýzy (session $sessionId)', analysisLines.toString());
 
     // Výpis jednotlivých chyb s kartičkami
@@ -350,6 +355,12 @@ class MemoryManagerAgent {
       levelDetail: isKnownLevel && !isTooShort ? _levelDetail(data['levelDetail'], estimatedLevel!) : null,
       levelReason: isKnownLevel && !isTooShort ? data['levelReason']?.toString().trim() : null,
     );
+
+    // Evidence témat: z ní plánovač pozná, o čem se mluvilo a kdy (TopicPlanner)
+    final session = await sessionRepo.getSession(sessionId);
+    await _ref
+        .read(topicHistoryRepositoryProvider)
+        .replaceForSession(sessionId, session?.startedAt ?? DateTime.now(), topics);
 
     // --- ALGORITMUS ODNAUČOVÁNÍ (Memory Pruning) ---
     // Extrahujeme seznam chyb, které student přestal opakovat.

@@ -72,6 +72,10 @@ class SessionRepository {
     }
   }
 
+  /// Lekce podle ID, null když neexistuje.
+  Future<Session?> getSession(int sessionId) =>
+      (_db.select(_db.sessions)..where((t) => t.id.equals(sessionId))).getSingleOrNull();
+
   /// Načte všechny textové záznamy (transkripty) pro konkrétní lekci.
   Future<List<Transcript>> getTranscripts(int sessionId) async {
     return await (_db.select(_db.transcripts)
@@ -295,6 +299,8 @@ class SessionRepository {
         await (_db.delete(_db.transcripts)..where((t) => t.sessionId.equals(sessionId))).go();
         // Smazání logů chyb
         await (_db.delete(_db.errorLogs)..where((t) => t.sessionId.equals(sessionId))).go();
+        // Smazání témat lekce z evidence témat
+        await (_db.delete(_db.topicHistory)..where((t) => t.sessionId.equals(sessionId))).go();
         // Smazání samotné session
         await (_db.delete(_db.sessions)..where((t) => t.id.equals(sessionId))).go();
 

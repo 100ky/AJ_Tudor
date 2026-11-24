@@ -5,28 +5,40 @@ abstract final class LiveTutorPrompts {
   static const String _casualGreeting =
       " Start with a casual and warm greeting as a friend (do NOT introduce yourself, say your name or where you are from). Share a small, natural detail about your day or mood (following your system instructions example) and ask an open question on a fresh, everyday or unexpected topic to kick off the chat (do NOT ask about the student's work, IT projects, grilling, garden, sailing, or TV series from their profile).";
 
+  /// Pozdrav s otázkou z oblastí, které nabídl plánovač témat (TopicPlanner).
+  static String _casualGreetingFrom(List<String> areas) =>
+      " Start with a casual and warm greeting as a friend (do NOT introduce yourself, say your name or where you are from). "
+      "Share a small, natural detail about your day or mood (following your system instructions example) and ask one open question "
+      "on a fresh topic from one of these areas (Czech names): ${areas.join(', ')}.";
+
   /// Skrytá úvodní zpráva, kterou tutor po připojení zahájí konverzaci.
   ///
   /// Podle režimu: volný hovor, role-play scénář, připravené téma
   /// ([preparedOpener]), navázání na minulou lekci ([briefing]), nebo pozdrav.
+  /// [areas] jsou oblasti témat od plánovače: bez připraveného tématu se otázka vybere z nich.
   static String opening({
     String? scenarioContext,
     String? preparedOpener,
     String? briefing,
     bool lesson = false,
+    List<String> areas = const [],
   }) {
     if (lesson) return lessonOpening;
+    final greeting = areas.isEmpty ? _casualGreeting : _casualGreetingFrom(areas);
     var prompt = "Hello! Please greet me and start the conversation according to your instructions.";
     if (scenarioContext == '__free_talk__') {
-      prompt += _casualGreeting;
+      prompt += greeting;
     } else if (scenarioContext != null) {
       prompt += " Introduce the role-play scenario and immediately start playing your role.";
     } else if (preparedOpener != null && preparedOpener.isNotEmpty) {
       prompt += ' Open the conversation naturally and casually as AJ Tudor using this prepared hook/question: "$preparedOpener". Do NOT introduce yourself or ask generic questions about pets/hobbies.';
     } else if (briefing != null && briefing.isNotEmpty) {
-      prompt += " Refer briefly to our last lesson and follow up on the recommended topic or question.";
+      prompt += areas.isEmpty
+          ? " Refer briefly to our last lesson and follow up on the recommended topic or question."
+              " If that topic is my work, IT or programming, pick a fresh everyday topic instead."
+          : " Refer briefly to our last lesson, then open a topic from one of these areas (Czech names): ${areas.join(', ')}.";
     } else {
-      prompt += _casualGreeting;
+      prompt += greeting;
     }
     return prompt;
   }
@@ -108,13 +120,33 @@ abstract final class LiveTutorPrompts {
       "such as an intriguing 'what if' dilemma, travel & hotels, future technology, cultural curiosity, or an everyday life situation, "
       "and ask ONE clear open-ended question to invite the student to speak.";
 
+  /// Student klepl na „Změnit téma“: nové téma z oblastí, které nabídl plánovač témat.
+  ///
+  /// [resting] jsou nedávno probrané oblasti, ke kterým se tutor nemá vracet.
+  static String changeTopicToAreas(List<String> areas, {List<String> resting = const []}) =>
+      "CRITICAL INSTRUCTION: The student just tapped 'Next Topic' / 'Change Topic'. "
+      "Immediately abandon the previous discussion. "
+      "Naturally acknowledge changing the subject in English in one brief, friendly sentence "
+      "(for example: \"Sure, let's switch gears!\" or \"Alright, let's move on to something else!\"), "
+      "smoothly introduce a fresh, engaging topic from one of these areas (Czech names): ${areas.join(', ')}"
+      "${resting.isEmpty ? '' : ' (do not go back to: ${resting.join(', ')})'}, "
+      "and ask ONE clear open-ended question to invite the student to speak.";
+
   /// Změna tématu s nenápadným zapojením 1–2 dnešních kartiček mimo profil studenta.
-  static String changeTopicWithCards(List<ConversationCard> sampleCards) {
-    if (sampleCards.isEmpty) return changeTopicNow;
+  ///
+  /// S [areas] od plánovače témat se nové téma vybere z nich, jinak platí [changeTopicNow].
+  static String changeTopicWithCards(
+    List<ConversationCard> sampleCards, {
+    List<String> areas = const [],
+    List<String> resting = const [],
+  }) {
+    final base = areas.isEmpty ? changeTopicNow : changeTopicToAreas(areas, resting: resting);
+    if (sampleCards.isEmpty) return base;
     final hints = sampleCards.map((c) => '"${c.czech}" (target: "${c.english}")').join(', ');
     final forbiddenEn = sampleCards.map((c) => '"${c.english}"').join(', ');
-    return '$changeTopicNow '
+    return '$base '
         'If possible, steer the new random topic so the student has a natural opportunity to express one of these concepts: $hints. '
+        'Skip a concept that would only fit their work or IT. '
         'CRITICAL: Do NOT say the English expressions ($forbiddenEn) yourself in your question—let the student use them!';
   }
 
@@ -141,5 +173,12 @@ abstract final class LiveTutorPrompts {
       "protože se konverzace zacyklila. Přestaň klást otázky k dosavadnímu okruhu "
       "a plynule přejdi na zcela nové, neotřelé téma mimo ohraná fakta z profilu studenta "
       "(vyhni se práci v IT, grilování, zahradě, lodi i seriálům). Použij přirozený "
+      "oslí můstek. Neupozorňuj nahlas, že měníš téma na příkaz systému.";
+
+  /// Konverzace se zacyklila: nové téma z oblastí, které nabídl plánovač témat.
+  static String changeTopicSilentlyTo(List<String> areas) =>
+      "CRITICAL INSTRUCTION: Okamžitě opusti současné téma hovoru, "
+      "protože se konverzace zacyklila. Přestaň klást otázky k dosavadnímu okruhu "
+      "a plynule přejdi na nové téma z jedné z těchto oblastí: ${areas.join(', ')}. Použij přirozený "
       "oslí můstek. Neupozorňuj nahlas, že měníš téma na příkaz systému.";
 }

@@ -6,6 +6,7 @@ import '../../data/database/app_database.dart';
 import '../../core/utils/logger.dart';
 import '../prompt/system_prompt_builder.dart';
 import '../prompt/task_prompts.dart';
+import '../topics/topic_plan_loader.dart';
 
 /// Agent odpovědný za plánování a generování personalizovaných konverzačních scénářů.
 /// 
@@ -66,6 +67,8 @@ class ScenarioPlannerAgent {
         currentVocabulary: profile.vocabulary,
         targetLevel: profile.targetLevel,
         memoryBriefing: profile.memoryBriefing,
+        // Každý scénář z jiné oblasti, kterou plánovač témat nabízí (dřív vyšly tři IT scénáře)
+        plan: await loadTopicPlan(_ref),
       );
 
       // 3. Odeslání dotazu a generování pomocí Structured Outputs (JSON Schema)

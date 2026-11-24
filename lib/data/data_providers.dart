@@ -5,6 +5,7 @@ import 'repositories/flashcard_repository.dart';
 import 'repositories/profile_repository.dart';
 import 'repositories/scenario_repository.dart';
 import 'repositories/session_repository.dart';
+import 'repositories/topic_history_repository.dart';
 
 /// Poskytuje globální instanci databáze [AppDatabase].
 ///
@@ -35,6 +36,11 @@ final scenarioRepositoryProvider = Provider<ScenarioRepository>((ref) {
 /// Kartičky Smart Flashcards a jejich SRS opakování.
 final flashcardRepositoryProvider = Provider<FlashcardRepository>((ref) {
   return FlashcardRepository(ref.watch(databaseProvider));
+});
+
+/// Evidence témat probraných v lekcích (podklad pro plánovač témat).
+final topicHistoryRepositoryProvider = Provider<TopicHistoryRepository>((ref) {
+  return TopicHistoryRepository(ref.watch(databaseProvider));
 });
 
 /// Živý stream profilu studenta (paměť, fakta, slovní zásoba).

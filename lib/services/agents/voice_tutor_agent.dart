@@ -35,6 +35,9 @@ import 'voice_tutor/speech_activity_detector.dart';
 import 'voice_tutor/student_utterance.dart';
 import 'voice_tutor/tutor_text_analysis.dart';
 import 'voice_tutor/tutor_timers.dart';
+import '../topics/topic_catalog.dart';
+import '../topics/topic_plan_loader.dart';
+import '../topics/topic_planner.dart';
 
 
 /// Výčet stavů, ve kterých se může Voice Tutor nacházet.
@@ -244,6 +247,9 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
   String _targetLevelSnapshot = 'B1';
   String? _userFactsSnapshot;
   String? _recentTopicsSnapshot;
+
+  /// Oblasti témat pro tento hovor (plánovač témat podle evidence), prázdné v lekci a scénáři.
+  TopicPlan _topicPlan = TopicPlan.empty;
 
   // Dnešní kartičky, které může splnit tento hovor (null = nenačetly se, hovor běží bez nich)
   ConversationCards? _conversationCards;
@@ -490,6 +496,12 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       _targetLevelSnapshot = targetLevel;
       _userFactsSnapshot = userProfile?.userFacts;
       _recentTopicsSnapshot = userProfile?.topicPreferences;
+      // Plán témat jen pro pokec a téma z historie: lekce i scénář mají téma dané.
+      // Oblast připraveného tématu se nenabízí, o té se bude mluvit od začátku.
+      final preparedArea = state.scenarioContext == null ? _preparedTopicArea(userProfile?.preparedTopic) : null;
+      _topicPlan = state.lessonMode || (state.scenarioContext != null && state.scenarioContext != '__free_talk__')
+          ? TopicPlan.empty
+          : await loadTopicPlan(ref, exclude: {?preparedArea});
       final conversationCards = await _loadConversationCards();
       // Stop během čekání na DB už lekci uzavřel – hovor bez lekce by se neuložil ani nevyhodnotil
       if (_isStartCancelled(generation)) return;
@@ -533,6 +545,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
             : userProfile?.memoryBriefing,
         userFacts: userProfile?.userFacts,
         personalFact: personalFact,
+        plan: _topicPlan,
         lessonCards: state.lessonCards,
         grammarGoal: lessonGoal,
       );
@@ -631,6 +644,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         preparedOpener: preparedOpener,
         briefing: userProfile?.memoryBriefing,
         lesson: state.lessonCards.isNotEmpty,
+        areas: _topicPlan.offerLabels,
       );
       _openerDue = false;
       Future.delayed(const Duration(milliseconds: 1000), () {
@@ -657,6 +671,17 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     await stopSession('start se nepovedl');
     if (ref.mounted) {
       state = state.copyWith(status: TutorState.error, errorMessage: message);
+    }
+  }
+
+  /// Oblast připraveného tématu z jeho uloženého JSON (null u starších témat bez oblasti).
+  String? _preparedTopicArea(String? preparedTopicJson) {
+    if (preparedTopicJson == null || preparedTopicJson.isEmpty) return null;
+    try {
+      final data = jsonDecode(preparedTopicJson);
+      return data is Map ? TopicCatalog.byId(data['areaId']?.toString() ?? '')?.id : null;
+    } catch (_) {
+      return null;
     }
   }
 
@@ -1011,6 +1036,14 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         _isPaused) {
       return;
     }
+    // Delší přepis, než se do krátké repliky vejde, je výmysl. Kontroluje se až tady:
+    // ověření zrušené pokračující řečí přepisuje útržek ze začátku repliky, z něhož
+    // přepisovač vymýšlí celé věty („So I went to the park and pak jsem potkal my
+    // friend.“), a jeho varování v logu mátlo rozbor lekcí 36 a 38.
+    if (text != null && text.isNotEmpty && !SpeechTranscriptionService.fitsVoicedTime(text, pending.voicedMs)) {
+      L.w('Ověření krátké repliky: „$text“ se do ${pending.voicedMs} ms hlasu nevejde, beru to jako ruch.');
+      text = '';
+    }
     if (text != null && text.isEmpty) {
       _discardPendingUtterance('Krátký ruch bez řeči (${pending.voicedMs} ms), Tudorovi ho neposílám.');
       _trySendOpener();
@@ -1085,18 +1118,11 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
 
   /// Ověří, že je v krátké replice řeč studenta: prázdný text znamená ruch.
   ///
-  /// Přepisuje se bez otázky tutora a delší přepis, než se do krátké repliky vejde,
-  /// je výmysl. 9. 11. z 240 ms hlasu ženy telefonující vedle vznikla podle otázky
-  /// tutora věta „Eh, so, they were changing at the same time?“ a Tudor na ni odpověděl.
-  Future<String?> _verifyShortUtterance(StudentUtterance utterance) async {
-    final text = await _correctedTranscript(utterance, withContext: false);
-    if (text == null || text.isEmpty) return text;
-    if (!SpeechTranscriptionService.fitsVoicedTime(text, utterance.voicedMs)) {
-      L.w('Ověření krátké repliky: „$text“ se do ${utterance.voicedMs} ms hlasu nevejde, beru to jako ruch.');
-      return '';
-    }
-    return text;
-  }
+  /// Přepisuje se bez otázky tutora: 9. 11. z 240 ms hlasu ženy telefonující vedle
+  /// vznikla podle otázky tutora věta „Eh, so, they were changing at the same time?“
+  /// a Tudor na ni odpověděl. Délku přepisu kontroluje až [_finishShortUtterance].
+  Future<String?> _verifyShortUtterance(StudentUtterance utterance) =>
+      _correctedTranscript(utterance, withContext: false);
 
   /// Ukáže v bublině repliky nejlepší známý přepis. Když bublina ještě není
   /// (živý přepis nepřišel vůbec), vloží ji před odpověď tutora.
@@ -1388,6 +1414,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         userFacts: _userFactsSnapshot,
         recentTopics: _recentTopicsSnapshot,
         cards: _conversationCards?.directorPool() ?? const [],
+        topicPlan: _topicPlan,
         onWhisperReady: (whisper, card) {
           // Rada se předá až po dalším tahu tutora. Když mezitím student promluvil
           // víckrát, hovor je jinde (lekce 19: rada „přejdi na narozeniny“ dorazila
@@ -2014,14 +2041,23 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
 
       // 6. Odešleme systémovou instrukci s turnComplete: true pro okamžité převzetí slova modelem
       injectMidSessionGuidance(
-        LiveTutorPrompts.changeTopicWithCards(sampleCards),
+        LiveTutorPrompts.changeTopicWithCards(
+          sampleCards,
+          areas: _topicPlan.offerLabels,
+          resting: _topicPlan.restingLabels,
+        ),
         turnComplete: true,
       );
     } else {
       // Pasivní heuristická změna při detekci stagnace v pozadí (přepne se v příštím tahu studenta)
       _pendingGuidance.clear();
       _director.onTopicChanged();
-      injectMidSessionGuidance(LiveTutorPrompts.changeTopicSilently, turnComplete: false);
+      injectMidSessionGuidance(
+        _topicPlan.offers.isEmpty
+            ? LiveTutorPrompts.changeTopicSilently
+            : LiveTutorPrompts.changeTopicSilentlyTo(_topicPlan.offerLabels),
+        turnComplete: false,
+      );
     }
   }
 

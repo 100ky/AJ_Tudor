@@ -12,6 +12,7 @@ import 'tables/error_logs.dart';
 import 'tables/scenarios.dart';
 import 'tables/flashcards.dart';
 import 'tables/session_issues.dart';
+import 'tables/topic_history.dart';
 
 part 'app_database.g.dart';
 
@@ -19,7 +20,7 @@ part 'app_database.g.dart';
 /// 
 /// Obsahuje definice všech tabulek a zajišťuje připojení k souboru databáze.
 /// Tabulky jsou importovány z oddělených souborů v adresáři 'tables/'.
-@DriftDatabase(tables: [Sessions, Transcripts, UserProfiles, ErrorLogs, Scenarios, Flashcards, SessionIssues])
+@DriftDatabase(tables: [Sessions, Transcripts, UserProfiles, ErrorLogs, Scenarios, Flashcards, SessionIssues, TopicHistory])
 class AppDatabase extends _$AppDatabase {
   /// Inicializuje databázi a otevírá připojení k souboru.
   AppDatabase() : super(_openConnection());
@@ -31,7 +32,7 @@ class AppDatabase extends _$AppDatabase {
 
   /// Verze schématu databáze. Při změně struktury tabulek je nutné ji zvýšit.
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   /// Definice strategie pro migraci databáze (např. při upgrade verze).
   @override

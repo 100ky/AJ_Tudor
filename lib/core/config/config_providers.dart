@@ -309,6 +309,28 @@ class SpeechPatienceNotifier extends Notifier<int> {
   }
 }
 
+/// Nejdelší odstup ve dnech, po kterém se aplikace vrátí k probrané oblasti témat
+/// (TopicPlanner): odstup roste 2, 4, 7… dní, ale nikdy nepřesáhne toto číslo.
+class TopicRestDaysNotifier extends Notifier<int> {
+  static const _key = 'topic_max_rest_days';
+  static const defaultDays = 7;
+  static const options = [3, 5, 7, 10, 14];
+
+  @override
+  int build() {
+    final prefs = ref.watch(sharedPreferencesProvider);
+    return prefs.getInt(_key) ?? defaultDays;
+  }
+
+  Future<void> save(int days) async {
+    await ref.read(sharedPreferencesProvider).setInt(_key, days);
+    state = days;
+  }
+}
+
+/// Nejdelší odstup návratu k probranému tématu (dny).
+final topicRestDaysProvider = NotifierProvider<TopicRestDaysNotifier, int>(TopicRestDaysNotifier.new);
+
 /// Globální provider pro trpělivost tutora (čas na rozmyšlenou v ms).
 final speechPatienceProvider =
     NotifierProvider<SpeechPatienceNotifier, int>(SpeechPatienceNotifier.new);

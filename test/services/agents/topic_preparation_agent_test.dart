@@ -10,6 +10,10 @@ import 'package:aj_tudor/data/data_providers.dart';
 import 'package:aj_tudor/services/gemini/gemini_providers.dart';
 import 'package:aj_tudor/services/agents/topic_preparation_agent.dart';
 import 'package:aj_tudor/services/gemini/gemini_batch_client.dart';
+import 'package:aj_tudor/core/config/config_providers.dart';
+import 'package:aj_tudor/data/repositories/topic_history_repository.dart';
+import 'package:aj_tudor/services/topics/topic_history_backfill.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class MockGeminiBatchClient extends Mock implements GeminiBatchClient {}
 
@@ -294,6 +298,54 @@ void main() {
 
       notifier.resetRefreshCounter();
       expect(notifier.refreshCount, 0);
+    });
+
+    test('prepareTopic offers areas from the topic history and remembers the chosen area', () async {
+      // Dřív generátor dostal jen profil a přepisy minulých lekcí a točil se kolem práce a IT
+      SharedPreferences.setMockInitialValues({TopicHistoryBackfill.doneKey: true});
+      final prefs = await SharedPreferences.getInstance();
+      final planContainer = ProviderContainer(
+        overrides: [
+          sessionRepositoryProvider.overrideWithValue(repo),
+          databaseProvider.overrideWithValue(db),
+          geminiBatchClientProvider.overrideWithValue(mockGemini),
+          sharedPreferencesProvider.overrideWithValue(prefs),
+        ],
+      );
+      addTearDown(planContainer.dispose);
+
+      await profileRepo.updateUserMemory('Notes');
+      final yesterday = (await repo.startNewSession()).getOrThrow();
+      await TopicHistoryRepository(db).replaceForSession(yesterday, DateTime.now().subtract(const Duration(hours: 20)), const [
+        LessonTopic(areaId: 'technologie', title: 'Stremio doplněk'),
+        LessonTopic(areaId: 'prace', title: 'Project Water'),
+      ]);
+
+      String? capturedPrompt;
+      when(() => mockGemini.sendMessage(
+        any(),
+        responseSchema: any(named: 'responseSchema'),
+        systemPrompt: any(named: 'systemPrompt'),
+      )).thenAnswer((invocation) async {
+        capturedPrompt = invocation.namedArguments[const Symbol('systemPrompt')] as String?;
+        return jsonEncode({
+          'topicTitle': 'Superschopnost na jeden den',
+          'openerEn': 'If you could have one superpower for a day, which one would you pick?',
+          'rationale': 'Nová oblast.',
+          'areaId': 'dilemata',
+        });
+      });
+
+      await planContainer.read(topicPreparationAgentProvider.notifier).prepareTopic(force: true);
+
+      expect(capturedPrompt, contains('VYBER TÉMA Z JEDNÉ Z TĚCHTO OBLASTÍ'));
+      expect(capturedPrompt, contains('NOVÁ oblast'));
+      expect(capturedPrompt, contains('NEDÁVNO PROBRANÉ OBLASTI (teď je nenabízej): '));
+      expect(capturedPrompt, contains('Technologie a internet'));
+      expect(capturedPrompt, isNot(contains('REÁLNÁ HISTORIE NEDÁVNÝCH ROZHOVORŮ')));
+      final topic = planContainer.read(topicPreparationAgentProvider).topic;
+      expect(topic?.areaId, 'dilemata');
+      expect(await profileRepo.getPreparedTopic(), contains('"areaId":"dilemata"'));
     });
   });
 }

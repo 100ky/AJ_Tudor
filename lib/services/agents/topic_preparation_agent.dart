@@ -10,6 +10,10 @@ import '../../data/repositories/session_repository.dart';
 import '../gemini/gemini_batch_client.dart';
 import '../../core/utils/logger.dart';
 import '../prompt/system_prompt_builder.dart';
+import '../topics/topic_catalog.dart';
+import '../topics/topic_history_backfill.dart';
+import '../topics/topic_plan_loader.dart';
+import '../topics/topic_planner.dart';
 
 /// Reprezentuje připravené téma pro hlasovou konverzaci.
 class PreparedTopic {
@@ -20,6 +24,9 @@ class PreparedTopic {
   final bool isRandomTopic;
   final List<String> targetWordsCz;
 
+  /// Oblast z katalogu témat, ze které téma je (null u starších témat a divoké karty bez oblasti).
+  final String? areaId;
+
   PreparedTopic({
     required this.title,
     required this.openerEn,
@@ -27,6 +34,7 @@ class PreparedTopic {
     required this.preparedAt,
     this.isRandomTopic = false,
     this.targetWordsCz = const [],
+    this.areaId,
   });
 
   Map<String, dynamic> toJson() => {
@@ -36,6 +44,7 @@ class PreparedTopic {
         'preparedAt': preparedAt.toIso8601String(),
         'isRandomTopic': isRandomTopic,
         if (targetWordsCz.isNotEmpty) 'targetWordsCz': targetWordsCz,
+        if (areaId != null) 'areaId': areaId,
       };
 
   factory PreparedTopic.fromJson(Map<String, dynamic> json) => PreparedTopic(
@@ -51,6 +60,7 @@ class PreparedTopic {
                 .where((s) => s.isNotEmpty)
                 .toList() ??
             const [],
+        areaId: TopicCatalog.byId(json['areaId']?.toString() ?? '')?.id,
       );
 }
 
@@ -152,6 +162,9 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
       return;
     }
 
+    // Evidence témat ze starších lekcí (jednou, dokud je prázdná)
+    await ref.read(topicHistoryBackfillProvider).ensure();
+
     // Pokud nevynucujeme obnovu, zkontrolujeme existenci a čerstvost tématu
     if (!force && state.topic != null) {
       final age = DateTime.now().difference(state.topic!.preparedAt);
@@ -234,7 +247,8 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
         return;
       }
 
-      // Standardní příprava tématu navazujícího na historii a profil studenta
+      // Standardní příprava tématu: oblasti nabídne plánovač podle evidence témat
+      final plan = await loadTopicPlan(ref);
       var currentProfile = profile;
       if (currentProfile?.userFacts == null ||
           currentProfile!.userFacts.isEmpty ||
@@ -273,11 +287,17 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
         memoryBriefing: currentProfile?.memoryBriefing,
         avoidTopics: avoidTopics,
         dueCardsSample: dueCardsSample,
+        plan: plan,
       );
 
-      final userMessage = avoidTopics.isNotEmpty
-          ? 'Navrhni 1 nové, svěží konverzační téma a úvodní háček (pokud se hodí, postav ho kolem dnešních kartiček). ZCELA SE VYHNI dříve navrženým tématům: ${avoidTopics.map((t) => '"$t"').join(', ')}.'
-          : 'Navrhni 1 smysluplné, svěží konverzační téma a úvodní háček, které se neopakuje a přirozeně zapojí dnešní kartičky nebo novou oblast ze života.';
+      final avoidText = avoidTopics.isEmpty
+          ? ''
+          : ' ZCELA SE VYHNI dříve navrženým tématům: ${avoidTopics.map((t) => '"$t"').join(', ')}.';
+      final userMessage = plan.offers.isNotEmpty
+          ? 'Navrhni 1 téma z jedné z nabízených oblastí a úvodní háček.$avoidText'
+          : (avoidTopics.isNotEmpty
+              ? 'Navrhni 1 nové, svěží konverzační téma a úvodní háček (pokud se hodí, postav ho kolem dnešních kartiček).$avoidText'
+              : 'Navrhni 1 smysluplné, svěží konverzační téma a úvodní háček, které se neopakuje a přirozeně zapojí dnešní kartičky nebo novou oblast ze života.');
 
       final result = await gemini.sendMessage(
         userMessage,
@@ -295,6 +315,7 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
         preparedAt: DateTime.now(),
         isRandomTopic: false,
         targetWordsCz: targetWordsCz,
+        areaId: _chosenArea(data, plan),
       );
 
       _recentlyProposedTitles.add(prepared.title);
@@ -316,6 +337,8 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
       topicLines.writeln('Opener: ${prepared.openerEn}');
       topicLines.writeln('Důvod: ${prepared.rationale}');
       topicLines.writeln('Typ: ${prepared.isRandomTopic ? 'Divoká karta (random)' : 'Navazující na historii'}');
+      final area = TopicCatalog.byId(prepared.areaId ?? '');
+      if (area != null) topicLines.writeln('Oblast: ${area.label}');
       L.block('TOPIC', 'Připravené konverzační téma (#$_refreshCounter)', topicLines.toString());
     } catch (e, stack) {
       L.e('Chyba při přípravě konverzačního tématu', e, stack);
@@ -378,6 +401,18 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
     } catch (_) {
       return const [];
     }
+  }
+
+  /// Oblast připraveného tématu: nabízená oblast, kterou model zvolil, jinak jakákoli
+  /// z katalogu; null, když model žádnou nevrátil.
+  String? _chosenArea(dynamic data, TopicPlan plan) {
+    if (data is! Map) return null;
+    final area = TopicCatalog.byId(data['areaId']?.toString() ?? '');
+    if (area == null) return null;
+    if (plan.offers.isNotEmpty && !plan.offers.any((o) => o.area.id == area.id)) {
+      L.w('TopicPreparationAgent: Téma je z oblasti ${area.label}, která nebyla v nabídce.');
+    }
+    return area.id;
   }
 
   List<String> _parseTargetWords(dynamic data) {

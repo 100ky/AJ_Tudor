@@ -32,7 +32,7 @@ lib/
 ├── data/                  # Datová vrstva (Drift ORM, SQLite)
 │   ├── database/          # Schéma Drift (AppDatabase, tabulky)
 │   ├── models/            # Datové modely a SRS plánovač opakování kartiček
-│   ├── repositories/      # Repozitáře: lekce, profil studenta, scénáře, kartičky
+│   ├── repositories/      # Repozitáře: lekce, profil studenta, scénáře, kartičky, evidence témat
 │   └── data_providers.dart  # Providery databáze, repozitářů a datových streamů
 ├── features/              # Obrazovky dle domény: obrazovka skládá layout, části jsou ve widgets/, akce v *_controller.dart
 │   ├── agents/            # Přehled agentů
@@ -50,7 +50,8 @@ lib/
     ├── gemini/            # Gemini Live (WebSocket), společné REST jádro a služby (batch, TTS, výslovnost, překlad)
     ├── notifications/     # Lokální připomínky
     ├── prompt/            # Všechny prompty: SystemPromptBuilder (agenti), LiveTutorPrompts (pokyny během hovoru), TaskPrompts (krátké úlohy)
-    └── system/            # Wakelock, záloha databáze
+    ├── system/            # Wakelock, záloha databáze
+    └── topics/            # Evidence témat: katalog oblastí (TopicCatalog), plánovač s odstupy (TopicPlanner), zpětné doplnění ze souhrnů
 ```
 
 ### Pravidla struktury
@@ -206,6 +207,17 @@ Automatické testy nepokryjí mikrofon, přehrávání zvuku ani skutečné vol�
 - [ ] Reset paměti, jen pokud vám nevadí přijít o to, co si Tudor pamatuje
 
 ---
+
+## 🛠️ Úpravy po lekcích 36–38 (21. 11. 2026)
+
+Úpravy vzešly ze sledování lekcí 36 až 38 naživo a z rozboru všech lekcí v databázi. Testů je 617.
+
+- **Build:** `flutter_local_notifications` 23 vyžaduje compileSdk 37 (`androidx.core` 1.19). Aplikace i pluginy (vynucení v `android/build.gradle.kts`) kompilují proti 37, AGP zůstal na 9.1.0.
+- **Chat po hovoru:** po ukončení hovoru zůstával chat bez ovládání a výběr tématu vrátil jen restart aplikace. `stopSession` teď zprávy maže, přepis zůstává v historii.
+- **Skákání mezi tématy (lekce 36):** režisér radil změnu tématu, i když ji sám hlásil jako zbytečnou, rada z dřívějška přebila nové téma studenta a zacyklení „repeat your answer“ při smrkání spustilo vynucenou změnu tématu i detekci frustrace. Režisér teď s `needsPivot=false` rozvíjí aktuální téma, rada má podmínku „jen když ještě sedí“, opakovanou žádost o zopakování řeší pokyn `breakRepairLoop` (téma se nemění) a po zásahu se nuluje počítadlo krátkých odpovědí. Pokyn při frustraci zjednoduší otázku ke stejnému tématu.
+- **Ověření krátké repliky:** varování „se do N ms hlasu nevejde“ se zapisovalo i u ověření zrušeného pokračující řečí. Kontrola je teď až v `_finishShortUtterance`. Přepisovač si z útržků kolem 0,2–0,5 s vymýšlí celé česko-anglické věty, pojistka je zahodí (viz *Otevřené body*).
+- **Hovory se točily kolem práce a IT:** v 22 z 34 lekcí otevřel práci nebo IT tutor, student jen ve 3. Rozbor po lekci zapisoval do paměti „zaměř se výhradně na IT a SaaS projekt“, tutor měl navázat na doporučené téma z paměti a plánovač scénářů na ně navazovat musel (tři scénáře o IT). Test na Gemini se současným profilem: starý prompt stočil k IT 5 ze 6 tahů tutora, nový žádný.
+- **Evidence témat (`topic_history`, schéma 5):** rozbor po lekci zařadí probraná témata do jedné z 22 oblastí katalogu (`TopicCatalog`). Starší lekce se při prvním spuštění doplní ze souhrnů jedním dotazem (`TopicHistoryBackfill`). `TopicPlanner` z evidence spočítá, které oblasti odpočívají (2, 4, 7 dní podle počtu lekcí, nejvýš podle nastavení *Návrat k probranému tématu*, výchozí týden), a nabídne tři oblasti, aspoň jednu novou. Nabídku dostává příprava tématu (místo přepisů a souhrnů minulých lekcí), plánovač scénářů (každý scénář z jiné oblasti), režisér při změně tématu, úvod volného pokecu, tlačítko Jiné téma i změna tématu při zacyklení. Kartičky se k tématu vybírají, téma se kvůli nim nemění. Briefing pro příště téma nedoporučuje.
 
 ## 🛠️ Úpravy po lekci 33 (17. 11. 2026)
 
@@ -375,7 +387,7 @@ Refaktoring proběhl ve větvi `refactor/structure` ve čtyřech fázích. Sché
    - `features/conversation/widgets/word_translation_sheet.dart` (756): překlad, uložení do kartiček a vrácení zpět přesunout ze stavu widgetu do controlleru. Metodu `build` (přes 400 řádků) rozdělit na menší widgety.
    - `services/gemini/gemini_live_client.dart` (737): zpracování zpráv ze serveru (`_handleIncomingMessage`, asi 190 řádků) přesunout do samostatného parseru. Klientovi zůstane připojení, reconnect a odesílání.
 4. **Nepoužívaná `features/history/history_screen.dart` (smazáno 17. 11.).** Historie lekcí je v záložce Pokrok. Testy seznamu lekcí ověřují `LessonHistoryTab` (`test/features/progress/lesson_history_tab_test.dart`).
-5. **Migrace databáze (zatím odloženo).** Opravy schématu a deduplikace kartiček v `beforeOpen` (`data/database/app_database.dart`) běží při každém startu aplikace. `schemaVersion` je od přidání tabulky `session_issues` 4. Doporučený postup: zvýšit ji na 5, opravy přesunout do `onUpgrade` a přidat test migrace na starší databázi. Změna se týká dat uložených v zařízení, proto zatím počkala.
+5. **Migrace databáze (zatím odloženo).** Opravy schématu a deduplikace kartiček v `beforeOpen` (`data/database/app_database.dart`) běží při každém startu aplikace. `schemaVersion` je od přidání tabulky `topic_history` (21. 11.) 5, nová tabulka vzniká v `onUpgrade` přes `createAll`. Doporučený postup: opravy z `beforeOpen` přesunout do `onUpgrade` a přidat test migrace na starší databázi. Změna se týká dat uložených v zařízení, proto zatím počkala.
 6. **Kartičky smazané chybnou deduplikací se samy nevrátí.** Jejich chyby mají dál příznak `in_flashcard`, takže z nich nové kartičky nevzniknou a detail lekce u nich ukazuje, že už v kartičkách jsou. Příznaky by šlo vynulovat u chyb, ke kterým žádná kartička neexistuje. Tím by se ale vrátily i chyby záměrně vyřazené z generování a chyby, jejichž kartičky byly smazané ručně, proto to zatím neproběhlo.
 7. **Zaseknutí modelu na serveru (příčina neznámá, aplikace se vzpamatuje).** Model po replice studenta přestane přepisovat i odpovídat, server jen dál potvrzuje začátek a konec řeči. V lekcích 17 a 18 to log zachytil celé. Aplikace serveru v tu chvíli neposílala nic neobvyklého, příčina je tedy nejspíš v Gemini Live. V lekci 17 se to stalo po třech minutách pauzy, v lekci 18 chvíli po přehrání výslovnosti (to jde přes REST, mimo Live spojení). Aplikace teď spojení obnoví a tutor odpoví (viz *Úpravy po ručním testu (1. 11. 2026)*). Kdyby se zaseknutí opakovalo často, stojí za to zkusit jiný Live model.
 8. **Tutor občas pochválí špatně zopakovanou opravu**, např. „I will call.“ místo „I will code.“ → „Exactly!“. Nejspíš studenta špatně slyší. Zatím neřešeno.
@@ -400,3 +412,7 @@ Refaktoring proběhl ve větvi `refactor/structure` ve čtyřech fázích. Sché
 18. **Detekce krátkých odpovědí prakticky nikdy nezasáhne (opraveno 17. 11.).** Podmínka ve `_flushUserTranscript` nyní kontroluje délku skutečné řeči (`utterance.voicedMs >= 3000`) místo `audioMs` (které zahrnovalo i 2 s ticha a úvod z `PreRollBuffer`). Zbývá ověřit chování v praxi na telefonu / testem promptu.
 19. **Jednoslovná kartička splněná jiným slovním druhem (hotovo 17. 11.).** Jednoslovné cíle v pokecu se nesplní jen doslovnou shodou, ale ověří je rozhodčí (`LessonCardJudge`) podle významu a slovního druhu.
 20. **Detekce opakování tutora zasahuje, i když se tutor opakovat má (hotovo 17. 11.).** `repeatedTurnSimilarity` nyní zasáhne, až když se promluva tutora podobá aspoň dvěma z posledních tří promluv v historii (`minMatches = 2`), tedy až když se tutor opakuje potřetí.
+21. **Opravný přepis si z krátkých útržků vymýšlí věty (lekce 36 a 38).** Z 0,2–0,5 s zvuku (začátek repliky, klepnutí na slovo) vznikly čtyřikrát za večer celé česko-anglické věty („I went to the park, ale nevím, jestli will be open.“). Pojistka `fitsVoicedTime` je zatím zahodila, kratší výmysl by ale prošel. Prompt přepisovače upravit a ověřit na nahrávkách, ne naslepo.
+22. **Útržek zvuku před pauzou zůstává rozpracovanou replikou.** Při klepnutí na slovo (překlad pozastaví hovor) mikrofon zachytí krátký zvuk a po obnovení se ověřuje jako replika (lekce 38). Zvážit, jestli při pauze nezahodit repliku kratší než 700 ms, kterou server ještě nedostal.
+23. **Evidence témat na telefonu.** Ověřit zpětné doplnění (řádek „Evidence témat doplněna“ v logu) a nabídku oblastí (řádek „Plán témat“) v pokecu, tématu z historie, scénářích a při Jiném tématu. Eval přípravy tématu s nabídkou oblastí zatím neproběhl, test na Gemini z 21. 11. ověřil jen prompty bez evidence (`tool/prompt_eval/private/topics_eval.dart`).
+24. **Režisér se ve scénáři zavrtal do drobností (lekce 38).** Scénář o králíkovi u veterináře skončil u výběru polic do sklepa. Zatím jeden případ, sledovat.

@@ -135,11 +135,32 @@ class ConversationSettingsSection extends ConsumerWidget {
               DropdownMenuItem(value: 2000, child: Text('Extra trpělivá (2 000 ms)')),
             ],
           ),
+          Divider(color: AppTheme.outlineLightColor(context)),
+          _DropdownSetting<int>(
+            icon: Icons.history_rounded,
+            color: AppTheme.primary,
+            title: 'Návrat k probranému tématu',
+            subtitle: 'Nejdéle po kolika dnech se tutor vrátí k oblasti, o které jste mluvili',
+            value: ref.watch(topicRestDaysProvider),
+            onChanged: (int? days) {
+              if (days != null) ref.read(topicRestDaysProvider.notifier).save(days);
+            },
+            items: [
+              for (final days in TopicRestDaysNotifier.options)
+                DropdownMenuItem(
+                  value: days,
+                  child: Text(days == TopicRestDaysNotifier.defaultDays ? '$days dní (výchozí)' : _daysLabel(days)),
+                ),
+            ],
+          ),
         ],
       ),
     );
   }
 }
+
+/// „3 dny“, „5 dní“.
+String _daysLabel(int days) => days >= 2 && days <= 4 ? '$days dny' : '$days dní';
 
 /// Nastavení s ikonou, popisem a rozbalovacím seznamem pod ním.
 class _DropdownSetting<T> extends StatelessWidget {

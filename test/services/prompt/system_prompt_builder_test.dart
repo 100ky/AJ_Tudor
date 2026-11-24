@@ -1,7 +1,12 @@
+import 'dart:math';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:aj_tudor/services/prompt/system_prompt_builder.dart';
 import 'package:aj_tudor/services/flashcards/conversation_cards.dart';
 import 'package:aj_tudor/data/models/error_category.dart';
+import 'package:aj_tudor/services/topics/topic_catalog.dart';
+import 'package:aj_tudor/services/topics/topic_planner.dart';
+import 'package:aj_tudor/data/models/topic_record.dart';
 
 void main() {
   group('SystemPromptBuilder - Tutor Prompt Tests', () {
@@ -90,6 +95,17 @@ void main() {
       expect(prompt.contains('že zrovna pije zelený čaj'), true);
     });
 
+    test('work and IT from the profile are not a topic to start, even when the memory recommends them', () {
+      // V 22 z 34 lekcí otevřel práci nebo IT jako první tutor, často už úvodní replikou
+      final prompt = SystemPromptBuilder.buildTutorPrompt(
+        userFacts: '["Pracuje jako vývojář aplikací v Power Platform"]',
+        memoryBriefing: 'Zaměř se výhradně na jeho kariéru, IT technologie a SaaS projekt.',
+      );
+      expect(prompt, contains('Nezačínej z nich nová témata (práce a IT, programování'));
+      expect(prompt, contains('když paměť doporučuje práci, IT nebo programování, téma nepoužij'));
+      expect(prompt, contains('Když doporučení míří k faktům z profilu (práce a IT'));
+    });
+
     test('errors from past lessons are marked as past so the tutor does not correct them now', () {
       final prompt = SystemPromptBuilder.buildTutorPrompt(
         targetLevel: 'B1',
@@ -142,6 +158,27 @@ void main() {
       expect(prompt, contains('opravoval drobnosti'));
     });
 
+    test('the lesson analysis does not steer the next lesson to work and IT', () {
+      // Lekce 37 a 38: briefing „zaměř se výhradně na kariéru, IT a SaaS projekt“ a kritika
+      // tutora za „zbytečné rozvíjení konverzace o králíkovi“ v role-play scénáři o králíkovi
+      final prompt = SystemPromptBuilder.buildAnalysisPrompt();
+      expect(prompt, contains('Téma na příště NEDOPORUČUJ: vybírá ho aplikace podle evidence témat'));
+      expect(prompt, contains('nikdy, ať se tutor soustředí „výhradně“'));
+      expect(prompt, contains('V `tutorFeedback` nedoporučuj témata hovoru'));
+      expect(prompt, contains('lekce s kartičkami'));
+    });
+
+    test('the lesson analysis sorts the topics of the lesson into catalog areas', () {
+      final prompt = SystemPromptBuilder.buildAnalysisPrompt();
+      expect(prompt, contains('KATALOG OBLASTÍ:'));
+      expect(prompt, contains('- cestovani: Cestování a dovolená'));
+      final schema = SystemPromptBuilder.getAnalysisResponseSchema();
+      expect(schema['required'], contains('topics'));
+      final topic = (schema['properties'] as Map)['topics']['items'] as Map;
+      expect(topic['properties']['area']['enum'], TopicCatalog.ids);
+      expect(topic['required'], ['area', 'title', 'startedBy']);
+    });
+
     test('getAnalysisResponseSchema provides valid schema structure with all required fields', () {
       final schema = SystemPromptBuilder.getAnalysisResponseSchema();
       expect(schema['type'], 'object');
@@ -188,6 +225,9 @@ void main() {
       expect(prompt.contains('BEZPEČNOSTNÍ STOP-BIAS'), true);
       expect(prompt.contains('děti'), true);
       expect(prompt.contains('školní jídelna'), true);
+      // 21. 11.: po briefingu „výhradně IT“ vyšly všechny tři scénáře o SaaS, Power Apps a digitalizaci
+      expect(prompt, contains('nejvýš v jednom ze tří scénářů'));
+      expect(prompt, isNot(contains('musí přímo navazovat na pokrok a kontext z minulých lekcí')));
     });
 
     test('getScenarioResponseSchema defines scenario array with valid properties', () {
@@ -302,6 +342,7 @@ void main() {
       expect(prompt, contains('Když se student loučí'));
       // Lekce 36: s needsPivot=false radil „steer towards weekend trips“ a hovor skákal mezi tématy
       expect(prompt, contains('Když je needsPivot=false, whisperToTutor zůstává u aktuálního tématu'));
+      expect(prompt, contains('Nevracej hovor k faktům z profilu (práce a IT, programování'));
 
       final schema = SystemPromptBuilder.getDirectorResponseSchema();
       expect(schema['type'], 'object');
@@ -401,6 +442,63 @@ void main() {
       expect(prompt, contains('VÝRAZY, NA KTERÉ SE STUDENT ZEPTAL'));
       expect(prompt, contains('Kartičky vzniknou jen z prvních šesti'));
       expect(prompt, contains('"at least", ne "least"'));
+    });
+  });
+
+  group('SystemPromptBuilder - topic plan from the topic history', () {
+    // Včera IT a práce, před 6 dny výlet: IT a práce odpočívají, cestování se vrací
+    final now = DateTime(2026, 11, 22, 18);
+    final plan = TopicPlanner.plan([
+      TopicRecord(sessionId: 1, areaId: 'technologie', title: 'Stremio doplněk', discussedAt: now.subtract(const Duration(days: 1))),
+      TopicRecord(sessionId: 1, areaId: 'prace', title: 'Project Water', discussedAt: now.subtract(const Duration(days: 1))),
+      TopicRecord(sessionId: 2, areaId: 'cestovani', title: 'Výlet do Toulovcových Maštalí', discussedAt: now.subtract(const Duration(days: 6))),
+    ], now: now, random: Random(7));
+
+    test('the topic preparation picks a topic from the offered areas instead of the old lessons', () {
+      final prompt = SystemPromptBuilder.buildTopicPreparationPrompt(
+        targetLevel: 'B1',
+        userFacts: '["Pracuje jako vývojář"]',
+        recentTranscriptsSnippet: 'Student: I work on Project Water.',
+        memoryBriefing: 'Zaměř se výhradně na IT.',
+        dueCardsSample: const ['těšit se na → look forward to'],
+        plan: plan,
+      );
+      expect(prompt, contains('VYBER TÉMA Z JEDNÉ Z TĚCHTO OBLASTÍ'));
+      expect(prompt, contains('Cestování a dovolená: k zopakování, naposledy před 6 dny (Výlet do Toulovcových Maštalí)'));
+      expect(prompt, contains('NOVÁ oblast'));
+      expect(prompt, contains('NEDÁVNO PROBRANÉ OBLASTI (teď je nenabízej): '));
+      expect(prompt, contains('Technologie a internet'));
+      expect(prompt, contains('Kvůli kartičce téma neměň'));
+      // Přepisy minulých lekcí a paměť do výběru tématu nepatří
+      expect(prompt, isNot(contains('I work on Project Water')));
+      expect(prompt, isNot(contains('výhradně na IT')));
+      expect(SystemPromptBuilder.getTopicPreparationResponseSchema()['properties']['areaId']['enum'], TopicCatalog.ids);
+    });
+
+    test('scenarios, the director and the tutor get the offered and the resting areas', () {
+      final scenarios = SystemPromptBuilder.buildScenarioPlannerPrompt(
+        userInterests: '[]',
+        recentErrors: 'doplnit minibar → refill the minibar',
+        currentVocabulary: '[]',
+        targetLevel: 'B1',
+        plan: plan,
+      );
+      expect(scenarios, contains('OBLASTI SCÉNÁŘŮ'));
+      expect(scenarios, contains('Každý scénář postav v jiné z těchto oblastí'));
+      expect(scenarios, contains('ze kterých teď scénář nedělej: '));
+
+      final director = SystemPromptBuilder.buildDirectorPrompt(targetLevel: 'B1', plan: plan);
+      expect(director, contains('KAM PŘI ZMĚNĚ TÉMATU (jen když needsPivot=true'));
+      expect(director, contains('Cestování a dovolená'));
+
+      final tutor = SystemPromptBuilder.buildTutorPrompt(plan: plan);
+      expect(tutor, contains('KAM S HOVOREM, KDYŽ TÉMA DOJDE'));
+      expect(tutor, contains('Nedávno probrané oblasti, které sám neotvírej'));
+      expect(tutor, contains('Práce a kariéra'));
+
+      // Bez plánu (lekce, scénář, nedostupná evidence) se nic nepřidá
+      expect(SystemPromptBuilder.buildTutorPrompt(), isNot(contains('KAM S HOVOREM')));
+      expect(SystemPromptBuilder.buildDirectorPrompt(targetLevel: 'B1'), isNot(contains('KAM PŘI ZMĚNĚ TÉMATU')));
     });
   });
 }

@@ -4215,6 +4215,417 @@ class SessionIssuesCompanion extends UpdateCompanion<SessionIssue> {
   }
 }
 
+class $TopicHistoryTable extends TopicHistory
+    with TableInfo<$TopicHistoryTable, TopicHistoryEntry> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $TopicHistoryTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _sessionIdMeta = const VerificationMeta(
+    'sessionId',
+  );
+  @override
+  late final GeneratedColumn<int> sessionId = GeneratedColumn<int>(
+    'session_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES sessions (id)',
+    ),
+  );
+  static const VerificationMeta _areaMeta = const VerificationMeta('area');
+  @override
+  late final GeneratedColumn<String> area = GeneratedColumn<String>(
+    'area',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _titleMeta = const VerificationMeta('title');
+  @override
+  late final GeneratedColumn<String> title = GeneratedColumn<String>(
+    'title',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _startedByMeta = const VerificationMeta(
+    'startedBy',
+  );
+  @override
+  late final GeneratedColumn<String> startedBy = GeneratedColumn<String>(
+    'started_by',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('unknown'),
+  );
+  static const VerificationMeta _discussedAtMeta = const VerificationMeta(
+    'discussedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> discussedAt = GeneratedColumn<DateTime>(
+    'discussed_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    sessionId,
+    area,
+    title,
+    startedBy,
+    discussedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'topic_history';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<TopicHistoryEntry> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('session_id')) {
+      context.handle(
+        _sessionIdMeta,
+        sessionId.isAcceptableOrUnknown(data['session_id']!, _sessionIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sessionIdMeta);
+    }
+    if (data.containsKey('area')) {
+      context.handle(
+        _areaMeta,
+        area.isAcceptableOrUnknown(data['area']!, _areaMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_areaMeta);
+    }
+    if (data.containsKey('title')) {
+      context.handle(
+        _titleMeta,
+        title.isAcceptableOrUnknown(data['title']!, _titleMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_titleMeta);
+    }
+    if (data.containsKey('started_by')) {
+      context.handle(
+        _startedByMeta,
+        startedBy.isAcceptableOrUnknown(data['started_by']!, _startedByMeta),
+      );
+    }
+    if (data.containsKey('discussed_at')) {
+      context.handle(
+        _discussedAtMeta,
+        discussedAt.isAcceptableOrUnknown(
+          data['discussed_at']!,
+          _discussedAtMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_discussedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  TopicHistoryEntry map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return TopicHistoryEntry(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      sessionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}session_id'],
+      )!,
+      area: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}area'],
+      )!,
+      title: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}title'],
+      )!,
+      startedBy: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}started_by'],
+      )!,
+      discussedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}discussed_at'],
+      )!,
+    );
+  }
+
+  @override
+  $TopicHistoryTable createAlias(String alias) {
+    return $TopicHistoryTable(attachedDatabase, alias);
+  }
+}
+
+class TopicHistoryEntry extends DataClass
+    implements Insertable<TopicHistoryEntry> {
+  final int id;
+  final int sessionId;
+
+  /// Klíč oblasti z katalogu (TopicCatalog), např. "cestovani".
+  final String area;
+
+  /// Konkrétní téma česky, např. „Výlet do Toulovcových Maštalí“.
+  final String title;
+
+  /// Kdo téma otevřel: student, tutor, nebo neznámo (zpětně doplněné lekce).
+  final String startedBy;
+
+  /// Začátek lekce, ve které se o tématu mluvilo.
+  final DateTime discussedAt;
+  const TopicHistoryEntry({
+    required this.id,
+    required this.sessionId,
+    required this.area,
+    required this.title,
+    required this.startedBy,
+    required this.discussedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['session_id'] = Variable<int>(sessionId);
+    map['area'] = Variable<String>(area);
+    map['title'] = Variable<String>(title);
+    map['started_by'] = Variable<String>(startedBy);
+    map['discussed_at'] = Variable<DateTime>(discussedAt);
+    return map;
+  }
+
+  TopicHistoryCompanion toCompanion(bool nullToAbsent) {
+    return TopicHistoryCompanion(
+      id: Value(id),
+      sessionId: Value(sessionId),
+      area: Value(area),
+      title: Value(title),
+      startedBy: Value(startedBy),
+      discussedAt: Value(discussedAt),
+    );
+  }
+
+  factory TopicHistoryEntry.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return TopicHistoryEntry(
+      id: serializer.fromJson<int>(json['id']),
+      sessionId: serializer.fromJson<int>(json['sessionId']),
+      area: serializer.fromJson<String>(json['area']),
+      title: serializer.fromJson<String>(json['title']),
+      startedBy: serializer.fromJson<String>(json['startedBy']),
+      discussedAt: serializer.fromJson<DateTime>(json['discussedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'sessionId': serializer.toJson<int>(sessionId),
+      'area': serializer.toJson<String>(area),
+      'title': serializer.toJson<String>(title),
+      'startedBy': serializer.toJson<String>(startedBy),
+      'discussedAt': serializer.toJson<DateTime>(discussedAt),
+    };
+  }
+
+  TopicHistoryEntry copyWith({
+    int? id,
+    int? sessionId,
+    String? area,
+    String? title,
+    String? startedBy,
+    DateTime? discussedAt,
+  }) => TopicHistoryEntry(
+    id: id ?? this.id,
+    sessionId: sessionId ?? this.sessionId,
+    area: area ?? this.area,
+    title: title ?? this.title,
+    startedBy: startedBy ?? this.startedBy,
+    discussedAt: discussedAt ?? this.discussedAt,
+  );
+  TopicHistoryEntry copyWithCompanion(TopicHistoryCompanion data) {
+    return TopicHistoryEntry(
+      id: data.id.present ? data.id.value : this.id,
+      sessionId: data.sessionId.present ? data.sessionId.value : this.sessionId,
+      area: data.area.present ? data.area.value : this.area,
+      title: data.title.present ? data.title.value : this.title,
+      startedBy: data.startedBy.present ? data.startedBy.value : this.startedBy,
+      discussedAt: data.discussedAt.present
+          ? data.discussedAt.value
+          : this.discussedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TopicHistoryEntry(')
+          ..write('id: $id, ')
+          ..write('sessionId: $sessionId, ')
+          ..write('area: $area, ')
+          ..write('title: $title, ')
+          ..write('startedBy: $startedBy, ')
+          ..write('discussedAt: $discussedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, sessionId, area, title, startedBy, discussedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is TopicHistoryEntry &&
+          other.id == this.id &&
+          other.sessionId == this.sessionId &&
+          other.area == this.area &&
+          other.title == this.title &&
+          other.startedBy == this.startedBy &&
+          other.discussedAt == this.discussedAt);
+}
+
+class TopicHistoryCompanion extends UpdateCompanion<TopicHistoryEntry> {
+  final Value<int> id;
+  final Value<int> sessionId;
+  final Value<String> area;
+  final Value<String> title;
+  final Value<String> startedBy;
+  final Value<DateTime> discussedAt;
+  const TopicHistoryCompanion({
+    this.id = const Value.absent(),
+    this.sessionId = const Value.absent(),
+    this.area = const Value.absent(),
+    this.title = const Value.absent(),
+    this.startedBy = const Value.absent(),
+    this.discussedAt = const Value.absent(),
+  });
+  TopicHistoryCompanion.insert({
+    this.id = const Value.absent(),
+    required int sessionId,
+    required String area,
+    required String title,
+    this.startedBy = const Value.absent(),
+    required DateTime discussedAt,
+  }) : sessionId = Value(sessionId),
+       area = Value(area),
+       title = Value(title),
+       discussedAt = Value(discussedAt);
+  static Insertable<TopicHistoryEntry> custom({
+    Expression<int>? id,
+    Expression<int>? sessionId,
+    Expression<String>? area,
+    Expression<String>? title,
+    Expression<String>? startedBy,
+    Expression<DateTime>? discussedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (sessionId != null) 'session_id': sessionId,
+      if (area != null) 'area': area,
+      if (title != null) 'title': title,
+      if (startedBy != null) 'started_by': startedBy,
+      if (discussedAt != null) 'discussed_at': discussedAt,
+    });
+  }
+
+  TopicHistoryCompanion copyWith({
+    Value<int>? id,
+    Value<int>? sessionId,
+    Value<String>? area,
+    Value<String>? title,
+    Value<String>? startedBy,
+    Value<DateTime>? discussedAt,
+  }) {
+    return TopicHistoryCompanion(
+      id: id ?? this.id,
+      sessionId: sessionId ?? this.sessionId,
+      area: area ?? this.area,
+      title: title ?? this.title,
+      startedBy: startedBy ?? this.startedBy,
+      discussedAt: discussedAt ?? this.discussedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (sessionId.present) {
+      map['session_id'] = Variable<int>(sessionId.value);
+    }
+    if (area.present) {
+      map['area'] = Variable<String>(area.value);
+    }
+    if (title.present) {
+      map['title'] = Variable<String>(title.value);
+    }
+    if (startedBy.present) {
+      map['started_by'] = Variable<String>(startedBy.value);
+    }
+    if (discussedAt.present) {
+      map['discussed_at'] = Variable<DateTime>(discussedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TopicHistoryCompanion(')
+          ..write('id: $id, ')
+          ..write('sessionId: $sessionId, ')
+          ..write('area: $area, ')
+          ..write('title: $title, ')
+          ..write('startedBy: $startedBy, ')
+          ..write('discussedAt: $discussedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -4225,6 +4636,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $ScenariosTable scenarios = $ScenariosTable(this);
   late final $FlashcardsTable flashcards = $FlashcardsTable(this);
   late final $SessionIssuesTable sessionIssues = $SessionIssuesTable(this);
+  late final $TopicHistoryTable topicHistory = $TopicHistoryTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -4237,6 +4649,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     scenarios,
     flashcards,
     sessionIssues,
+    topicHistory,
   ];
 }
 
@@ -4324,6 +4737,24 @@ final class $$SessionsTableReferences
     ).filter((f) => f.sessionId.id.sqlEquals($_itemColumn<int>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_sessionIssuesRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$TopicHistoryTable, List<TopicHistoryEntry>>
+  _topicHistoryRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.topicHistory,
+    aliasName: 'sessions__id__topic_history__session_id',
+  );
+
+  $$TopicHistoryTableProcessedTableManager get topicHistoryRefs {
+    final manager = $$TopicHistoryTableTableManager(
+      $_db,
+      $_db.topicHistory,
+    ).filter((f) => f.sessionId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_topicHistoryRefsTable($_db));
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -4465,6 +4896,31 @@ class $$SessionsTableFilterComposer
           }) => $$SessionIssuesTableFilterComposer(
             $db: $db,
             $table: $db.sessionIssues,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> topicHistoryRefs(
+    Expression<bool> Function($$TopicHistoryTableFilterComposer f) f,
+  ) {
+    final $$TopicHistoryTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.topicHistory,
+      getReferencedColumn: (t) => t.sessionId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TopicHistoryTableFilterComposer(
+            $db: $db,
+            $table: $db.topicHistory,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -4682,6 +5138,31 @@ class $$SessionsTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> topicHistoryRefs<T extends Object>(
+    Expression<T> Function($$TopicHistoryTableAnnotationComposer a) f,
+  ) {
+    final $$TopicHistoryTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.topicHistory,
+      getReferencedColumn: (t) => t.sessionId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TopicHistoryTableAnnotationComposer(
+            $db: $db,
+            $table: $db.topicHistory,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$SessionsTableTableManager
@@ -4701,6 +5182,7 @@ class $$SessionsTableTableManager
             bool transcriptsRefs,
             bool errorLogsRefs,
             bool sessionIssuesRefs,
+            bool topicHistoryRefs,
           })
         > {
   $$SessionsTableTableManager(_$AppDatabase db, $SessionsTable table)
@@ -4783,6 +5265,7 @@ class $$SessionsTableTableManager
                 transcriptsRefs = false,
                 errorLogsRefs = false,
                 sessionIssuesRefs = false,
+                topicHistoryRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
@@ -4790,6 +5273,7 @@ class $$SessionsTableTableManager
                     if (transcriptsRefs) db.transcripts,
                     if (errorLogsRefs) db.errorLogs,
                     if (sessionIssuesRefs) db.sessionIssues,
+                    if (topicHistoryRefs) db.topicHistory,
                   ],
                   addJoins: null,
                   getPrefetchedDataCallback: (items) async {
@@ -4854,6 +5338,26 @@ class $$SessionsTableTableManager
                           referencedColumn: 'session_id',
                           typedResults: items,
                         ),
+                      if (topicHistoryRefs)
+                        await $_getPrefetchedDataByColumns<
+                          Session,
+                          $SessionsTable,
+                          TopicHistoryEntry,
+                          $TopicHistoryTable
+                        >(
+                          currentTable: table,
+                          referencedTable: $$SessionsTableReferences
+                              ._topicHistoryRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$SessionsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).topicHistoryRefs,
+                          currentColumn: 'id',
+                          referencedColumn: 'session_id',
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -4878,6 +5382,7 @@ typedef $$SessionsTableProcessedTableManager =
         bool transcriptsRefs,
         bool errorLogsRefs,
         bool sessionIssuesRefs,
+        bool topicHistoryRefs,
       })
     >;
 typedef $$TranscriptsTableCreateCompanionBuilder =
@@ -7306,6 +7811,339 @@ typedef $$SessionIssuesTableProcessedTableManager =
       SessionIssue,
       PrefetchHooks Function({bool sessionId, bool transcriptId})
     >;
+typedef $$TopicHistoryTableCreateCompanionBuilder =
+    TopicHistoryCompanion Function({
+      Value<int> id,
+      required int sessionId,
+      required String area,
+      required String title,
+      Value<String> startedBy,
+      required DateTime discussedAt,
+    });
+typedef $$TopicHistoryTableUpdateCompanionBuilder =
+    TopicHistoryCompanion Function({
+      Value<int> id,
+      Value<int> sessionId,
+      Value<String> area,
+      Value<String> title,
+      Value<String> startedBy,
+      Value<DateTime> discussedAt,
+    });
+
+final class $$TopicHistoryTableReferences
+    extends
+        BaseReferences<_$AppDatabase, $TopicHistoryTable, TopicHistoryEntry> {
+  $$TopicHistoryTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $SessionsTable _sessionIdTable(_$AppDatabase db) =>
+      db.sessions.createAlias('topic_history__session_id__sessions__id');
+
+  $$SessionsTableProcessedTableManager get sessionId {
+    final $_column = $_itemColumn<int>('session_id')!;
+
+    final manager = $$SessionsTableTableManager(
+      $_db,
+      $_db.sessions,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_sessionIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$TopicHistoryTableFilterComposer
+    extends Composer<_$AppDatabase, $TopicHistoryTable> {
+  $$TopicHistoryTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get area => $composableBuilder(
+    column: $table.area,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get startedBy => $composableBuilder(
+    column: $table.startedBy,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get discussedAt => $composableBuilder(
+    column: $table.discussedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$SessionsTableFilterComposer get sessionId {
+    final $$SessionsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.sessionId,
+      referencedTable: $db.sessions,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SessionsTableFilterComposer(
+            $db: $db,
+            $table: $db.sessions,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$TopicHistoryTableOrderingComposer
+    extends Composer<_$AppDatabase, $TopicHistoryTable> {
+  $$TopicHistoryTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get area => $composableBuilder(
+    column: $table.area,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get startedBy => $composableBuilder(
+    column: $table.startedBy,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get discussedAt => $composableBuilder(
+    column: $table.discussedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$SessionsTableOrderingComposer get sessionId {
+    final $$SessionsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.sessionId,
+      referencedTable: $db.sessions,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SessionsTableOrderingComposer(
+            $db: $db,
+            $table: $db.sessions,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$TopicHistoryTableAnnotationComposer
+    extends Composer<_$AppDatabase, $TopicHistoryTable> {
+  $$TopicHistoryTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get area =>
+      $composableBuilder(column: $table.area, builder: (column) => column);
+
+  GeneratedColumn<String> get title =>
+      $composableBuilder(column: $table.title, builder: (column) => column);
+
+  GeneratedColumn<String> get startedBy =>
+      $composableBuilder(column: $table.startedBy, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get discussedAt => $composableBuilder(
+    column: $table.discussedAt,
+    builder: (column) => column,
+  );
+
+  $$SessionsTableAnnotationComposer get sessionId {
+    final $$SessionsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.sessionId,
+      referencedTable: $db.sessions,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SessionsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.sessions,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$TopicHistoryTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $TopicHistoryTable,
+          TopicHistoryEntry,
+          $$TopicHistoryTableFilterComposer,
+          $$TopicHistoryTableOrderingComposer,
+          $$TopicHistoryTableAnnotationComposer,
+          $$TopicHistoryTableCreateCompanionBuilder,
+          $$TopicHistoryTableUpdateCompanionBuilder,
+          (TopicHistoryEntry, $$TopicHistoryTableReferences),
+          TopicHistoryEntry,
+          PrefetchHooks Function({bool sessionId})
+        > {
+  $$TopicHistoryTableTableManager(_$AppDatabase db, $TopicHistoryTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$TopicHistoryTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$TopicHistoryTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$TopicHistoryTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int> sessionId = const Value.absent(),
+                Value<String> area = const Value.absent(),
+                Value<String> title = const Value.absent(),
+                Value<String> startedBy = const Value.absent(),
+                Value<DateTime> discussedAt = const Value.absent(),
+              }) => TopicHistoryCompanion(
+                id: id,
+                sessionId: sessionId,
+                area: area,
+                title: title,
+                startedBy: startedBy,
+                discussedAt: discussedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required int sessionId,
+                required String area,
+                required String title,
+                Value<String> startedBy = const Value.absent(),
+                required DateTime discussedAt,
+              }) => TopicHistoryCompanion.insert(
+                id: id,
+                sessionId: sessionId,
+                area: area,
+                title: title,
+                startedBy: startedBy,
+                discussedAt: discussedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$TopicHistoryTable, TopicHistoryEntry>(table),
+                  $$TopicHistoryTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({sessionId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (sessionId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.sessionId,
+                                referencedTable: $$TopicHistoryTableReferences
+                                    ._sessionIdTable(db),
+                                referencedColumn: $$TopicHistoryTableReferences
+                                    ._sessionIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$TopicHistoryTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $TopicHistoryTable,
+      TopicHistoryEntry,
+      $$TopicHistoryTableFilterComposer,
+      $$TopicHistoryTableOrderingComposer,
+      $$TopicHistoryTableAnnotationComposer,
+      $$TopicHistoryTableCreateCompanionBuilder,
+      $$TopicHistoryTableUpdateCompanionBuilder,
+      (TopicHistoryEntry, $$TopicHistoryTableReferences),
+      TopicHistoryEntry,
+      PrefetchHooks Function({bool sessionId})
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -7324,4 +8162,6 @@ class $AppDatabaseManager {
       $$FlashcardsTableTableManager(_db, _db.flashcards);
   $$SessionIssuesTableTableManager get sessionIssues =>
       $$SessionIssuesTableTableManager(_db, _db.sessionIssues);
+  $$TopicHistoryTableTableManager get topicHistory =>
+      $$TopicHistoryTableTableManager(_db, _db.topicHistory);
 }

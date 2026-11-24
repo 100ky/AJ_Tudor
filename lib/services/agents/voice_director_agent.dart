@@ -7,6 +7,7 @@ import '../gemini/gemini_json.dart';
 import '../gemini/gemini_providers.dart';
 
 import '../prompt/system_prompt_builder.dart';
+import '../topics/topic_planner.dart';
 
 /// Stav konverzačního režiséra na pozadí (Voice Director).
 class VoiceDirectorState {
@@ -203,6 +204,7 @@ class VoiceDirectorAgent extends Notifier<VoiceDirectorState> {
     required String? recentTopics,
     required void Function(String whisper, ConversationCard? card) onWhisperReady,
     List<ConversationCard> cards = const [],
+    TopicPlan? topicPlan,
   }) async {
     if (state.isAnalyzing) return;
 
@@ -261,6 +263,7 @@ class VoiceDirectorAgent extends Notifier<VoiceDirectorState> {
         recentTopics: recentTopics,
         rollingSummary: state.rollingSummary,
         cards: cards,
+        plan: topicPlan,
       );
 
       L.director('Spouštím asynchronní analýzu transkriptu přes Gemini 3.8 Flash...');

@@ -27,6 +27,9 @@ import 'package:aj_tudor/data/models/chat_message.dart';
 import 'package:aj_tudor/services/agents/voice_director_agent.dart';
 import 'package:aj_tudor/services/flashcards/conversation_cards.dart';
 import 'package:aj_tudor/services/flashcards/lesson_card_judge.dart';
+import 'package:aj_tudor/services/topics/topic_planner.dart';
+import 'package:aj_tudor/data/repositories/topic_history_repository.dart';
+import 'package:aj_tudor/data/models/topic_record.dart';
 
 class MockGeminiLiveClient extends Mock implements GeminiLiveClient {}
 class MockAudioSessionController extends Mock implements AudioSessionController {}
@@ -38,11 +41,13 @@ class MockWakelockService extends Mock implements WakelockService {}
 class MockSharedPreferences extends Mock implements SharedPreferences {}
 class MockSpeechTranscriber extends Mock implements SpeechTranscriptionService {}
 class MockFlutterSecureStorage extends Mock implements FlutterSecureStorage {}
+class MockTopicHistoryRepository extends Mock implements TopicHistoryRepository {}
 
 /// Režisér, který neanalyzuje, jen si schová callbacky pro předání rady.
 class _CapturingDirector extends VoiceDirectorAgent {
   final List<void Function(String whisper, ConversationCard? card)> whisperCallbacks = [];
   final List<List<ConversationCard>> cardPools = [];
+  final List<TopicPlan?> topicPlans = [];
 
   @override
   Future<void> onTurnCompleted({
@@ -53,9 +58,11 @@ class _CapturingDirector extends VoiceDirectorAgent {
     required String? recentTopics,
     required void Function(String whisper, ConversationCard? card) onWhisperReady,
     List<ConversationCard> cards = const [],
+    TopicPlan? topicPlan,
   }) async {
     whisperCallbacks.add(onWhisperReady);
     cardPools.add(cards);
+    topicPlans.add(topicPlan);
   }
 }
 
@@ -106,6 +113,7 @@ void main() {
   late MockSharedPreferences mockPrefs;
   late MockFlutterSecureStorage mockStorage;
   late MockSpeechTranscriber mockTranscriber;
+  late MockTopicHistoryRepository mockTopicHistory;
 
   setUpAll(() {
     registerFallbackValue(DateTime(2000));
@@ -122,6 +130,9 @@ void main() {
     mockPrefs = MockSharedPreferences();
     mockStorage = MockFlutterSecureStorage();
     mockTranscriber = MockSpeechTranscriber();
+    mockTopicHistory = MockTopicHistoryRepository();
+    // Evidence témat je prázdná: plánovač nabídne nové oblasti
+    when(() => mockTopicHistory.getAll()).thenAnswer((_) async => const []);
 
     // Setup default responses for mocks
     when(() => mockStorage.read(key: any(named: 'key'))).thenAnswer((_) async => null);
@@ -169,6 +180,7 @@ void main() {
         sharedPreferencesProvider.overrideWithValue(mockPrefs),
         secureStorageProvider.overrideWithValue(mockStorage),
         speechTranscriptionServiceProvider.overrideWithValue(mockTranscriber),
+        topicHistoryRepositoryProvider.overrideWithValue(mockTopicHistory),
       ];
     container = ProviderContainer(overrides: overrides);
   });
@@ -1699,6 +1711,9 @@ void main() {
         final agent = container.read(voiceTutorAgentProvider.notifier);
         await agent.startSession();
 
+        // Tichá změna tématu míří do oblastí od plánovače témat (evidence je tu prázdná)
+        bool isTopicChange(String t) => t.contains('Okamžitě opusti současné téma hovoru');
+
         Future<void> tutorSays(String line) async {
           tutorText!(line);
           turnComplete!();
@@ -1711,17 +1726,18 @@ void main() {
         await speakAndPause(tester);
         userTranscript!('Sorry, I did not hear you.');
         await tutorSays('I was asking what kind of grilling you enjoy on weekends?');
-        expect(sentContent.where((t) => t.contains(LiveTutorPrompts.changeTopicSilently)), isEmpty);
+        expect(sentContent.where(isTopicChange), isEmpty);
 
         // 2. zopakování (potřetí totéž) – vynutí se tichá změna tématu a historie se vyčistí
         await speakAndPause(tester);
         userTranscript!('I stayed at home.');
         await tutorSays('So what kind of grilling do you enjoy on weekends?');
-        expect(sentContent.where((t) => t.contains(LiveTutorPrompts.changeTopicSilently)), hasLength(1));
+        expect(sentContent.where(isTopicChange), hasLength(1));
+        expect(sentContent.firstWhere(isTopicChange), contains('z jedné z těchto oblastí'));
 
         // Po vyčištění historie další výskyt nespustí změnu tématu podruhé
         await tutorSays('What kind of grilling do you enjoy on weekends?');
-        expect(sentContent.where((t) => t.contains(LiveTutorPrompts.changeTopicSilently)), hasLength(1));
+        expect(sentContent.where(isTopicChange), hasLength(1));
 
         await agent.stopSession('test');
       });
@@ -1820,6 +1836,36 @@ void main() {
           whisperFromFirstTurn('Ask about the boat.', null);
           await exchange(tester, 'Bye, good night.', 'Good night!');
           expect(whisperSent('Ask about the boat.'), isFalse);
+
+          await agent.stopSession('test');
+        });
+
+        testWidgets('a free talk gets areas from the topic history and the director gets them too', (tester) async {
+          // Včera IT, před 6 dny výlet: IT odpočívá, cestování se může vrátit
+          final now = DateTime.now();
+          when(() => mockTopicHistory.getAll()).thenAnswer((_) async => [
+                TopicRecord(
+                    sessionId: 1, areaId: 'technologie', title: 'Stremio doplněk', discussedAt: now.subtract(const Duration(days: 1))),
+                TopicRecord(sessionId: 2, areaId: 'cestovani', title: 'Výlet', discussedAt: now.subtract(const Duration(days: 6))),
+              ]);
+          final agent = container.read(voiceTutorAgentProvider.notifier)..selectScenario(-1, '__free_talk__');
+          await agent.startSession();
+
+          final prompt = verify(() => mockClient.connect(
+                modelName: any(named: 'modelName'),
+                systemPrompt: captureAny(named: 'systemPrompt'),
+                voiceName: any(named: 'voiceName'),
+              )).captured.last as String;
+          expect(prompt, contains('KAM S HOVOREM, KDYŽ TÉMA DOJDE'));
+          expect(prompt, contains('které sám neotvírej (když o nich začne student, zůstaň u nich): Technologie a internet'));
+
+          await tester.pump(const Duration(seconds: 1));
+          final opener = verify(() => mockClient.sendText(captureAny())).captured.last as String;
+          expect(opener, contains('from one of these areas (Czech names): '));
+          expect(opener, isNot(contains('Technologie a internet')));
+
+          await exchange(tester, 'I like trains.', 'Trains are great! Where did you go last time?');
+          expect(director.topicPlans.last?.offers.map((o) => o.area.id), contains('cestovani'));
 
           await agent.stopSession('test');
         });

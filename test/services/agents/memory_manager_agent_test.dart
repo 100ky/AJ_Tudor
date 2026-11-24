@@ -10,6 +10,7 @@ import 'package:aj_tudor/data/database/app_database.dart';
 import 'package:aj_tudor/data/repositories/session_repository.dart';
 import 'package:aj_tudor/data/repositories/profile_repository.dart';
 import 'package:aj_tudor/data/repositories/flashcard_repository.dart';
+import 'package:aj_tudor/data/repositories/topic_history_repository.dart';
 import 'package:aj_tudor/data/data_providers.dart';
 import 'package:aj_tudor/services/gemini/gemini_providers.dart';
 import 'package:aj_tudor/services/agents/memory_manager_agent.dart';
@@ -207,6 +208,11 @@ void main() {
             "explanation": "Předpřítomný průběhový čas vyjadřující děj trvající až do současnosti.",
             "czechTranslation": "Pracuji jako softwarový inženýr již 5 let."
           }
+        ],
+        "topics": [
+          {"area": "prace", "title": "Práce softwarového inženýra", "startedBy": "tutor"},
+          {"area": "cestovani", "title": "Výlet vlakem do Brna", "startedBy": "student"},
+          {"area": "neznama", "title": "Oblast, která v katalogu není", "startedBy": "tutor"}
         ]
       });
 
@@ -218,6 +224,13 @@ void main() {
 
       final agent = container.read(memoryManagerAgentProvider);
       await agent.analyzeSession(s);
+
+      // 0. Témata lekce jsou v evidenci s časem začátku lekce (neznámá oblast se zahodí)
+      final topics = await TopicHistoryRepository(db).getAll();
+      expect(topics.map((t) => '${t.areaId}: ${t.title}'),
+          ['prace: Práce softwarového inženýra', 'cestovani: Výlet vlakem do Brna']);
+      final session = await repo.getSession(s);
+      expect(topics.first.discussedAt, session!.startedAt);
 
       // 1. Session summary & fluency updated
       final sessions = await repo.watchAllSessions().first;

@@ -33,6 +33,8 @@ void main() {
     test('without a prepared topic the tutor follows up on the last lesson', () {
       final prompt = LiveTutorPrompts.opening(preparedOpener: '', briefing: 'Past simple');
       expect(prompt, contains('Refer briefly to our last lesson'));
+      // Lekce 25 a 27 začínaly „Last time we talked about … at work“
+      expect(prompt, contains('If that topic is my work, IT or programming, pick a fresh everyday topic instead.'));
     });
 
     test('with nothing prepared the tutor greets casually', () {
@@ -98,5 +100,27 @@ void main() {
     expect(prompt, contains('"stěhovat se"'));
     expect(prompt, contains('"záloha"'));
     expect(prompt, contains('Do NOT say the English expressions ("move out", "deposit") yourself'));
+  });
+
+  test('with areas from the topic planner the tutor opens and changes topics within them', () {
+    const areas = ['Dilemata a hypotetické otázky', 'Zdraví a životní styl'];
+    // Volný pokec: otázka z nabídnutých oblastí místo seznamu zákazů
+    final freeTalk = LiveTutorPrompts.opening(scenarioContext: '__free_talk__', areas: areas);
+    expect(freeTalk, contains('from one of these areas (Czech names): Dilemata a hypotetické otázky, Zdraví a životní styl'));
+    expect(freeTalk, isNot(contains('do NOT ask about the student')));
+    // Bez připraveného tématu: navázat na minulou lekci a otevřít oblast z nabídky
+    final briefing = LiveTutorPrompts.opening(briefing: 'Past simple', areas: areas);
+    expect(briefing, contains('then open a topic from one of these areas'));
+    expect(briefing, isNot(contains('recommended topic')));
+
+    final change = LiveTutorPrompts.changeTopicWithCards(
+      const [],
+      areas: areas,
+      resting: const ['Technologie a internet'],
+    );
+    expect(change, contains('from one of these areas (Czech names): Dilemata a hypotetické otázky'));
+    expect(change, contains('(do not go back to: Technologie a internet)'));
+    expect(change, isNot(contains('Power Platform')));
+    expect(LiveTutorPrompts.changeTopicSilentlyTo(areas), contains('z jedné z těchto oblastí: Dilemata a hypotetické otázky'));
   });
 }
