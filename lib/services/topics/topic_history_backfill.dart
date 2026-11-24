@@ -39,7 +39,7 @@ class TopicHistoryBackfill {
         await prefs.setBool(doneKey, true);
         return;
       }
-      final gemini = _ref.read(geminiBatchClientProvider);
+      final gemini = _ref.read(geminiTopicBackfillClientProvider);
       if (gemini == null) return;
 
       final sessions = (await _ref.read(sessionRepositoryProvider).watchAllSessions().first)
@@ -49,7 +49,10 @@ class TopicHistoryBackfill {
           })
           .take(sessionLimit)
           .toList();
-      if (sessions.isEmpty) return;
+      if (sessions.isEmpty) {
+        await prefs.setBool(doneKey, true);
+        return;
+      }
 
       final dateFormat = DateFormat('d. M. yyyy');
       final lines = sessions.map((s) => '#${s.id} (${dateFormat.format(s.startedAt)}): ${s.topicSummary!.trim()}');
@@ -72,8 +75,12 @@ class TopicHistoryBackfill {
         await repo.replaceForSession(session.id, session.startedAt, topics);
         saved += topics.length;
       }
-      L.i('🗂️ Evidence témat doplněna: $saved témat z ${sessions.length} lekcí.');
-      await prefs.setBool(doneKey, true);
+      if (saved > 0) {
+        L.i('🗂️ Evidence témat doplněna: $saved témat z ${sessions.length} lekcí.');
+        await prefs.setBool(doneKey, true);
+      } else {
+        L.w('🗂️ Doplnění evidence témat vrátilo 0 témat, zkusím to příště znovu.');
+      }
     } catch (e) {
       // Zkusí se znovu při dalším spuštění, plánovač zatím bere evidenci, jaká je
       L.w('🗂️ Doplnění evidence témat se nepovedlo: $e');

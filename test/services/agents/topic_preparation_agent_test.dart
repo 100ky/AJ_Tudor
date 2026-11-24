@@ -347,6 +347,45 @@ void main() {
       expect(topic?.areaId, 'dilemata');
       expect(await profileRepo.getPreparedTopic(), contains('"areaId":"dilemata"'));
     });
+
+    test('consecutive forced refreshes exclude previously proposed areas', () async {
+      SharedPreferences.setMockInitialValues({TopicHistoryBackfill.doneKey: true});
+      final prefs = await SharedPreferences.getInstance();
+      final planContainer = ProviderContainer(
+        overrides: [
+          sessionRepositoryProvider.overrideWithValue(repo),
+          databaseProvider.overrideWithValue(db),
+          geminiBatchClientProvider.overrideWithValue(mockGemini),
+          sharedPreferencesProvider.overrideWithValue(prefs),
+        ],
+      );
+      addTearDown(planContainer.dispose);
+
+      await profileRepo.updateUserMemory('Notes');
+      final capturedPrompts = <String>[];
+      var call = 0;
+      when(() => mockGemini.sendMessage(
+        any(),
+        responseSchema: any(named: 'responseSchema'),
+        systemPrompt: any(named: 'systemPrompt'),
+      )).thenAnswer((invocation) async {
+        capturedPrompts.add(invocation.namedArguments[const Symbol('systemPrompt')] as String);
+        call++;
+        return jsonEncode({
+          'topicTitle': 'Téma $call',
+          'openerEn': 'Opener $call?',
+          'rationale': 'Důvod',
+          'areaId': call == 1 ? 'cestovani' : 'sport',
+        });
+      });
+
+      final notifier = planContainer.read(topicPreparationAgentProvider.notifier);
+      await notifier.prepareTopic(force: true);
+      await notifier.prepareTopic(force: true);
+
+      expect(capturedPrompts, hasLength(2));
+      expect(capturedPrompts[1], isNot(contains('Cestování a dovolená: NOVÁ oblast')));
+    });
   });
 }
 

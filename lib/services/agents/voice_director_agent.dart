@@ -86,6 +86,7 @@ class VoiceDirectorAgent extends Notifier<VoiceDirectorState> {
   DateTime? _lastAnalysisTime;
   Timer? _tipDismissTimer;
   int _analysisGeneration = 0;
+  final List<String> _recentWhispers = [];
 
   // Minimální odstup mezi analýzami (cooldown pro prevenci spamování API)
   static const Duration _minAnalysisCooldown = Duration(seconds: 40);
@@ -106,6 +107,7 @@ class VoiceDirectorAgent extends Notifier<VoiceDirectorState> {
     _analysisGeneration++;
     _tipDismissTimer?.cancel();
     _lastAnalysisTime = null;
+    _recentWhispers.clear();
     if (ref.mounted) {
       state = const VoiceDirectorState();
     }
@@ -123,6 +125,7 @@ class VoiceDirectorAgent extends Notifier<VoiceDirectorState> {
   void onTopicChanged({String? cardCueCz}) {
     _analysisGeneration++;
     _tipDismissTimer?.cancel();
+    _recentWhispers.clear();
     if (!ref.mounted) return;
     state = state.copyWith(
       isAnalyzing: false,
@@ -205,6 +208,7 @@ class VoiceDirectorAgent extends Notifier<VoiceDirectorState> {
     required void Function(String whisper, ConversationCard? card) onWhisperReady,
     List<ConversationCard> cards = const [],
     TopicPlan? topicPlan,
+    String? scenarioContext,
   }) async {
     if (state.isAnalyzing) return;
 
@@ -264,9 +268,11 @@ class VoiceDirectorAgent extends Notifier<VoiceDirectorState> {
         rollingSummary: state.rollingSummary,
         cards: cards,
         plan: topicPlan,
+        scenarioContext: scenarioContext,
+        recentWhispers: List<String>.unmodifiable(_recentWhispers),
       );
 
-      L.director('Spouštím asynchronní analýzu transkriptu přes Gemini 3.8 Flash...');
+      L.director('Spouštím asynchronní analýzu transkriptu (flash-lite)...');
 
 
       final rawResponse = await directorClient.sendMessage(
@@ -352,6 +358,8 @@ class VoiceDirectorAgent extends Notifier<VoiceDirectorState> {
         if (ref.mounted && state.repeatTarget != null) {
           L.d('VoiceDirector: Šepot zahazuji – tutor mezitím začal opravu a režisér ho nesmí přebít.');
         } else {
+          _recentWhispers.add(whisper);
+          if (_recentWhispers.length > 4) _recentWhispers.removeAt(0);
           onWhisperReady(whisper, card);
         }
       }

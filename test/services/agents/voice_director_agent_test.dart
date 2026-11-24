@@ -296,6 +296,92 @@ void main() {
       expect(whisperCalled, false);
       expect(container.read(voiceDirectorAgentProvider).isAnalyzing, false);
     });
+
+    test('passes recentWhispers and scenarioContext into prompt and clears whispers on topic change', () async {
+      final notifier = container.read(voiceDirectorAgentProvider.notifier);
+      final messages = [
+        ChatMessage('One', isUser: true),
+        ChatMessage('One reply', isUser: false),
+        ChatMessage('Two', isUser: true),
+        ChatMessage('Two reply', isUser: false),
+        ChatMessage('Three', isUser: true),
+        ChatMessage('Three reply', isUser: false),
+      ];
+
+      final capturedPrompts = <String>[];
+      var call = 0;
+      when(() => mockDirectorClient.sendMessage(
+            any(),
+            systemPrompt: any(named: 'systemPrompt'),
+            responseSchema: any(named: 'responseSchema'),
+          )).thenAnswer((invocation) async {
+        capturedPrompts.add(invocation.namedArguments[const Symbol('systemPrompt')] as String);
+        call++;
+        return jsonEncode({
+          'topicHealth': 2,
+          'needsPivot': false,
+          'whisperToTutor': 'Whisper $call',
+          'studentHint': '',
+          'newLearnedFacts': [],
+          'incrementalSummary': 'Turn $call.',
+          'flashcardId': 0,
+        });
+      });
+
+      await notifier.onTurnCompleted(
+        sessionId: 1,
+        messages: messages,
+        targetLevel: 'B1',
+        userFacts: null,
+        recentTopics: null,
+        scenarioContext: 'At the vet with Dobas.',
+        onWhisperReady: (_, _) {},
+      );
+
+      final moreMessages = [
+        ...messages,
+        ChatMessage('Four', isUser: true),
+        ChatMessage('Four reply', isUser: false),
+        ChatMessage('Five', isUser: true),
+        ChatMessage('Five reply', isUser: false),
+        ChatMessage('Six', isUser: true),
+        ChatMessage('Six reply', isUser: false),
+      ];
+      await notifier.onTurnCompleted(
+        sessionId: 1,
+        messages: moreMessages,
+        targetLevel: 'B1',
+        userFacts: null,
+        recentTopics: null,
+        scenarioContext: 'At the vet with Dobas.',
+        onWhisperReady: (_, _) {},
+      );
+
+      expect(capturedPrompts[0], contains('ROLE-PLAY SCÉNÁŘ'));
+      expect(capturedPrompts[0], contains('At the vet with Dobas.'));
+      expect(capturedPrompts[0], isNot(contains('TVÉ POSLEDNÍ RADY TUTOROVI')));
+      expect(capturedPrompts[1], contains('TVÉ POSLEDNÍ RADY TUTOROVI'));
+      expect(capturedPrompts[1], contains('Whisper 1'));
+
+      notifier.onTopicChanged();
+      await notifier.onTurnCompleted(
+        sessionId: 1,
+        messages: [
+          ...moreMessages,
+          ChatMessage('Seven', isUser: true),
+          ChatMessage('Seven reply', isUser: false),
+          ChatMessage('Eight', isUser: true),
+          ChatMessage('Eight reply', isUser: false),
+          ChatMessage('Nine', isUser: true),
+          ChatMessage('Nine reply', isUser: false),
+        ],
+        targetLevel: 'B1',
+        userFacts: null,
+        recentTopics: null,
+        onWhisperReady: (_, _) {},
+      );
+      expect(capturedPrompts[2], isNot(contains('Whisper 1')));
+    });
   });
 }
 

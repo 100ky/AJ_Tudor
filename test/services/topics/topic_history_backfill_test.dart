@@ -32,7 +32,7 @@ void main() {
     container = ProviderContainer(overrides: [
       databaseProvider.overrideWithValue(db),
       sharedPreferencesProvider.overrideWithValue(prefs),
-      geminiBatchClientProvider.overrideWithValue(gemini),
+      geminiTopicBackfillClientProvider.overrideWithValue(gemini),
     ]);
   });
 
@@ -119,5 +119,23 @@ void main() {
 
     expect(prefs.getBool(TopicHistoryBackfill.doneKey), isNull);
     expect(await TopicHistoryRepository(db).isEmpty(), isTrue);
+  });
+
+  test('backfill with zero saved topics does not mark doneKey so it retries next time', () async {
+    await lesson('Grilování na zahradě');
+    answer({'sessions': []});
+
+    await container.read(topicHistoryBackfillProvider).ensure();
+
+    expect(prefs.getBool(TopicHistoryBackfill.doneKey), isNull);
+    expect(await TopicHistoryRepository(db).isEmpty(), isTrue);
+  });
+
+  test('backfill with no analyzed sessions marks doneKey without calling Gemini', () async {
+    await container.read(topicHistoryBackfillProvider).ensure();
+
+    verifyNever(() => gemini.sendMessage(any(),
+        systemPrompt: any(named: 'systemPrompt'), responseSchema: any(named: 'responseSchema')));
+    expect(prefs.getBool(TopicHistoryBackfill.doneKey), isTrue);
   });
 }

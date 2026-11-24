@@ -149,12 +149,12 @@ abstract final class TopicCatalog {
       'zavolat řemeslníka',
       'stížnost na službu',
     ]),
-    TopicArea('uceni', 'Učení a vzdělávání', 'škola, kurzy, učení jazyků, učitelé, sebevzdělávání', [
+    TopicArea('uceni', 'Učení a vzdělávání', 'kurzy, učení jazyků, sebevzdělávání, workshopy, dovednosti, vzpomínky na učitele', [
       'jak se učíš jazyky',
-      'oblíbený předmět ve škole',
+      'online kurz, nebo učitel naživo',
       'učitel, na kterého vzpomínáš',
       'kurz, který tě bavil',
-      'co by se měly učit děti',
+      'dovednost, kterou se chceš naučit',
       'naučit se něco nového v dospělosti',
     ]),
     TopicArea('spolecnost', 'Společnost a zprávy', 'zprávy, město a vesnice, ekologie, dobrovolnictví, generace', [

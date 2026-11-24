@@ -6,8 +6,10 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:sqlite3/sqlite3.dart';
+import '../../core/config/config_providers.dart';
 import '../../core/utils/logger.dart';
 import '../../data/data_providers.dart';
+import '../topics/topic_history_backfill.dart';
 
 /// Služba pro provádění exportu a importu zálohy databáze SQLite.
 class BackupService {
@@ -157,8 +159,12 @@ class BackupService {
       L.i('Databáze má obsah zálohy.');
 
       // Nové spojení: při otevření proběhnou opravy schématu (záloha může být ze starší
-      // verze aplikace) a obrazovky si načtou nová data
+      // verze aplikace) a obrazovky si načtou nová data; příznak backfillu vyčistíme,
+      // aby se prázdná evidence témat ze starší zálohy znovu doplnila.
       _ref.invalidate(databaseProvider);
+      try {
+        await _ref.read(sharedPreferencesProvider).remove(TopicHistoryBackfill.doneKey);
+      } catch (_) {}
       return true;
     } catch (e, stack) {
       L.e('Chyba při obnově ze zálohy', e, stack);

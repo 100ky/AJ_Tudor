@@ -43,4 +43,7 @@ class TopicHistoryRepository {
       }
     });
   }
+
+  /// Smaže celou evidenci probraných témat (při resetu paměti).
+  Future<void> clearAll() => _db.delete(_db.topicHistory).go();
 }

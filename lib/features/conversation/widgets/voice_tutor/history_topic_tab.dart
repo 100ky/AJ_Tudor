@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/app_theme.dart';
 import '../../../../services/agents/topic_preparation_agent.dart';
+import '../../../../services/topics/topic_catalog.dart';
 
 /// Podrobnosti „Téma z historie“: téma připravené agentem z minulých rozhovorů.
 class HistoryTopicTab extends ConsumerWidget {
@@ -50,14 +51,18 @@ class HistoryTopicTab extends ConsumerWidget {
       );
     }
 
+    final areaLabel = topic.isRandomTopic
+        ? 'Náhodné téma'
+        : TopicCatalog.byId(topic.areaId ?? '')?.label;
+
     return Column(
       key: const ValueKey('history_topic_card'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (topic.isRandomTopic)
+        if (areaLabel != null)
           Padding(
             padding: const EdgeInsets.only(bottom: 2),
-            child: Text('Náhodné téma', style: AppTheme.font(fontSize: 12.5, fontWeight: FontWeight.w500, color: AppTheme.textSecondary)),
+            child: Text(areaLabel, style: AppTheme.font(fontSize: 12.5, fontWeight: FontWeight.w500, color: AppTheme.textSecondary)),
           ),
         Text(
           topic.title,

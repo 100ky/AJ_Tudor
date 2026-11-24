@@ -3,13 +3,18 @@
 /// Centralizuje názvy modelů pro různé účely (chat, audio, embedding) a poskytuje
 /// lidsky čitelné popisky pro uživatelské rozhraní.
 class GeminiModels {
-  // Aktuální verze modelů Gemini (k 19. 11. 2026, aistudio.google.com/docs/latest-model, /models a /changelog).
+  // Aktuální verze modelů Gemini (k 24. 11. 2026, aistudio.google.com/docs/latest-model, /models a /changelog).
   // gemini-3.7-flash a gemini-3.5-flash jsou zastaralé (API je přesměruje na 3.8 a 3.6 Flash),
-  // gemini-2.5-flash a gemini-2.5-pro se vypínají 1. 12. 2026.
+  // gemini-2.5-flash a gemini-2.5-pro se vypínají 1. 12. 2026, gemini-2.5-flash-lite už vrací 404.
   // Řada Gemini 4: Carbon (nejsilnější úvahy), Neon (vydán 18. 11. 2026, rychlé úvahy), Argon (úsporný)
   // a Hydrogen (vydán 12. 11. 2026, dostupný i na bezplatné úrovni).
-  // Specializovaný model gemini-decision-1 (vydán 11. 11. 2026, Decisions API) má na bezplatné úrovni
-  // 10 000 požadavků denně / 200 RPM a nulové výstupní tokeny.
+  // Ověřeno 24. 11. 2026 na Free Tier klíči:
+  // - Placený tarif (429 limit: 0 na Free Tier): gemini-4-carbon, gemini-4-neon, gemini-4-argon,
+  //   gemini-omni-1.2-flash, gemini-3.1-pro-preview.
+  // - Free Tier, ale často přetížené (503): gemini-4-hydrogen, gemma-4-31b-it, gemma-4-26b-a4b-it,
+  //   gemini-3.8-flash, gemini-3.6-flash, gemini-3.1-flash-lite.
+  // - Spolehlivě rychlé na Free Tier (200 OK): gemini-3.5-flash-lite (500 RPD), gemini-decision-1
+  //   (vydán 11. 11. 2026, Decisions API: 10 000 RPD / 200 RPM, nulové výstupní tokeny) a gemini-3.8-live.
   static const String carbon4 = 'gemini-4-carbon';     // vydán 10. 11. 2026
   static const String neon4 = 'gemini-4-neon';         // vydán 18. 11. 2026
   static const String argon4 = 'gemini-4-argon';       // vydán 13. 10. 2026
@@ -66,13 +71,13 @@ class GeminiModels {
   static String getLabel(String model) {
     switch (model) {
       case carbon4:
-        return 'Gemini 4 Carbon (Nejsilnější úvahy 🧠)';
+        return 'Gemini 4 Carbon (Placený tarif 🧠)';
       case neon4:
-        return 'Gemini 4 Neon (Rychlé úvahy ⚡)';
+        return 'Gemini 4 Neon (Placený tarif ⚡)';
       case argon4:
-        return 'Gemini 4 Argon (Úsporný z řady 4 🚀)';
+        return 'Gemini 4 Argon (Placený tarif 🚀)';
       case hydrogen4:
-        return 'Gemini 4 Hydrogen (Nový ✨)';
+        return 'Gemini 4 Hydrogen (Free Tier / Nový ✨)';
       case decision1:
         return 'Gemini Decision 1 (Rozhodčí ⚖️)';
       case flash3_8:
@@ -84,7 +89,7 @@ class GeminiModels {
       case flashLite3_1:
         return 'Gemini 3.1 Flash-Lite (Záložní)';
       case pro3_1:
-        return 'Gemini 3.1 Pro (Expertní úvahy 🧠)';
+        return 'Gemini 3.1 Pro (Placený tarif 🧠)';
       case liveVoiceModel:
         return 'Gemini 3.8 Live (Hlasový)';
       case liveExtendedVoiceModel:

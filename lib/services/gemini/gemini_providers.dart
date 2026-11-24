@@ -81,3 +81,22 @@ final geminiDirectorClientProvider = Provider<GeminiBatchClient?>((ref) {
   );
 });
 
+/// Klient pro jednorázové zpětné zařazení starších lekcí do oblastí témat ([TopicHistoryBackfill]).
+///
+/// Jde o jednoduchou klasifikaci jednořádkových souhrnů, proto začíná na flash-lite,
+/// aby se vyhnul přetížení 503 a 20 RPD limitu na 3.8 / 3.6 Flash.
+final geminiTopicBackfillClientProvider = Provider<GeminiBatchClient?>((ref) {
+  final apiKey = ref.watch(apiKeyProvider);
+  if (apiKey == null || apiKey.isEmpty) return null;
+  return GeminiBatchClient(
+    apiKey,
+    GeminiModels.flashLite3_5,
+    fallbackModels: const [
+      GeminiModels.flashLite3_1,
+      GeminiModels.flash3_6,
+      GeminiModels.flash3_8,
+    ],
+    receiveTimeout: GeminiBatchClient.shortTaskTimeout,
+  );
+});
+

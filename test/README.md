@@ -26,7 +26,8 @@ test/
 │       ├── session_repository_test.dart          # Lekce, transkripty, chyby, nahlášené problémy, kaskádový delete
 │       ├── profile_repository_test.dart          # Paměť, slovní zásoba, chyby, fakta „O mně“, připravené téma
 │       ├── scenario_repository_test.dart         # Scénáře (náhrada, vlastní scénář, použití)
-│       └── flashcard_repository_test.dart        # Kartičky: duplicity, SRS hodnocení, statistiky, heuristiky
+│       ├── flashcard_repository_test.dart        # Kartičky: duplicity, SRS hodnocení, statistiky, heuristiky
+│       └── topic_history_repository_test.dart    # Evidence témat: uložení, náhrada při opakovaném rozboru, smazání
 ├── features/                                     # Testy obrazovek a modulů aplikace
 │   ├── skeleton/
 │   │   └── skeleton_screen_test.dart             # Hlavní shell, navigace (5 tabů, Hovor uprostřed), API klíč warning, téma až po načtení klíče
@@ -91,6 +92,11 @@ test/
 │   │   └── user_facts_and_topic_prompts_test.dart # Prompty s fakty „O mně“ a příprava témat
 │   ├── system/
 │   │   └── backup_service_test.dart              # Validace SQLite hlavičky, export zálohy přes SQLite Backup API i při otevřeném spojení, obnova ze zálohy (ověření souboru, původní data v .bak, otevřené spojení čte nová data)
+│   ├── topics/
+│   │   ├── lesson_topics_test.dart               # Parsování témat z rozboru lekce (limit, neznámé oblasti, duplicity)
+│   │   ├── topic_history_backfill_test.dart      # Jednorázové zpětné zařazení starších lekcí do oblastí témat
+│   │   ├── topic_plan_loader_test.dart           # Načtení plánu témat (ochrana před prázdnou evidencí před backfillem)
+│   │   └── topic_planner_test.dart               # Plánovač témat s rostoucími odstupy (2, 4, 7 dní) a nabídkou oblastí
 │   ├── gemini_tts_service_test.dart              # Gemini TTS, audio cache, zvuk z WAV odpovědi (bez hlavičky a C2PA)
 │   ├── pronunciation_service_test.dart           # Analýza výslovnosti, záložní modely (po přetížení všech se zkusí znovu všechny)
 │   └── translation_service_test.dart             # Překladový servis a disková cache

@@ -60,15 +60,18 @@ void main() {
       final a1 = SystemPromptBuilder.buildTutorPrompt(targetLevel: 'A1');
       expect(a1.contains('nejjednodušší možná slova a velmi krátké věty (max 3-5 slov)'), true);
       expect(a1.contains('Present Simple'), true);
+      expect(a1, isNot(contains('standardní běžnou angličtinu')));
 
       final a2 = SystemPromptBuilder.buildTutorPrompt(targetLevel: 'A2');
       expect(a2.contains('jednoduché základní časy'), true);
 
       final b1 = SystemPromptBuilder.buildTutorPrompt(targetLevel: 'B1');
       expect(b1.contains('standardní běžnou angličtinu'), true);
+      expect(b1, isNot(contains('max 3-5 slov')));
 
       final b2 = SystemPromptBuilder.buildTutorPrompt(targetLevel: 'B2');
       expect(b2.contains('přirozenou a plynulou angličtinu (včetně běžných idiomů'), true);
+      expect(b2, isNot(contains('max 3-5 slov')));
     });
 
     test('buildTutorPrompt injects scenario context, profile memory, user facts and vocabulary', () {
@@ -481,15 +484,33 @@ void main() {
         recentErrors: 'doplnit minibar → refill the minibar',
         currentVocabulary: '[]',
         targetLevel: 'B1',
+        memoryBriefing: 'Zaměř se výhradně na IT a SaaS projekt.',
         plan: plan,
       );
       expect(scenarios, contains('OBLASTI SCÉNÁŘŮ'));
       expect(scenarios, contains('Každý scénář postav v jiné z těchto oblastí'));
       expect(scenarios, contains('ze kterých teď scénář nedělej: '));
+      expect(scenarios, isNot(contains('výhradně na IT')));
 
-      final director = SystemPromptBuilder.buildDirectorPrompt(targetLevel: 'B1', plan: plan);
+      final director = SystemPromptBuilder.buildDirectorPrompt(
+        targetLevel: 'B1',
+        plan: plan,
+        recentWhispers: const ['Ask about his trip.'],
+      );
       expect(director, contains('KAM PŘI ZMĚNĚ TÉMATU (jen když needsPivot=true'));
       expect(director, contains('Cestování a dovolená'));
+      expect(director, contains('TVÉ POSLEDNÍ RADY TUTOROVI'));
+      expect(director, contains('Ask about his trip.'));
+      expect(director, isNot(contains('their project')));
+
+      final scenarioDirector = SystemPromptBuilder.buildDirectorPrompt(
+        targetLevel: 'B1',
+        plan: plan,
+        scenarioContext: 'At the vet with Dobas.',
+      );
+      expect(scenarioDirector, contains('ROLE-PLAY SCÉNÁŘ'));
+      expect(scenarioDirector, contains('At the vet with Dobas.'));
+      expect(scenarioDirector, isNot(contains('KAM PŘI ZMĚNĚ TÉMATU')));
 
       final tutor = SystemPromptBuilder.buildTutorPrompt(plan: plan);
       expect(tutor, contains('KAM S HOVOREM, KDYŽ TÉMA DOJDE'));

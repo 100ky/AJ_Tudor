@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/config/config_providers.dart';
 import '../../data/data_providers.dart';
+import '../../services/topics/topic_history_backfill.dart';
 
 /// Úpravy profilu studenta z nastavení: úroveň angličtiny, fakta „O mně“
 /// a reset paměti tutora.
@@ -23,9 +25,13 @@ class ProfileSettingsController {
     return _ref.read(profileRepositoryProvider).removeUserFact(fact);
   }
 
-  /// Vymaže vše, co si tutor o studentovi pamatuje, včetně pokroku.
-  Future<void> resetMemory() {
-    return _ref.read(profileRepositoryProvider).resetUserMemory();
+  /// Vymaže vše, co si tutor o studentovi pamatuje, včetně pokroku a evidence témat.
+  Future<void> resetMemory() async {
+    await _ref.read(profileRepositoryProvider).resetUserMemory();
+    await _ref.read(topicHistoryRepositoryProvider).clearAll();
+    try {
+      await _ref.read(sharedPreferencesProvider).remove(TopicHistoryBackfill.doneKey);
+    } catch (_) {}
   }
 }
 

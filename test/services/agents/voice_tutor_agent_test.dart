@@ -59,6 +59,7 @@ class _CapturingDirector extends VoiceDirectorAgent {
     required void Function(String whisper, ConversationCard? card) onWhisperReady,
     List<ConversationCard> cards = const [],
     TopicPlan? topicPlan,
+    String? scenarioContext,
   }) async {
     whisperCallbacks.add(onWhisperReady);
     cardPools.add(cards);
@@ -1868,6 +1869,62 @@ void main() {
           expect(director.topicPlans.last?.offers.map((o) => o.area.id), contains('cestovani'));
 
           await agent.stopSession('test');
+        });
+
+        testWidgets('changing topic rotates offered areas so the next switch does not repeat them', (tester) async {
+          final sentContent = <String>[];
+          when(() => mockClient.sendClientContent(
+                role: any(named: 'role'),
+                text: any(named: 'text'),
+                turnComplete: any(named: 'turnComplete'),
+              )).thenAnswer((invocation) => sentContent.add(invocation.namedArguments[#text] as String));
+
+          final agent = container.read(voiceTutorAgentProvider.notifier)..selectScenario(-1, '__free_talk__');
+          await agent.startSession();
+          await tester.pump(const Duration(seconds: 1));
+          tutorText!('Hey! How is your day going?');
+          turnComplete!();
+          await tester.pump();
+
+          agent.forceTopicChange();
+          await tester.pump();
+          tutorText!('Sure, let us switch gears! What place would you like to visit?');
+          turnComplete!();
+          await tester.pump();
+
+          agent.forceTopicChange();
+          await tester.pump();
+
+          final switches = sentContent.where((t) => t.contains("tapped 'Next Topic'")).toList();
+          expect(switches, hasLength(2));
+          expect(switches[1], isNot(equals(switches[0])));
+
+          await agent.stopSession('test');
+        });
+
+        testWidgets('a prepared topic discussed in a call is consumed when the call stops', (tester) async {
+          when(() => mockProfileRepo.getUserProfile()).thenAnswer((_) async => UserProfile(
+                id: 1,
+                displayName: 'Student',
+                nativeLanguage: 'cs',
+                targetLevel: 'B1',
+                recurringErrors: '[]',
+                vocabulary: '[]',
+                topicPreferences: '[]',
+                totalSessions: 1,
+                userFacts: '[]',
+                preparedTopic: '{"title":"Výlet","openerEn":"Where did you go?","rationale":"Test","areaId":"cestovani"}',
+              ));
+          when(() => mockProfileRepo.clearPreparedTopic()).thenAnswer((_) async {});
+
+          final agent = container.read(voiceTutorAgentProvider.notifier);
+          await agent.startSession();
+          await exchange(tester, 'I went to the mountains.', 'Nice! How was the weather?');
+
+          await agent.stopSession('test');
+          await tester.pump();
+
+          verify(() => mockProfileRepo.clearPreparedTopic()).called(1);
         });
 
         group('lesson with flashcards', () {

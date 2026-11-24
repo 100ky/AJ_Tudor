@@ -6,6 +6,7 @@ import '../../data/database/app_database.dart';
 import '../../core/utils/logger.dart';
 import '../prompt/system_prompt_builder.dart';
 import '../prompt/task_prompts.dart';
+import '../topics/topic_history_backfill.dart';
 import '../topics/topic_plan_loader.dart';
 
 /// Agent odpovědný za plánování a generování personalizovaných konverzačních scénářů.
@@ -59,6 +60,9 @@ class ScenarioPlannerAgent {
             ? '$combinedErrors, Problémy z kartiček: $strugglingTopics'
             : 'Problémy z kartiček: $strugglingTopics';
       }
+
+      // Evidence témat ze starších lekcí (pokud ještě neproběhla)
+      await _ref.read(topicHistoryBackfillProvider).ensure();
 
       // 2. Příprava promptu s parametry uživatele
       final prompt = SystemPromptBuilder.buildScenarioPlannerPrompt(

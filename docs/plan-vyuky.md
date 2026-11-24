@@ -95,6 +95,7 @@ Body 1, 3, 4 a 5 jsou v kódu od 7. 11. Body 2 a 6 mění prompt pokecu a 8. 11.
 - Zkrácením se ztratily drobnosti, které podrobné znění drželo: české slovo „dosadit do své věty“, otázka k tématu po zopakování, pořadí čas před předložkou u druhé chyby. Prompt pokecu Live modelu evidentně pomáhá i svou důrazností.
 - Zkrácená verze je v `tool/prompt_eval/private/kratsi_system_prompt_builder.dart.txt`, výsledky v `results/kratsi`.
 - Další pokus: jen malé, cílené změny ověřeného promptu, každá zvlášť ověřená. Kandidáti: popis jen té úrovně, kterou student má (asi 600 znaků méně), rada režiséra se zahodí, když se hovor posunul jinam (lekce 22), mírnější příklad na jednoslovnou odpověď místo „Come on, tell me more! Why?“ (dvě otázky naráz) a fakta z profilu bez „navaž na ně (How is your dog doing?)“.
+- **Úprava 24. 11. 2026:** nasazeny jen bezpečné cílené úpravy bez krácení pedagogického protokolu: tutor dostává jen popis své aktuální CEFR úrovně (`_levelInstruction`), jednoslovný příklad má jen jednu otázku bez „Come on, tell me more!“, z faktů profilu zmizelo protichůdné „na tato fakta přirozeně navaž“, plánovač scénářů s `TopicPlan` nedostává `memoryBriefing` a režisér dostává `recentWhispers` + `scenarioContext`, aby neopakoval otázky na drobnosti.
 
 ## Technické body z rozborů lekcí
 

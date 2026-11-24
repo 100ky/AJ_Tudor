@@ -28,6 +28,7 @@ import '../gemini/gemini_live_client.dart';
 import '../gemini/speech_transcription_service.dart';
 
 import 'memory_manager_agent.dart';
+import 'topic_preparation_agent.dart';
 import 'voice_director_agent.dart';
 import 'voice_tutor/pre_roll_buffer.dart';
 import 'voice_tutor/session_metrics.dart';
@@ -250,6 +251,12 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
 
   /// Oblasti témat pro tento hovor (plánovač témat podle evidence), prázdné v lekci a scénáři.
   TopicPlan _topicPlan = TopicPlan.empty;
+
+  /// Oblasti, které už v tomto hovoru zazněly (aby změna tématu nabízela vždy další okruhy).
+  final Set<String> _usedAreasInSession = {};
+
+  /// Zda se tento hovor otevřel připraveným tématem (po skončení se spotřebuje).
+  bool _usedPreparedTopic = false;
 
   // Dnešní kartičky, které může splnit tento hovor (null = nenačetly se, hovor běží bez nich)
   ConversationCards? _conversationCards;
@@ -499,9 +506,12 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
       // Plán témat jen pro pokec a téma z historie: lekce i scénář mají téma dané.
       // Oblast připraveného tématu se nenabízí, o té se bude mluvit od začátku.
       final preparedArea = state.scenarioContext == null ? _preparedTopicArea(userProfile?.preparedTopic) : null;
+      _usedAreasInSession
+        ..clear()
+        ..addAll([?preparedArea]);
       _topicPlan = state.lessonMode || (state.scenarioContext != null && state.scenarioContext != '__free_talk__')
           ? TopicPlan.empty
-          : await loadTopicPlan(ref, exclude: {?preparedArea});
+          : await loadTopicPlan(ref, exclude: _usedAreasInSession);
       final conversationCards = await _loadConversationCards();
       // Stop během čekání na DB už lekci uzavřel – hovor bez lekce by se neuložil ani nevyhodnotil
       if (_isStartCancelled(generation)) return;
@@ -639,6 +649,8 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
           preparedOpener = data['openerEn']?.toString();
         } catch (_) {}
       }
+      _usedPreparedTopic =
+          state.scenarioContext == null && !state.lessonMode && preparedOpener != null && preparedOpener.isNotEmpty;
       _pendingOpener = LiveTutorPrompts.opening(
         scenarioContext: state.scenarioContext,
         preparedOpener: preparedOpener,
@@ -1407,6 +1419,8 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
     // tutor podle kartiček a rada k tématu by ho od nich odváděla.
     if (_currentSessionId != null && state.messages.isNotEmpty && !_lessonRunning) {
       final studentTurnsAtStart = _studentTurnCount;
+      final activeScenario =
+          (state.scenarioContext != null && state.scenarioContext != '__free_talk__') ? state.scenarioContext : null;
       _director.onTurnCompleted(
         sessionId: _currentSessionId!,
         messages: state.messages,
@@ -1415,6 +1429,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         recentTopics: _recentTopicsSnapshot,
         cards: _conversationCards?.directorPool() ?? const [],
         topicPlan: _topicPlan,
+        scenarioContext: activeScenario,
         onWhisperReady: (whisper, card) {
           // Rada se předá až po dalším tahu tutora. Když mezitím student promluvil
           // víckrát, hovor je jinde (lekce 19: rada „přejdi na narozeniny“ dorazila
@@ -1739,10 +1754,17 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
           L.i('🃏 V hovoru splněno kartiček: ${completedCards.length} '
               '(${completedCards.map((c) => c.english).join(', ')})');
         }
+        final hadStudentTurn = _studentTurnCount > 0;
+        final consumePrepared = _usedPreparedTopic && hadStudentTurn;
+        _usedPreparedTopic = false;
+        _usedAreasInSession.clear();
         
         _currentSessionId = null;
         if (ref.mounted) {
           _director.reset();
+          if (consumePrepared) {
+            unawaited(ref.read(topicPreparationAgentProvider.notifier).consumeTopic().catchError((Object _) {}));
+          }
         }
 
 
@@ -2048,6 +2070,7 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
         ),
         turnComplete: true,
       );
+      _rotateTopicPlan();
     } else {
       // Pasivní heuristická změna při detekci stagnace v pozadí (přepne se v příštím tahu studenta)
       _pendingGuidance.clear();
@@ -2058,7 +2081,25 @@ class VoiceTutorAgent extends Notifier<VoiceTutorState> with WidgetsBindingObser
             : LiveTutorPrompts.changeTopicSilentlyTo(_topicPlan.offerLabels),
         turnComplete: false,
       );
+      _rotateTopicPlan();
     }
+  }
+
+  /// Posune plán témat na další oblasti v pořadí, aby další změna tématu v témže hovoru
+  /// nevracela pořád stejné tři oblasti.
+  void _rotateTopicPlan() {
+    if (_topicPlan.offers.isEmpty) return;
+    _usedAreasInSession.addAll(_topicPlan.offers.map((o) => o.area.id));
+    if (_usedAreasInSession.length >= TopicCatalog.areas.length - 3) {
+      _usedAreasInSession.clear();
+    }
+    unawaited(
+      loadTopicPlan(ref, exclude: Set<String>.from(_usedAreasInSession)).then((next) {
+        if (ref.mounted && next.offers.isNotEmpty) {
+          _topicPlan = next;
+        }
+      }),
+    );
   }
 
   /// Resetuje watchdog časovač aktivity.

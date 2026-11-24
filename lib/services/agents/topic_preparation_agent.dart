@@ -99,6 +99,7 @@ class TopicPreparationState {
 /// a připravuje svěží konverzační téma s úvodním háčkem pro Voice Tutora.
 class TopicPreparationAgent extends Notifier<TopicPreparationState> {
   final List<String> _recentlyProposedTitles = [];
+  final List<String> _recentlyProposedAreaIds = [];
   int _refreshCounter = 0;
 
   /// Dokončí se po načtení uloženého tématu z databáze (viz [build]).
@@ -108,6 +109,7 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
 
   void resetRefreshCounter() {
     _refreshCounter = 0;
+    _recentlyProposedAreaIds.clear();
   }
 
   @override
@@ -121,6 +123,9 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
           final loadedTopic = PreparedTopic.fromJson(data);
           if (loadedTopic.title.isNotEmpty && !_recentlyProposedTitles.contains(loadedTopic.title)) {
             _recentlyProposedTitles.add(loadedTopic.title);
+          }
+          if (loadedTopic.areaId != null && !_recentlyProposedAreaIds.contains(loadedTopic.areaId)) {
+            _recentlyProposedAreaIds.add(loadedTopic.areaId!);
           }
           state = state.copyWith(topic: loadedTopic);
         }
@@ -150,7 +155,7 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
     if (state.isLoading) return;
 
     if (resetCounter) {
-      _refreshCounter = 0;
+      resetRefreshCounter();
     }
 
     final sessionRepo = ref.read(sessionRepositoryProvider);
@@ -247,8 +252,18 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
         return;
       }
 
-      // Standardní příprava tématu: oblasti nabídne plánovač podle evidence témat
-      final plan = await loadTopicPlan(ref);
+      // Standardní příprava tématu: oblasti nabídne plánovač podle evidence témat.
+      // Vynecháme nedávno navržené oblasti, aby opakované klepnutí na „Jiné téma“ střídalo okruhy.
+      final currentAreaId = state.topic?.areaId;
+      var excludeAreas = <String>{
+        ..._recentlyProposedAreaIds,
+        ?currentAreaId,
+      };
+      if (excludeAreas.length >= TopicCatalog.areas.length - 1) {
+        _recentlyProposedAreaIds.clear();
+        excludeAreas = {?currentAreaId};
+      }
+      final plan = await loadTopicPlan(ref, exclude: excludeAreas);
       var currentProfile = profile;
       if (currentProfile?.userFacts == null ||
           currentProfile!.userFacts.isEmpty ||
@@ -321,6 +336,13 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
       _recentlyProposedTitles.add(prepared.title);
       if (_recentlyProposedTitles.length > 8) {
         _recentlyProposedTitles.removeAt(0);
+      }
+      if (prepared.areaId != null) {
+        _recentlyProposedAreaIds.remove(prepared.areaId);
+        _recentlyProposedAreaIds.add(prepared.areaId!);
+        if (_recentlyProposedAreaIds.length > 8) {
+          _recentlyProposedAreaIds.removeAt(0);
+        }
       }
 
       await profileRepo.savePreparedTopic(jsonEncode(prepared.toJson()));
@@ -427,7 +449,7 @@ class TopicPreparationAgent extends Notifier<TopicPreparationState> {
   /// Označí téma za spotřebované / vymaže ho (např. po proběhlé lekci).
   Future<void> consumeTopic() async {
     await ref.read(profileRepositoryProvider).clearPreparedTopic();
-    state = state.copyWith(topic: null);
+    if (!ref.mounted) return;
     state = state.copyWith(clearTopic: true);
   }
 }
